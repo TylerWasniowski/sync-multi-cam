@@ -45,11 +45,11 @@ Plans:
   2. App cross-correlates audio waveforms and displays the detected timecode offset for each video relative to the reference
   3. App auto-selects a reference file (longest or first) and correlates all other files against it
   4. App displays a sync confidence score (correlation strength as percentage) for each video pair
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 02-01: TBD
-- [ ] 02-02: TBD
+- [ ] 02-01-PLAN.md -- Install SynAudio, define types/constants, create audio extraction and correlation engine modules
+- [ ] 02-02-PLAN.md -- Build SyncButton, SyncProgress, SyncResults components, wire sync pipeline into App.tsx, verify with real files
 
 ### Phase 3: Video Trimming and Output
 **Goal**: Users get downloadable, synchronized video files trimmed to a common start point -- completing the core value proposition from input to output
