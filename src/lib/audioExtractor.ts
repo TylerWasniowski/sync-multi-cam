@@ -30,9 +30,29 @@ export async function extractAudio(
 
     onProgress?.('Reading audio data...');
     const outputData = await ffmpeg.readFile(outputName);
+    const wavBytes = outputData as Uint8Array;
 
-    // Convert WAV to Float32Array: skip 44-byte WAV header, then Int16 -> Float32
-    const pcmBytes = (outputData as Uint8Array).slice(44);
+    // Parse WAV header to find the 'data' chunk rather than assuming 44-byte header.
+    // WAV files can have extra metadata chunks (LIST, INFO, etc.) before the data chunk.
+    let dataOffset = 12; // skip RIFF header (12 bytes)
+    while (dataOffset + 8 < wavBytes.length) {
+      const chunkId = String.fromCharCode(
+        wavBytes[dataOffset], wavBytes[dataOffset + 1],
+        wavBytes[dataOffset + 2], wavBytes[dataOffset + 3],
+      );
+      const chunkSize = wavBytes[dataOffset + 4]
+        | (wavBytes[dataOffset + 5] << 8)
+        | (wavBytes[dataOffset + 6] << 16)
+        | (wavBytes[dataOffset + 7] << 24);
+
+      if (chunkId === 'data') {
+        dataOffset += 8; // skip chunk header to reach PCM data
+        break;
+      }
+      dataOffset += 8 + chunkSize;
+    }
+
+    const pcmBytes = wavBytes.slice(dataOffset);
     const int16 = new Int16Array(
       pcmBytes.buffer,
       pcmBytes.byteOffset,
@@ -42,6 +62,15 @@ export async function extractAudio(
     for (let i = 0; i < int16.length; i++) {
       float32[i] = int16[i] / 32768.0;
     }
+
+    // Debug: log audio stats to help diagnose sync issues
+    let maxAbs = 0;
+    for (let i = 0; i < Math.min(float32.length, 160000); i++) {
+      if (Math.abs(float32[i]) > maxAbs) maxAbs = Math.abs(float32[i]);
+    }
+    console.log(
+      `[extractAudio] ${file.name}: wavSize=${wavBytes.length} dataOffset=${dataOffset} samples=${float32.length} duration=${(float32.length / SYNC_SAMPLE_RATE).toFixed(1)}s maxAbs=${maxAbs.toFixed(4)}`
+    );
 
     return {
       channelData: [float32],

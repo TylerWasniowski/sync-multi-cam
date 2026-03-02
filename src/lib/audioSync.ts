@@ -48,11 +48,11 @@ export async function syncAudioTracks(
   const reference = sorted[0];
   const comparisons = sorted.slice(1);
 
-  // Initialize SynAudio with SharedMemory enabled (COOP/COEP headers from Phase 1)
+  // Initialize SynAudio — uses syncWorker (single Web Worker) to avoid
+  // a chunking bug in syncWorkerConcurrent that returns zero offsets
   const synAudio = new SynAudio({
     correlationSampleSize: CORRELATION_SAMPLE_SIZE,
     initialGranularity: INITIAL_GRANULARITY,
-    shared: true,
   });
 
   // Reference always has 0 offset and 100% confidence
@@ -72,7 +72,7 @@ export async function syncAudioTracks(
   for (let i = 0; i < comparisons.length; i++) {
     const track = comparisons[i];
 
-    const { sampleOffset, correlation } = await synAudio.syncWorkerConcurrent(
+    const { sampleOffset, correlation } = await synAudio.syncWorker(
       {
         channelData: reference.audio.channelData,
         samplesDecoded: reference.audio.samplesDecoded,
@@ -81,7 +81,10 @@ export async function syncAudioTracks(
         channelData: track.audio.channelData,
         samplesDecoded: track.audio.samplesDecoded,
       },
-      navigator.hardwareConcurrency || 4
+    );
+
+    console.log(
+      `[syncAudio] ${track.fileName} vs ${reference.fileName}: sampleOffset=${sampleOffset} correlation=${correlation.toFixed(4)} offsetSec=${(sampleOffset / SYNC_SAMPLE_RATE).toFixed(3)}`
     );
 
     results.push({

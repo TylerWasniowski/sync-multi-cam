@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AudioData } from '../../types/index.ts';
 
 // Shared mock state
-const mockSyncWorkerConcurrent = vi.fn();
+const mockSyncWorker = vi.fn();
 const constructorCalls: unknown[][] = [];
 
 // Mock synaudio before importing the module under test
@@ -11,7 +11,7 @@ vi.mock('synaudio', () => {
     constructor(...args: unknown[]) {
       constructorCalls.push(args);
     }
-    syncWorkerConcurrent = mockSyncWorkerConcurrent;
+    syncWorker = mockSyncWorker;
   }
   return {
     default: MockSynAudio,
@@ -38,7 +38,7 @@ describe('syncAudioTracks', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     constructorCalls.length = 0;
-    mockSyncWorkerConcurrent.mockResolvedValue({
+    mockSyncWorker.mockResolvedValue({
       sampleOffset: 8000,
       correlation: 0.85,
     });
@@ -78,7 +78,7 @@ describe('syncAudioTracks', () => {
   it('comparison track gets sampleOffset/SYNC_SAMPLE_RATE as offsetSeconds', async () => {
     const { syncAudioTracks } = await import('../audioSync.ts');
 
-    mockSyncWorkerConcurrent.mockResolvedValue({
+    mockSyncWorker.mockResolvedValue({
       sampleOffset: 8000,
       correlation: 0.85,
     });
@@ -99,7 +99,7 @@ describe('syncAudioTracks', () => {
   it('comparison track confidence = Math.round(Math.abs(correlation) * 100)', async () => {
     const { syncAudioTracks } = await import('../audioSync.ts');
 
-    mockSyncWorkerConcurrent.mockResolvedValue({
+    mockSyncWorker.mockResolvedValue({
       sampleOffset: 0,
       correlation: 0.756,
     });
@@ -118,7 +118,7 @@ describe('syncAudioTracks', () => {
   it('handles negative correlation (inverted signal)', async () => {
     const { syncAudioTracks } = await import('../audioSync.ts');
 
-    mockSyncWorkerConcurrent.mockResolvedValue({
+    mockSyncWorker.mockResolvedValue({
       sampleOffset: 1600,
       correlation: -0.92,
     });
@@ -160,7 +160,7 @@ describe('syncAudioTracks', () => {
     ).rejects.toThrow('At least 2 audio tracks required for sync');
   });
 
-  it('initializes SynAudio with shared: true', async () => {
+  it('initializes SynAudio with correlationSampleSize and initialGranularity', async () => {
     const tracks = [
       makeTrack('ref', 'ref.mp4', 48000),
       makeTrack('comp', 'comp.mp4', 16000),
@@ -171,7 +171,10 @@ describe('syncAudioTracks', () => {
 
     expect(constructorCalls.length).toBeGreaterThan(0);
     expect(constructorCalls[0][0]).toEqual(
-      expect.objectContaining({ shared: true })
+      expect.objectContaining({
+        correlationSampleSize: 11025,
+        initialGranularity: 16,
+      })
     );
   });
 });
