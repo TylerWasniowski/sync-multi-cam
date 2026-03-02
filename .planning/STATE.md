@@ -73,13 +73,18 @@ Recent decisions affecting current work:
 - 02-02: Switched from syncWorkerConcurrent to syncWorker — avoids SynAudio thread-chunking bug
 - 02-02: Removed shared: true from SynAudio — syncWorker doesn't need SharedArrayBuffer
 - 02-02: Added robust WAV 'data' chunk parsing instead of hardcoded 44-byte offset
-- 03-01: Smart rendering with fallback: probe keyframes, re-encode only to first keyframe, stream-copy rest
+- 03-01: ~~Smart rendering with fallback~~ Replaced with pure stream-copy: mp4box.js reads keyframe index from container, FFmpeg `-c copy` trims at keyframe boundary
 - 03-01: fflate zipSync at level 0 (store mode) for pre-compressed video
 - 03-01: downloadHelper tests use globalThis DOM mocks to stay in node test environment
 - 03-02: Refactored SyncProgress into PipelineProgress (clean replacement, not bolt-on)
 - 03-02: maxOffset alignment for trim: trimSeconds = max(offsets) - fileOffset
 - 03-02: Individual trim failures logged and skipped; pipeline continues unless all fail
 - 03-02: Skipped files (trim 0) included as-is in ZIP with original filename
+- 03-post: Replaced smart rendering with mp4box.js keyframe index + FFmpeg stream-copy (no re-encode, preserves HEVC/HDR)
+- 03-post: Added calculateAlignedTrims() for coordinated cross-file keyframe alignment
+- 03-post: Removed auto-download of ZIP; download buttons in SyncResults are sufficient
+- 03-post: Removed unused TrimResult type from types/index.ts
+- 03-post: Added mp4box dependency for container-level keyframe reading
 
 ### Pending Todos
 
@@ -90,7 +95,7 @@ None yet.
 - ~~COOP/COEP header validation on Cloudflare Pages is a hard prerequisite (research pitfall #2)~~ RESOLVED in 01-01
 - ~~SynAudio vs fft.js decision deferred to Phase 2 planning~~ RESOLVED in 02-01: SynAudio selected
 - ~~SynAudio syncWorkerConcurrent zero-offset bug with 4+ threads~~ RESOLVED in 02-02: switched to syncWorker
-- ~~Keyframe alignment precision for stream-copy trimming needs empirical validation in Phase 3~~ RESOLVED: user chose re-encode for frame-precise cuts
+- ~~Keyframe alignment precision for stream-copy trimming needs empirical validation in Phase 3~~ RESOLVED: stream-copy with mp4box.js keyframe snapping; coordinated alignment via calculateAlignedTrims()
 
 ## Session Continuity
 
