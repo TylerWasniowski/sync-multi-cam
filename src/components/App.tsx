@@ -1,13 +1,13 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import type { VideoFile, PipelineProgress as PipelineProgressType, DownloadableResult, TrimmedFile } from '../types/index.ts';
+import type { VideoFile, PipelineProgress as PipelineProgressType, DownloadableResult, TrimmedFile, MultiResolutionPeaks } from '../types/index.ts';
 import { MAX_FILES } from '../lib/constants.ts';
 import { validateFiles } from '../lib/fileValidation.ts';
 import { getFFmpeg } from '../lib/ffmpeg.ts';
 import { extractAudio } from '../lib/audioExtractor.ts';
 import { syncAudioTracks } from '../lib/audioSync.ts';
-import { trimVideo } from '../lib/videoTrimmer.ts';
+import { trimVideo, calculateAlignedTrims } from '../lib/videoTrimmer.ts';
 import { buildZip } from '../lib/zipBuilder.ts';
-import { triggerDownload } from '../lib/downloadHelper.ts';
+import { computeMultiResolutionPeaks } from '../lib/waveformPeaks.ts';
 import { PrivacyBanner } from './PrivacyBanner.tsx';
 import { FileDropZone } from './FileDropZone.tsx';
 import { FileList } from './FileList.tsx';
@@ -15,6 +15,7 @@ import { FFmpegStatus } from './FFmpegStatus.tsx';
 import { SyncButton } from './SyncButton.tsx';
 import { PipelineProgress } from './PipelineProgress.tsx';
 import { SyncResults } from './SyncResults.tsx';
+import { WaveformPanel } from './WaveformPanel.tsx';
 
 type FFmpegLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -67,6 +68,7 @@ export default function App() {
   const [syncResults, setSyncResults] = useState<DownloadableResult[]>([]);
   const [syncError, setSyncError] = useState<string | undefined>(undefined);
   const [zipData, setZipData] = useState<Uint8Array | null>(null);
+  const [waveformPeaks, setWaveformPeaks] = useState<Map<string, MultiResolutionPeaks>>(new Map());
 
   const handleSync = useCallback(async () => {
     if (files.length < 2) return;
@@ -75,6 +77,7 @@ export default function App() {
     setSyncResults([]);
     setSyncError(undefined);
     setZipData(null);
+    setWaveformPeaks(new Map());
     setSyncProgress({ stage: 'extracting', current: 0, total: files.length, message: 'Starting audio extraction...' });
 
     try {
@@ -89,6 +92,9 @@ export default function App() {
         });
 
         const audio = await extractAudio(files[i].file);
+        // Compute waveform peaks while we have the raw audio data
+        const peaks = computeMultiResolutionPeaks(audio.channelData[0], audio.sampleRate);
+        setWaveformPeaks(prev => new Map(prev).set(files[i].id, peaks));
         audioTracks.push({
           fileId: files[i].id,
           fileName: files[i].name,
@@ -117,53 +123,58 @@ export default function App() {
       // Phase 3: Trim videos
       // Calculate trim amounts: align all files to the latest-starting track
       const maxOffset = Math.max(...results.map(r => r.offsetSeconds));
-      const trimAmounts = results.map(r => ({
-        ...r,
-        trimSeconds: maxOffset - r.offsetSeconds,
-      }));
 
       setSyncProgress({
         stage: 'trimming',
         current: 0,
         total: files.length,
-        message: 'Starting video trimming...',
+        message: 'Calculating keyframe-aligned trim points...',
       });
+
+      // Build per-file ideal trims and get coordinated snap points
+      const idealTrims = results.map(r => {
+        const videoFile = files.find(f => f.id === r.fileId)!;
+        return { file: videoFile.file, idealTrimSeconds: maxOffset - r.offsetSeconds };
+      });
+      const alignedTrims = await calculateAlignedTrims(idealTrims);
 
       const downloadableResults: DownloadableResult[] = [];
       let trimFailCount = 0;
 
-      for (let i = 0; i < trimAmounts.length; i++) {
-        const trimInfo = trimAmounts[i];
-        const videoFile = files.find(f => f.id === trimInfo.fileId);
+      for (let i = 0; i < results.length; i++) {
+        const syncResult = results[i];
+        const videoFile = files.find(f => f.id === syncResult.fileId);
         if (!videoFile) continue;
+
+        const trimSeconds = alignedTrims[i].snapTrimSeconds;
 
         setSyncProgress({
           stage: 'trimming',
           current: i + 1,
           total: files.length,
-          message: `Trimming ${trimInfo.fileName}...`,
+          message: `Trimming ${syncResult.fileName}...`,
         });
 
         let trimmedData: Uint8Array | null = null;
         try {
-          trimmedData = await trimVideo(videoFile.file, trimInfo.trimSeconds);
+          trimmedData = await trimVideo(videoFile.file, trimSeconds);
         } catch (err: unknown) {
           console.warn(
-            `Failed to trim ${trimInfo.fileName}:`,
+            `Failed to trim ${syncResult.fileName}:`,
             err instanceof Error ? err.message : err
           );
           trimFailCount++;
         }
 
         downloadableResults.push({
-          fileId: trimInfo.fileId,
-          fileName: trimInfo.fileName,
-          offsetSeconds: trimInfo.offsetSeconds,
-          offsetSamples: trimInfo.offsetSamples,
-          confidence: trimInfo.confidence,
-          isReference: trimInfo.isReference,
+          fileId: syncResult.fileId,
+          fileName: syncResult.fileName,
+          offsetSeconds: syncResult.offsetSeconds,
+          offsetSamples: syncResult.offsetSamples,
+          confidence: syncResult.confidence,
+          isReference: syncResult.isReference,
           trimmedData,
-          trimSeconds: trimInfo.trimSeconds,
+          trimSeconds,
           originalFile: videoFile.file,
         });
       }
@@ -209,9 +220,6 @@ export default function App() {
         total: 1,
         message: 'ZIP ready',
       });
-
-      // Phase 5: Auto-download ZIP and set complete
-      triggerDownload(zip, 'synced_videos.zip', 'application/zip');
 
       setSyncProgress({
         stage: 'complete',
@@ -326,6 +334,13 @@ export default function App() {
         {syncResults.length > 0 && (
           <div className="mt-6">
             <SyncResults results={syncResults} zipData={zipData} />
+          </div>
+        )}
+
+        {/* Waveforms -- visible after sync completes with peak data */}
+        {syncResults.length > 0 && waveformPeaks.size > 0 && (
+          <div className="mt-6">
+            <WaveformPanel peaksMap={waveformPeaks} results={syncResults} />
           </div>
         )}
       </main>
