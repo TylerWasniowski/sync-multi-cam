@@ -21,14 +21,14 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **SYNC-03**: App auto-selects reference file (longest or first) with no user input required
 - [x] **SYNC-04**: App displays detected timecode offsets per video in the results UI
 - [x] **SYNC-05**: App displays sync confidence score (correlation strength as percentage) per video
-- [ ] **SYNC-06**: App renders audio waveforms on canvas with sync point markers for visual verification
+- [x] **SYNC-06**: App renders audio waveforms on canvas with sync point markers for visual verification
 
 ### Output
 
-- [x] **OUT-01**: App trims videos to align start points using stream-copy (no re-encode) via FFmpeg WASM
+- [x] **OUT-01**: App trims videos to align start points using stream-copy via FFmpeg WASM (keyframe-aligned via mp4box.js, no re-encode)
 - [x] **OUT-02**: App keeps full remaining footage per video after trim (no forced end cut)
 - [x] **OUT-03**: UI presents individual synced videos in a list with offset info and per-file download buttons
-- [x] **OUT-04**: App auto-downloads a zip of all synced/trimmed video files
+- [x] **OUT-04**: App provides a zip of all synced/trimmed video files with download buttons (per-file and full ZIP)
 - [x] **OUT-05**: App shows multi-stage progress indicator during processing (loading, extracting, analyzing, trimming)
 
 ### UX
@@ -98,7 +98,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | OUT-03 | Phase 3: Video Trimming and Output | Complete |
 | OUT-04 | Phase 3: Video Trimming and Output | Complete |
 | OUT-05 | Phase 3: Video Trimming and Output | Complete |
-| SYNC-06 | Phase 4: Waveform Visualization | Pending |
+| SYNC-06 | Phase 4: Waveform Visualization | Complete |
 
 **Coverage:**
 - v1 requirements: 20 total

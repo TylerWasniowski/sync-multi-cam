@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in-progress
-last_updated: "2026-03-02T06:46:52Z"
+last_updated: "2026-03-02T17:56:21Z"
 progress:
-  total_phases: 3
+  total_phases: 4
   completed_phases: 3
-  total_plans: 6
-  completed_plans: 7
+  total_plans: 8
+  completed_plans: 8
 ---
 
 # Project State
@@ -18,23 +18,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-01)
 
 **Core value:** Accurately sync multiple camera angles by audio so users get aligned video files without installing any software
-**Current focus:** Phase 3 in progress — Video Trimming and Output
+**Current focus:** Phase 4 in progress — Waveform Visualization
 
 ## Current Position
 
-Phase: 3 of 4 (Video Trimming and Output) — COMPLETE
-Plan: 2 of 2 in current phase — COMPLETE
-Status: Phase 3 complete. Full pipeline wired: extract -> correlate -> trim -> zip -> auto-download.
-Last activity: 2026-03-02 — Completed 03-02-PLAN.md (pipeline UI wiring)
+Phase: 4 of 4 (Waveform Visualization) — IN PROGRESS
+Plan: 1 of 2 in current phase — COMPLETE
+Status: Plan 04-01 complete. Peak downsampling and WaveformCanvas built. Ready for Plan 04-02 (interactive panel).
+Last activity: 2026-03-02 — Completed 04-01-PLAN.md (waveform data + canvas)
 
-Progress: [████████░░] 80%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7
-- Average duration: 7.4min
-- Total execution time: ~0.9 hours
+- Total plans completed: 8
+- Average duration: 6.9min
+- Total execution time: ~0.95 hours
 
 **By Phase:**
 
@@ -43,10 +43,11 @@ Progress: [████████░░] 80%
 | 1 - Foundation | 3 | 19min | 6.3min |
 | 2 - Audio Sync | 2 | 33min | 16.5min |
 | 3 - Video Trimming | 2 | 8min | 4.0min |
+| 4 - Waveform Visualization | 1/2 | 3min | 3.0min |
 
 **Recent Trend:**
-- Last 5 plans: 01-03 (12min), 02-01 (8min), 02-02 (25min), 03-01 (5min), 03-02 (3min)
-- Trend: Phase 3 plans fast due to well-defined patterns and existing infrastructure
+- Last 5 plans: 02-01 (8min), 02-02 (25min), 03-01 (5min), 03-02 (3min), 04-01 (3min)
+- Trend: Plans getting faster as patterns and infrastructure mature
 
 *Updated after each plan completion*
 
@@ -85,6 +86,9 @@ Recent decisions affecting current work:
 - 03-post: Removed auto-download of ZIP; download buttons in SyncResults are sufficient
 - 03-post: Removed unused TrimResult type from types/index.ts
 - 03-post: Added mp4box dependency for container-level keyframe reading
+- 04-01: Multi-resolution peaks at 3 levels (2K/20K/100K buckets) for zoom-responsive rendering
+- 04-01: Stateless WaveformCanvas with no event handlers; parent controls all state
+- 04-01: devicePixelRatio-aware canvas for crisp HiDPI rendering
 
 ### Pending Todos
 
@@ -100,5 +104,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 03-02-PLAN.md — Phase 3 complete. Ready for Phase 4 polish.
-Resume file: .planning/phases/03-video-trimming-and-output/03-02-SUMMARY.md
+Stopped at: Completed 04-01-PLAN.md — Peak downsampling + WaveformCanvas built. Ready for 04-02.
+Resume file: .planning/phases/04-waveform-visualization/04-01-SUMMARY.md
