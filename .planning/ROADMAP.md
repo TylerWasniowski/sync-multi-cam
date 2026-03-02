@@ -12,7 +12,7 @@ This roadmap delivers a browser-based multi-camera video synchronization tool in
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Foundation and File Input** - Deployable app shell with dark theme, file drop zone, and validated COOP/COEP headers on Cloudflare Pages
+- [x] **Phase 1: Foundation and File Input** - Deployable app shell with dark theme, file drop zone, and validated COOP/COEP headers on Cloudflare Pages
 - [ ] **Phase 2: Audio Sync Engine** - Extract audio from videos and cross-correlate to detect time offsets with confidence scoring
 - [ ] **Phase 3: Video Trimming and Output** - Trim videos to aligned start points and deliver downloadable synced files
 - [ ] **Phase 4: Waveform Visualization** - Render audio waveforms with sync point markers for visual verification of results
@@ -33,8 +33,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 Plans:
 - [x] 01-01-PLAN.md -- Scaffold Vite project, configure COOP/COEP headers, deploy skeleton to Cloudflare Pages
-- [ ] 01-02-PLAN.md -- Build dark theme UI shell, file drop zone, file validation, file list, privacy banner
-- [ ] 01-03-PLAN.md -- Integrate FFmpeg WASM lazy loading, wire all components, final deploy and verify
+- [x] 01-02-PLAN.md -- Build dark theme UI shell, file drop zone, file validation, file list, privacy banner
+- [x] 01-03-PLAN.md -- Integrate FFmpeg WASM lazy loading, wire all components, final deploy and verify
 
 ### Phase 2: Audio Sync Engine
 **Goal**: Users can trigger audio analysis on their loaded videos and see accurate time offsets and confidence scores -- the core algorithmic capability that makes the tool useful
@@ -85,7 +85,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation and File Input | 1/3 | In progress | - |
+| 1. Foundation and File Input | 3/3 | Complete | 2026-03-02 |
 | 2. Audio Sync Engine | 0/2 | Not started | - |
 | 3. Video Trimming and Output | 0/2 | Not started | - |
 | 4. Waveform Visualization | 0/1 | Not started | - |
