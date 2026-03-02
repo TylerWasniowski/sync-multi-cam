@@ -190,6 +190,34 @@ function drawSyncMarker(
 }
 
 /**
+ * Draw a dimmed overlay and vertical line at the track-end boundary,
+ * showing where the audio content ends and empty space begins.
+ */
+function drawTrackEnd(
+  ctx: CanvasRenderingContext2D,
+  duration: number,
+  viewState: ViewState,
+  sampleRate: number,
+  canvasWidth: number,
+  canvasHeight: number,
+): void {
+  const endX = (duration * sampleRate - viewState.scrollOffset) / viewState.samplesPerPixel;
+  if (endX >= canvasWidth || endX < 0) return; // not visible or fully past
+
+  // Draw dimmed overlay for region beyond audio end
+  ctx.fillStyle = TRACK_END_COLOR;
+  ctx.fillRect(endX, 0, canvasWidth - endX, canvasHeight);
+
+  // Draw a thin vertical line at the track end boundary
+  ctx.strokeStyle = TRACK_END_LINE_COLOR;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(endX, 0);
+  ctx.lineTo(endX, canvasHeight);
+  ctx.stroke();
+}
+
+/**
  * Draw a thin vertical cursor line at the hover time position with time label.
  */
 function drawCursor(
