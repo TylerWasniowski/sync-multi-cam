@@ -66,12 +66,13 @@ export function WaveformTrack({
     ? selectPeakLevel(peaks, viewState.samplesPerPixel, containerWidth)
     : peaks.overview;
 
-  // --- Wheel zoom (Ctrl/Meta + scroll) ---
-  const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
-    if (!(e.ctrlKey || e.metaKey)) return; // let normal scroll propagate
-    e.preventDefault();
+  // --- Wheel zoom (bare scroll, no modifier needed) ---
+  const handleWheel = useCallback((e: WheelEvent) => {
+    e.preventDefault(); // prevent page scroll when over waveform
 
-    const rect = e.currentTarget.getBoundingClientRect();
+    const el = containerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
     const offsetX = e.clientX - rect.left;
     const factor = e.deltaY > 0 ? 1.1 : 0.9;
     const oldSPP = viewState.samplesPerPixel;
@@ -86,6 +87,14 @@ export function WaveformTrack({
       scrollOffset: Math.max(0, newOffset),
     });
   }, [viewState.samplesPerPixel, viewState.scrollOffset, maxSamplesPerPixel, onViewStateChange]);
+
+  // Attach native wheel listener with passive: false so preventDefault() works
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, [handleWheel]);
 
   // --- Pointer drag (pan) ---
   const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -255,7 +264,6 @@ export function WaveformTrack({
           touchAction: 'none',
           cursor: isDragging ? 'grabbing' : 'grab',
         }}
-        onWheel={handleWheel}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
