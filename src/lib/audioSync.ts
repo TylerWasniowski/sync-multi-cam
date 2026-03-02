@@ -83,10 +83,6 @@ export async function syncAudioTracks(
       },
     );
 
-    console.log(
-      `[syncAudio] ${track.fileName} vs ${reference.fileName}: sampleOffset=${sampleOffset} correlation=${correlation.toFixed(4)} offsetSec=${(sampleOffset / SYNC_SAMPLE_RATE).toFixed(3)}`
-    );
-
     results.push({
       fileId: track.fileId,
       fileName: track.fileName,

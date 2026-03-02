@@ -63,15 +63,6 @@ export async function extractAudio(
       float32[i] = int16[i] / 32768.0;
     }
 
-    // Debug: log audio stats to help diagnose sync issues
-    let maxAbs = 0;
-    for (let i = 0; i < Math.min(float32.length, 160000); i++) {
-      if (Math.abs(float32[i]) > maxAbs) maxAbs = Math.abs(float32[i]);
-    }
-    console.log(
-      `[extractAudio] ${file.name}: wavSize=${wavBytes.length} dataOffset=${dataOffset} samples=${float32.length} duration=${(float32.length / SYNC_SAMPLE_RATE).toFixed(1)}s maxAbs=${maxAbs.toFixed(4)}`
-    );
-
     return {
       channelData: [float32],
       samplesDecoded: float32.length,
