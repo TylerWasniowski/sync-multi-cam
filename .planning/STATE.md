@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-03-02T19:28:07Z"
+last_updated: "2026-03-02T19:35:53Z"
 progress:
   total_phases: 4
   completed_phases: 4
   total_plans: 12
-  completed_plans: 10
+  completed_plans: 12
 ---
 
 # Project State
@@ -18,23 +18,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-01)
 
 **Core value:** Accurately sync multiple camera angles by audio so users get aligned video files without installing any software
-**Current focus:** Phase 4 UAT gap closure -- fixing interaction and visual issues
+**Current focus:** All phases complete -- v1.0 milestone achieved
 
 ## Current Position
 
 Phase: 4 of 4 (Waveform Visualization)
-Plan: 3 of 4 in current phase — COMPLETE
-Status: Completed 04-03 UAT gap closure. 04-04 remaining.
-Last activity: 2026-03-02 — Completed 04-03-PLAN.md (UAT gap closure)
+Plan: 4 of 4 in current phase — COMPLETE
+Status: All plans complete. v1.0 milestone achieved.
+Last activity: 2026-03-02 — Completed 04-04-PLAN.md (waveform rendering fixes)
 
-Progress: [████████░░] 83%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 11
-- Average duration: 6.0min
-- Total execution time: ~1.10 hours
+- Total plans completed: 12
+- Average duration: 6.1min
+- Total execution time: ~1.22 hours
 
 **By Phase:**
 
@@ -43,11 +43,11 @@ Progress: [████████░░] 83%
 | 1 - Foundation | 3 | 19min | 6.3min |
 | 2 - Audio Sync | 2 | 33min | 16.5min |
 | 3 - Video Trimming | 2 | 8min | 4.0min |
-| 4 - Waveform Visualization | 3/4 | 10min | 3.3min |
+| 4 - Waveform Visualization | 4/4 | 19min | 4.8min |
 
 **Recent Trend:**
-- Last 5 plans: 03-01 (5min), 03-02 (3min), 04-01 (3min), 04-02 (5min), 04-03 (2min)
-- Trend: Plans getting faster as patterns and infrastructure mature
+- Last 5 plans: 03-02 (3min), 04-01 (3min), 04-02 (5min), 04-03 (2min), 04-04 (9min)
+- Trend: All plans complete. 04-04 took longer due to checkpoint verification cycle.
 
 *Updated after each plan completion*
 
@@ -95,6 +95,9 @@ Recent decisions affecting current work:
 - 04-02: ResizeObserver for responsive canvas width (no fixed pixel widths)
 - 04-03: Native addEventListener with passive: false instead of React onWheel for scroll prevention
 - 04-03: Track-end drawn after waveform but before sync markers to avoid obscuring important indicators
+- 04-04: Removed Math.floor from samplesPerBucket to preserve fractional precision for accurate bucket-to-pixel mapping
+- 04-04: endBucket computed from viewport sample range ceil((scrollOffset + width * SPP) / SPB) instead of pixel-based offset
+- 04-04: barWidth scales dynamically as ceil(SPB / SPP) to fill gaps between waveform bars at all zoom levels
 
 ### Pending Todos
 
@@ -110,5 +113,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 04-03-PLAN.md (UAT gap closure)
-Resume file: .planning/phases/04-waveform-visualization/04-03-SUMMARY.md
+Stopped at: Completed 04-04-PLAN.md (waveform rendering fixes) -- ALL PLANS COMPLETE
+Resume file: .planning/phases/04-waveform-visualization/04-04-SUMMARY.md
