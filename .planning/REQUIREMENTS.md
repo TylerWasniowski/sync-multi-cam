@@ -12,7 +12,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **FILE-01**: User can drag-and-drop video files onto a drop zone with visual feedback
 - [x] **FILE-02**: User can browse to select video files as a fallback to drag-and-drop
 - [x] **FILE-03**: App accepts common video formats (MP4, MOV, MKV, WebM)
-- [x] **FILE-04**: App supports 2-4 video files simultaneously
+- [x] **FILE-04**: App supports up to 30 video files simultaneously
 
 ### Audio Sync
 
@@ -70,7 +70,7 @@ Explicitly excluded. Documented to prevent scope creep.
 | Server-side processing | Contradicts client-side premise, adds cost/privacy concerns |
 | Mobile support | FFmpeg WASM too memory-intensive for mobile browsers |
 | Account system / cloud storage | Users want stateless tool — no signup, no tracking |
-| Support for >4 videos | Memory scales linearly, correlation scales quadratically — desktop tools for larger setups |
+| Support for >30 videos | Memory scales linearly, correlation scales quadratically — desktop tools for larger setups |
 | Audio drift compensation | Extremely complex, only matters for 30+ min recordings — defer to v2+ |
 
 ## Traceability

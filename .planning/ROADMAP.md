@@ -20,11 +20,11 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Phase Details
 
 ### Phase 1: Foundation and File Input
-**Goal**: Users can open the app in a browser, see a professional dark-themed interface, and load 2-4 video files via drag-and-drop or file browser -- with zero installation and clear privacy messaging
+**Goal**: Users can open the app in a browser, see a professional dark-themed interface, and load up to 30 video files via drag-and-drop or file browser -- with zero installation and clear privacy messaging
 **Depends on**: Nothing (first phase)
 **Requirements**: FILE-01, FILE-02, FILE-03, FILE-04, UX-01, UX-02, UX-03, UX-04, UX-05
 **Success Criteria** (what must be TRUE):
-  1. User can drag-and-drop 2-4 video files (MP4, MOV, MKV, WebM) onto a drop zone and see them listed in the UI
+  1. User can drag-and-drop video files (MP4, MOV, MKV, WebM) anywhere on the page and see them listed in the UI
   2. User can alternatively browse to select video files if drag-and-drop is not preferred
   3. App loads in a modern browser with a dark, professional UI theme and displays "files never leave your browser" privacy messaging
   4. App is deployed and accessible as a static site on Cloudflare Pages with SharedArrayBuffer enabled (COOP/COEP headers validated)
