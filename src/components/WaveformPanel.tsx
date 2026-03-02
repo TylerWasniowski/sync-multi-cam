@@ -157,16 +157,27 @@ export function WaveformPanel({ peaksMap, results }: WaveformPanelProps) {
   }, [viewState.scrollOffset]);
 
   const handlePanelPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (!panelDragRef.current) return;
-    const deltaX = panelDragStartXRef.current - e.clientX;
-    const deltaSamples = deltaX * viewState.samplesPerPixel;
-    const newOffset = panelDragStartOffsetRef.current + deltaSamples;
+    if (panelDragRef.current) {
+      // Drag panning
+      const deltaX = panelDragStartXRef.current - e.clientX;
+      const deltaSamples = deltaX * viewState.samplesPerPixel;
+      const newOffset = panelDragStartOffsetRef.current + deltaSamples;
 
-    if (panelRafRef.current) cancelAnimationFrame(panelRafRef.current);
-    panelRafRef.current = requestAnimationFrame(() => {
-      handleViewStateChange({ scrollOffset: Math.max(0, newOffset) });
-    });
-  }, [viewState.samplesPerPixel, handleViewStateChange]);
+      if (panelRafRef.current) cancelAnimationFrame(panelRafRef.current);
+      panelRafRef.current = requestAnimationFrame(() => {
+        handleViewStateChange({ scrollOffset: Math.max(0, newOffset) });
+      });
+    } else {
+      // Hover cursor tracking in gap areas
+      const el = panelRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const offsetX = e.clientX - rect.left - 176;
+      const clampedX = Math.max(0, offsetX);
+      const time = (viewState.scrollOffset + clampedX * viewState.samplesPerPixel) / sampleRate;
+      handleViewStateChange({ cursorTime: time });
+    }
+  }, [viewState.samplesPerPixel, viewState.scrollOffset, sampleRate, handleViewStateChange]);
 
   const handlePanelPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (!panelDragRef.current) return;
@@ -221,7 +232,7 @@ export function WaveformPanel({ peaksMap, results }: WaveformPanelProps) {
       <div
         ref={panelRef}
         className="divide-y divide-gray-800"
-        style={{ cursor: 'grab' }}
+        style={{ cursor: 'grab', userSelect: 'none' }}
         onPointerDown={handlePanelPointerDown}
         onPointerMove={handlePanelPointerMove}
         onPointerUp={handlePanelPointerUp}

@@ -202,7 +202,14 @@ function drawTrackEnd(
   canvasHeight: number,
 ): void {
   const endX = (duration * sampleRate - viewState.scrollOffset) / viewState.samplesPerPixel;
-  if (endX >= canvasWidth || endX < 0) return; // not visible or fully past
+  if (endX >= canvasWidth) return; // track end not visible yet
+
+  if (endX <= 0) {
+    // Entire viewport is beyond track audio — dim everything
+    ctx.fillStyle = TRACK_END_COLOR;
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+    return;
+  }
 
   // Draw dimmed overlay for region beyond audio end
   ctx.fillStyle = TRACK_END_COLOR;
