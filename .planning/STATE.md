@@ -1,40 +1,39 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.0
-milestone_name: milestone
-status: unknown
-last_updated: "2026-03-02T19:35:53Z"
+milestone_name: MVP
+status: complete
+last_updated: "2026-03-02T22:30:00Z"
 progress:
   total_phases: 4
   completed_phases: 4
-  total_plans: 12
-  completed_plans: 12
+  total_plans: 11
+  completed_plans: 11
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-01)
+See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** Accurately sync multiple camera angles by audio so users get aligned video files without installing any software
-**Current focus:** All phases complete -- v1.0 milestone achieved
+**Current focus:** v1.0 shipped — planning next milestone
 
 ## Current Position
 
-Phase: 4 of 4 (Waveform Visualization)
-Plan: 4 of 4 in current phase — COMPLETE
-Status: All plans complete. v1.0 milestone achieved.
-Last activity: 2026-03-02 — Completed 04-04-PLAN.md (waveform rendering fixes)
+Phase: 4 of 4 (all complete)
+Milestone: v1.0 MVP — SHIPPED 2026-03-02
+Status: Milestone archived. Ready for next milestone.
 
 Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 12
-- Average duration: 6.1min
+- Total plans completed: 11
 - Total execution time: ~1.22 hours
+- Average duration: 6.7min per plan
 
 **By Phase:**
 
@@ -43,75 +42,24 @@ Progress: [██████████] 100%
 | 1 - Foundation | 3 | 19min | 6.3min |
 | 2 - Audio Sync | 2 | 33min | 16.5min |
 | 3 - Video Trimming | 2 | 8min | 4.0min |
-| 4 - Waveform Visualization | 4/4 | 19min | 4.8min |
-
-**Recent Trend:**
-- Last 5 plans: 03-02 (3min), 04-01 (3min), 04-02 (5min), 04-03 (2min), 04-04 (9min)
-- Trend: All plans complete. 04-04 took longer due to checkpoint verification cycle.
-
-*Updated after each plan completion*
+| 4 - Waveform Visualization | 4 | 19min | 4.8min |
 
 ## Accumulated Context
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-- Roadmap: 4-phase structure following strict dependency chain (foundation -> sync -> output -> polish)
-- Phase 1 must validate COOP/COEP headers on Cloudflare Pages before any FFmpeg code is written
-- 01-01: Used --branch=main for wrangler deploy to match Cloudflare Pages production branch
-- 01-01: COOP/COEP headers validated on Cloudflare Pages production deployment
-- 01-02: Used inline SVGs for icons to avoid icon library dependency
-- 01-02: Incremental file adds allowed (1 at a time) with count indicator for better UX
-- 01-02: Silent filtering of non-video files in mixed drops; error only when ALL files invalid
-- 01-03: FFmpeg loads lazily only after first file is added, not on page load
-- 01-03: SharedArrayBuffer detection auto-selects multi-thread or single-thread FFmpeg core
-- 01-03: MAX_FILES increased from 4 to 30 per user feedback
-- 01-03: Full-page drag-and-drop via window-level listeners per user feedback
-- 02-01: Used syncWorkerConcurrent (per-pair Web Worker) over syncOneToMany for simpler debugging
-- 02-01: Installed vitest as test framework for TDD workflow
-- 02-02: Switched from syncWorkerConcurrent to syncWorker — avoids SynAudio thread-chunking bug
-- 02-02: Removed shared: true from SynAudio — syncWorker doesn't need SharedArrayBuffer
-- 02-02: Added robust WAV 'data' chunk parsing instead of hardcoded 44-byte offset
-- 03-01: ~~Smart rendering with fallback~~ Replaced with pure stream-copy: mp4box.js reads keyframe index from container, FFmpeg `-c copy` trims at keyframe boundary
-- 03-01: fflate zipSync at level 0 (store mode) for pre-compressed video
-- 03-01: downloadHelper tests use globalThis DOM mocks to stay in node test environment
-- 03-02: Refactored SyncProgress into PipelineProgress (clean replacement, not bolt-on)
-- 03-02: maxOffset alignment for trim: trimSeconds = max(offsets) - fileOffset
-- 03-02: Individual trim failures logged and skipped; pipeline continues unless all fail
-- 03-02: Skipped files (trim 0) included as-is in ZIP with original filename
-- 03-post: Replaced smart rendering with mp4box.js keyframe index + FFmpeg stream-copy (no re-encode, preserves HEVC/HDR)
-- 03-post: Added calculateAlignedTrims() for coordinated cross-file keyframe alignment
-- 03-post: Removed auto-download of ZIP; download buttons in SyncResults are sufficient
-- 03-post: Removed unused TrimResult type from types/index.ts
-- 03-post: Added mp4box dependency for container-level keyframe reading
-- 04-01: Multi-resolution peaks at 3 levels (2K/20K/100K buckets) for zoom-responsive rendering
-- 04-01: Stateless WaveformCanvas with no event handlers; parent controls all state
-- 04-01: devicePixelRatio-aware canvas for crisp HiDPI rendering
-- 04-02: WaveformPanel owns shared ViewState; all tracks receive as props for linked scrolling
-- 04-02: requestAnimationFrame gating on view state updates to coalesce rapid zoom/pan events
-- 04-02: Touch gestures: pinch-to-zoom with midpoint anchor, single-finger swipe for pan
-- 04-02: ResizeObserver for responsive canvas width (no fixed pixel widths)
-- 04-03: Native addEventListener with passive: false instead of React onWheel for scroll prevention
-- 04-03: Track-end drawn after waveform but before sync markers to avoid obscuring important indicators
-- 04-04: Removed Math.floor from samplesPerBucket to preserve fractional precision for accurate bucket-to-pixel mapping
-- 04-04: endBucket computed from viewport sample range ceil((scrollOffset + width * SPP) / SPB) instead of pixel-based offset
-- 04-04: barWidth scales dynamically as ceil(SPB / SPP) to fill gaps between waveform bars at all zoom levels
+Full decision log in PROJECT.md Key Decisions table.
 
 ### Pending Todos
 
-None yet.
+None.
 
 ### Blockers/Concerns
 
-- ~~COOP/COEP header validation on Cloudflare Pages is a hard prerequisite (research pitfall #2)~~ RESOLVED in 01-01
-- ~~SynAudio vs fft.js decision deferred to Phase 2 planning~~ RESOLVED in 02-01: SynAudio selected
-- ~~SynAudio syncWorkerConcurrent zero-offset bug with 4+ threads~~ RESOLVED in 02-02: switched to syncWorker
-- ~~Keyframe alignment precision for stream-copy trimming needs empirical validation in Phase 3~~ RESOLVED: stream-copy with mp4box.js keyframe snapping; coordinated alignment via calculateAlignedTrims()
+All resolved during v1.0 development.
 
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 04-04-PLAN.md (waveform rendering fixes) -- ALL PLANS COMPLETE
-Resume file: .planning/phases/04-waveform-visualization/04-04-SUMMARY.md
+Stopped at: v1.0 milestone completed and archived
+Resume file: .planning/MILESTONES.md

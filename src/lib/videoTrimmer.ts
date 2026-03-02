@@ -1,31 +1,43 @@
 import { getFFmpeg } from './ffmpeg.ts';
 import { fetchFile } from '@ffmpeg/util';
+import { getKeyframeTimes } from './keyframeIndex.ts';
+
+const TAG = '[TRIM]';
 
 /**
- * Smart rendering: re-encode only from trim point to first keyframe (~0.5-2s),
- * stream-copy the rest, concat. Falls back to full re-encode if smart rendering fails.
+ * Stream-copy trim: snaps to nearest keyframe >= trimSeconds using mp4box.js
+ * container index, then FFmpeg `-c copy`. No re-encoding, preserves HEVC/HDR.
  *
- * Returns null when trimSeconds === 0 (reference file optimization).
- * Returns Uint8Array of trimmed video data otherwise.
+ * Returns null when trimSeconds === 0 (reference file — no trim needed).
  */
 export async function trimVideo(
   file: File,
   trimSeconds: number,
   onProgress?: (secondsEncoded: number) => void
 ): Promise<Uint8Array | null> {
-  // Skip when no trim needed (reference/latest-starting file)
-  if (trimSeconds === 0) return null;
+  if (trimSeconds === 0) {
+    console.log(TAG, `Skipping "${file.name}" — trimSeconds=0 (reference file)`);
+    return null;
+  }
+
+  console.log(TAG, `Starting "${file.name}" — trim ${trimSeconds}s from start`);
+  const t0 = performance.now();
+
+  // Read keyframe positions from container (no decoding)
+  const keyframes = await getKeyframeTimes(file);
+  // Snap forward: first keyframe >= trimSeconds (never include footage that should be trimmed)
+  let snapTime = keyframes.find((t) => t >= trimSeconds);
+  if (snapTime === undefined) {
+    snapTime = keyframes[keyframes.length - 1];
+  }
+  console.log(TAG, `Snap: ideal=${trimSeconds}s → keyframe=${snapTime}s`);
 
   const ffmpeg = await getFFmpeg();
   const id = crypto.randomUUID().slice(0, 8);
   const inputName = `trim_in_${id}.mp4`;
-  const startSeg = `trim_start_${id}.mp4`;
-  const restSeg = `trim_rest_${id}.mp4`;
-  const concatList = `trim_list_${id}.txt`;
   const outputName = `trim_out_${id}.mp4`;
 
   const progressHandler = ({ time }: { progress: number; time: number }) => {
-    // NOTE: Do NOT use the progress field -- broken in @ffmpeg/core 0.12.x
     if (onProgress && time > 0) {
       onProgress(time / 1_000_000);
     }
@@ -35,100 +47,61 @@ export async function trimVideo(
   try {
     await ffmpeg.writeFile(inputName, await fetchFile(file));
 
-    // Try smart rendering first
-    try {
-      // Attempt to probe keyframes by running ffmpeg with -skip_frame nokey
-      // and parsing log output for I-frame timestamps.
-      // In WASM FFmpeg, ffprobe is not available, so we use the main binary
-      // with flags that cause it to log keyframe info.
-      const keyframeTimestamps: number[] = [];
-      const logHandler = ({ message }: { message: string }) => {
-        // Parse log lines like: "pts_time:3.000000" from showinfo filter output
-        const match = message.match(/pts_time:\s*([\d.]+)/);
-        if (match) {
-          keyframeTimestamps.push(parseFloat(match[1]));
-        }
-      };
-      ffmpeg.on('log', logHandler);
-
-      try {
-        await ffmpeg.exec([
-          '-skip_frame', 'nokey',
-          '-i', inputName,
-          '-vf', 'showinfo',
-          '-f', 'null',
-          '-',
-        ]);
-      } finally {
-        ffmpeg.off('log', logHandler);
-      }
-
-      // Find first keyframe at or after trim point
-      const firstKeyframe = keyframeTimestamps.find(t => t >= trimSeconds);
-      if (firstKeyframe === undefined || firstKeyframe === trimSeconds) {
-        // No keyframe found after trim point, or trim is exactly on keyframe
-        // Fall through to fallback
-        throw new Error('No suitable keyframe found for smart rendering');
-      }
-
-      const reEncodeDuration = firstKeyframe - trimSeconds;
-
-      // Step 2: Re-encode from trim point to first keyframe
-      await ffmpeg.exec([
-        '-ss', String(trimSeconds),
-        '-accurate_seek',
-        '-i', inputName,
-        '-t', String(reEncodeDuration),
-        '-c:v', 'libx264',
-        '-crf', '18',
-        '-preset', 'fast',
-        '-c:a', 'aac',
-        '-b:a', '192k',
-        startSeg,
-      ]);
-
-      // Step 3: Stream-copy from first keyframe to end (no -t/-to = full remaining)
-      await ffmpeg.exec([
-        '-ss', String(firstKeyframe),
-        '-i', inputName,
-        '-c', 'copy',
-        restSeg,
-      ]);
-
-      // Step 4: Write concat list and merge
-      const listContent = `file '${startSeg}'\nfile '${restSeg}'\n`;
-      await ffmpeg.writeFile(concatList, new TextEncoder().encode(listContent));
-
-      await ffmpeg.exec([
-        '-f', 'concat',
-        '-safe', '0',
-        '-i', concatList,
-        '-c', 'copy',
-        outputName,
-      ]);
-    } catch {
-      // Fallback: Full re-encode (still frame-precise, just slower)
-      // No -t or -to flags: keeps full remaining footage after trim point (OUT-02)
-      await ffmpeg.exec([
-        '-ss', String(trimSeconds),
-        '-accurate_seek',
-        '-i', inputName,
-        '-c:v', 'libx264',
-        '-crf', '18',
-        '-preset', 'fast',
-        '-c:a', 'aac',
-        '-b:a', '192k',
-        outputName,
-      ]);
-    }
+    await ffmpeg.exec([
+      '-ss', String(snapTime),
+      '-i', inputName,
+      '-c', 'copy',
+      '-avoid_negative_ts', '1',
+      outputName,
+    ]);
 
     const data = await ffmpeg.readFile(outputName);
+    const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
+    console.log(TAG, `Complete "${file.name}" — stream copy, ${((data as Uint8Array).byteLength / 1024 / 1024).toFixed(1)}MB output, ${elapsed}s total`);
     return data as Uint8Array;
   } finally {
     ffmpeg.off('progress', progressHandler);
-    // Clean up ALL possible intermediate files
-    for (const f of [inputName, startSeg, restSeg, concatList, outputName]) {
+    for (const f of [inputName, outputName]) {
       await ffmpeg.deleteFile(f).catch(() => {});
     }
   }
+}
+
+/**
+ * Coordinate trim points across multiple files so they all overshoot by
+ * approximately the same amount, minimizing inter-file drift.
+ *
+ * Different files have different keyframe phases so exact alignment isn't
+ * possible with stream-copy — but this gets within one GOP (~0.93s).
+ */
+export async function calculateAlignedTrims(
+  files: { file: File; idealTrimSeconds: number }[]
+): Promise<{ file: File; snapTrimSeconds: number; driftFromIdeal: number }[]> {
+  // Get keyframe times for all files in parallel
+  const allKeyframes = await Promise.all(
+    files.map((f) => getKeyframeTimes(f.file))
+  );
+
+  // First pass: snap each file independently to find per-file overshoot
+  const snapped = files.map((f, i) => {
+    const keyframes = allKeyframes[i];
+    const snap = keyframes.find((t) => t >= f.idealTrimSeconds) ?? keyframes[keyframes.length - 1];
+    return { ...f, keyframes, snap, overshoot: snap - f.idealTrimSeconds };
+  });
+
+  // Find the maximum overshoot — all files should target this
+  const maxOvershoot = Math.max(...snapped.map((s) => s.overshoot));
+
+  // Second pass: re-snap each file targeting idealTrim + maxOvershoot
+  return snapped.map((s) => {
+    const target = s.file === snapped.find((x) => x.overshoot === maxOvershoot)?.file
+      ? s.snap // The file that defined maxOvershoot keeps its snap
+      : s.keyframes.find((t) => t >= s.idealTrimSeconds + maxOvershoot) ?? s.keyframes[s.keyframes.length - 1];
+
+    return {
+      file: s.file,
+      snapTrimSeconds: target,
+      driftFromIdeal: target - s.idealTrimSeconds,
+    };
+  });
 }

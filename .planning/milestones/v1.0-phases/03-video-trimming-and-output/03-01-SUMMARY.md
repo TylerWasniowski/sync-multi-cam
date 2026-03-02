@@ -122,5 +122,21 @@ None - no external service configuration required.
 - Offset calculation logic (maxOffset - fileOffset) documented in research but not yet wired -- Plan 03-02 handles this
 
 ---
+
+## Post-Phase Rewrite (2026-03-01)
+
+**videoTrimmer.ts was fully rewritten** to replace smart rendering with pure stream-copy:
+- Added `mp4box` dependency for reading keyframe positions from container metadata (stss atom) — no frame decoding
+- New `src/lib/keyframeIndex.ts` module wraps mp4box.js `getTrackSamplesInfo()` → filters `is_sync` samples
+- `trimVideo()` now snaps to nearest keyframe >= trimSeconds and uses FFmpeg `-c copy` (no re-encode)
+- Added `calculateAlignedTrims()` for coordinated cross-file keyframe alignment (minimizes inter-file drift)
+- Removed all H.264 re-encoding (`-c:v libx264`, `-crf`, `-preset`, `-accurate_seek`, concat workflow)
+- Preserves HEVC/HDR metadata that smart rendering destroyed
+- WASM FS cleanup reduced from 5 files to 2 (input + output only)
+- Tests rewritten: 15 tests for stream-copy behavior + 4 tests for keyframeIndex
+
+**Reason:** Smart rendering was fundamentally broken for iPhone HEVC recordings — keyframe probe hung on 10-bit HEVC decoding in WASM, and H.264 re-encode + HEVC stream-copy concat produced broken output. Pure stream-copy trims a 332MB file in ~2 seconds.
+
+---
 *Phase: 03-video-trimming-and-output*
 *Completed: 2026-03-02*

@@ -111,5 +111,12 @@ None - no external service configuration required.
 - All 45 existing tests pass; TypeScript compiles cleanly; production build succeeds
 
 ---
+
+## Post-Phase Updates (2026-03-01)
+
+- **Removed auto-download of ZIP**: `triggerDownload()` call removed from App.tsx pipeline. Download buttons in SyncResults (per-file + full ZIP) are sufficient. The `triggerDownload` import was also removed from App.tsx (still used by SyncResults).
+- **Coordinated trim alignment**: App.tsx now calls `calculateAlignedTrims()` before trimming to coordinate keyframe snap points across all files, minimizing inter-file drift.
+
+---
 *Phase: 03-video-trimming-and-output*
 *Completed: 2026-03-02*
