@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Foundation and File Input** - Deployable app shell with dark theme, file drop zone, and validated COOP/COEP headers on Cloudflare Pages
 - [x] **Phase 2: Audio Sync Engine** - Extract audio from videos and cross-correlate to detect time offsets with confidence scoring
 - [x] **Phase 3: Video Trimming and Output** - Trim videos to aligned start points and deliver downloadable synced files
-- [ ] **Phase 4: Waveform Visualization** - Render audio waveforms with sync point markers for visual verification of results
+- [x] **Phase 4: Waveform Visualization** - Render audio waveforms with sync point markers for visual verification of results
 
 ## Phase Details
 
@@ -76,8 +76,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 04-01-PLAN.md -- Define waveform types, build peak downsampling library (TDD), create stateless WaveformCanvas renderer
-- [ ] 04-02-PLAN.md -- Build WaveformTrack/WaveformPanel with linked zoom/pan/cursor interaction, wire into App.tsx pipeline
+- [x] 04-01-PLAN.md -- Define waveform types, build peak downsampling library (TDD), create stateless WaveformCanvas renderer
+- [x] 04-02-PLAN.md -- Build WaveformTrack/WaveformPanel with linked zoom/pan/cursor interaction, wire into App.tsx pipeline
 
 ## Progress
 
@@ -89,4 +89,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | 1. Foundation and File Input | 3/3 | Complete | 2026-03-02 |
 | 2. Audio Sync Engine | 2/2 | Complete | 2026-03-02 |
 | 3. Video Trimming and Output | 2/2 | Complete | 2026-03-02 |
-| 4. Waveform Visualization | 0/2 | Not started | - |
+| 4. Waveform Visualization | 2/2 | Complete | 2026-03-02 |
