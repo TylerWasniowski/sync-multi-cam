@@ -45,8 +45,8 @@ export function WaveformPanel({ peaksMap, results }: WaveformPanelProps) {
     return 16000; // fallback
   }, [peaksMap]);
 
-  // Default samplesPerPixel: fit longest track in panel width (minus label area ~160px)
-  const canvasWidth = Math.max(panelWidth - 160, 200);
+  // Default samplesPerPixel: fit longest track in panel width (minus px-4 padding + w-40 label = 176px)
+  const canvasWidth = Math.max(panelWidth - 176, 200);
   const defaultSPP = maxDuration > 0 && canvasWidth > 0
     ? (maxDuration * sampleRate) / canvasWidth
     : 100;
@@ -105,6 +105,80 @@ export function WaveformPanel({ peaksMap, results }: WaveformPanelProps) {
     });
   }, [maxTotalSamples, canvasWidth]);
 
+  // --- Wheel zoom at panel level (covers tracks + gaps) ---
+  const MIN_SAMPLES_PER_PIXEL = 1;
+  const maxSamplesPerPixel = Math.ceil(maxTotalSamples / 200);
+
+  const handleWheel = useCallback((e: WheelEvent) => {
+    e.preventDefault(); // prevent page scroll when over waveform panel
+
+    const el = panelRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    // Account for px-4 padding (16px) + label column w-40 (160px)
+    const offsetX = e.clientX - rect.left - 176;
+    const clampedX = Math.max(0, Math.min(offsetX, canvasWidth));
+    const factor = e.deltaY > 0 ? 1.1 : 0.9;
+    const oldSPP = viewState.samplesPerPixel;
+    const newSPP = Math.max(MIN_SAMPLES_PER_PIXEL, Math.min(maxSamplesPerPixel, oldSPP * factor));
+
+    // Keep the cursor sample position stable under the pointer
+    const cursorSample = viewState.scrollOffset + clampedX * oldSPP;
+    const newOffset = cursorSample - clampedX * newSPP;
+
+    handleViewStateChange({
+      samplesPerPixel: newSPP,
+      scrollOffset: Math.max(0, newOffset),
+    });
+  }, [viewState.samplesPerPixel, viewState.scrollOffset, maxSamplesPerPixel, canvasWidth, handleViewStateChange]);
+
+  // Attach native wheel listener with passive: false so preventDefault() works
+  useEffect(() => {
+    const el = panelRef.current;
+    if (!el) return;
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, [handleWheel]);
+
+  // --- Panel-level pointer drag (pan) for gaps between tracks ---
+  const panelDragRef = useRef(false);
+  const panelDragStartXRef = useRef(0);
+  const panelDragStartOffsetRef = useRef(0);
+  const panelRafRef = useRef<number>(0);
+
+  const handlePanelPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    // Only handle clicks directly on the panel (gaps), not on tracks
+    if (e.target !== e.currentTarget && (e.target as HTMLElement).closest('[data-waveform-track]')) return;
+    if (e.button !== 0) return;
+    panelDragRef.current = true;
+    panelDragStartXRef.current = e.clientX;
+    panelDragStartOffsetRef.current = viewState.scrollOffset;
+    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+  }, [viewState.scrollOffset]);
+
+  const handlePanelPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!panelDragRef.current) return;
+    const deltaX = panelDragStartXRef.current - e.clientX;
+    const deltaSamples = deltaX * viewState.samplesPerPixel;
+    const newOffset = panelDragStartOffsetRef.current + deltaSamples;
+
+    if (panelRafRef.current) cancelAnimationFrame(panelRafRef.current);
+    panelRafRef.current = requestAnimationFrame(() => {
+      handleViewStateChange({ scrollOffset: Math.max(0, newOffset) });
+    });
+  }, [viewState.samplesPerPixel, handleViewStateChange]);
+
+  const handlePanelPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!panelDragRef.current) return;
+    panelDragRef.current = false;
+    (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId);
+
+    const deltaX = panelDragStartXRef.current - e.clientX;
+    const deltaSamples = deltaX * viewState.samplesPerPixel;
+    const newOffset = panelDragStartOffsetRef.current + deltaSamples;
+    handleViewStateChange({ scrollOffset: Math.max(0, newOffset) });
+  }, [viewState.samplesPerPixel, handleViewStateChange]);
+
   const handlePointerLeaveAll = useCallback(() => {
     handleViewStateChange({ cursorTime: null });
   }, [handleViewStateChange]);
@@ -144,15 +218,24 @@ export function WaveformPanel({ peaksMap, results }: WaveformPanelProps) {
         <h2 className="text-sm font-medium text-gray-300">Audio Waveforms</h2>
       </div>
 
-      <div ref={panelRef} className="divide-y divide-gray-800" onPointerLeave={handlePointerLeaveAll}>
+      <div
+        ref={panelRef}
+        className="divide-y divide-gray-800"
+        style={{ cursor: 'grab' }}
+        onPointerDown={handlePanelPointerDown}
+        onPointerMove={handlePanelPointerMove}
+        onPointerUp={handlePanelPointerUp}
+        onPointerLeave={handlePointerLeaveAll}
+      >
         {trackEntries.map((entry) => (
-          <div key={entry.key} className="px-4 py-1">
+          <div key={entry.key} className="px-4 py-1" data-waveform-track>
             <WaveformTrack
               fileName={entry.fileName}
               isReference={entry.isReference}
               peaks={entry.peaks}
               syncResult={entry.syncResult}
               viewState={viewState}
+              maxSamplesPerPixel={maxSamplesPerPixel}
               onViewStateChange={handleViewStateChange}
               onPointerEnter={handlePointerEnter}
               onPointerLeave={handlePointerLeaveAll}

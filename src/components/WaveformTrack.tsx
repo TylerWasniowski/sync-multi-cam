@@ -12,6 +12,7 @@ export interface WaveformTrackProps {
   peaks: MultiResolutionPeaks;
   syncResult: { offsetSeconds: number; confidence: number };
   viewState: ViewState;
+  maxSamplesPerPixel: number;
   onViewStateChange: (update: Partial<ViewState>) => void;
   onPointerEnter: () => void;
   onPointerLeave: () => void;
@@ -23,6 +24,7 @@ export function WaveformTrack({
   peaks,
   syncResult,
   viewState,
+  maxSamplesPerPixel,
   onViewStateChange,
   onPointerEnter,
   onPointerLeave,
@@ -44,9 +46,6 @@ export function WaveformTrack({
   const pinchStartSPPRef = useRef(0);
   const lastSingleTouchXRef = useRef(0);
 
-  // Max samples per pixel: fit entire track in ~200px
-  const maxSamplesPerPixel = Math.ceil(peaks.totalSamples / 200);
-
   // Measure container width via ResizeObserver
   useEffect(() => {
     const el = containerRef.current;
@@ -66,35 +65,6 @@ export function WaveformTrack({
     ? selectPeakLevel(peaks, viewState.samplesPerPixel, containerWidth)
     : peaks.overview;
 
-  // --- Wheel zoom (bare scroll, no modifier needed) ---
-  const handleWheel = useCallback((e: WheelEvent) => {
-    e.preventDefault(); // prevent page scroll when over waveform
-
-    const el = containerRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const offsetX = e.clientX - rect.left;
-    const factor = e.deltaY > 0 ? 1.1 : 0.9;
-    const oldSPP = viewState.samplesPerPixel;
-    const newSPP = Math.max(MIN_SAMPLES_PER_PIXEL, Math.min(maxSamplesPerPixel, oldSPP * factor));
-
-    // Keep the cursor sample position stable under the pointer
-    const cursorSample = viewState.scrollOffset + offsetX * oldSPP;
-    const newOffset = cursorSample - offsetX * newSPP;
-
-    onViewStateChange({
-      samplesPerPixel: newSPP,
-      scrollOffset: Math.max(0, newOffset),
-    });
-  }, [viewState.samplesPerPixel, viewState.scrollOffset, maxSamplesPerPixel, onViewStateChange]);
-
-  // Attach native wheel listener with passive: false so preventDefault() works
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    el.addEventListener('wheel', handleWheel, { passive: false });
-    return () => el.removeEventListener('wheel', handleWheel);
-  }, [handleWheel]);
 
   // --- Pointer drag (pan) ---
   const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
