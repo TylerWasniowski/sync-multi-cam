@@ -79,13 +79,32 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (populated during roadmap creation) | | |
+| FILE-01 | Phase 1: Foundation and File Input | Pending |
+| FILE-02 | Phase 1: Foundation and File Input | Pending |
+| FILE-03 | Phase 1: Foundation and File Input | Pending |
+| FILE-04 | Phase 1: Foundation and File Input | Pending |
+| UX-01 | Phase 1: Foundation and File Input | Pending |
+| UX-02 | Phase 1: Foundation and File Input | Pending |
+| UX-03 | Phase 1: Foundation and File Input | Pending |
+| UX-04 | Phase 1: Foundation and File Input | Pending |
+| UX-05 | Phase 1: Foundation and File Input | Pending |
+| SYNC-01 | Phase 2: Audio Sync Engine | Pending |
+| SYNC-02 | Phase 2: Audio Sync Engine | Pending |
+| SYNC-03 | Phase 2: Audio Sync Engine | Pending |
+| SYNC-04 | Phase 2: Audio Sync Engine | Pending |
+| SYNC-05 | Phase 2: Audio Sync Engine | Pending |
+| OUT-01 | Phase 3: Video Trimming and Output | Pending |
+| OUT-02 | Phase 3: Video Trimming and Output | Pending |
+| OUT-03 | Phase 3: Video Trimming and Output | Pending |
+| OUT-04 | Phase 3: Video Trimming and Output | Pending |
+| OUT-05 | Phase 3: Video Trimming and Output | Pending |
+| SYNC-06 | Phase 4: Waveform Visualization | Pending |
 
 **Coverage:**
 - v1 requirements: 20 total
-- Mapped to phases: 0
-- Unmapped: 20 ⚠️
+- Mapped to phases: 20
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-01*
-*Last updated: 2026-03-01 after initial definition*
+*Last updated: 2026-03-01 after roadmap creation*

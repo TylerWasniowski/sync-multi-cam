@@ -1,0 +1,91 @@
+# Roadmap: Sync Multi-Cam
+
+## Overview
+
+This roadmap delivers a browser-based multi-camera video synchronization tool in four phases following the strict dependency chain: deploy infrastructure with file input first, then build the audio sync algorithm, then add video trimming and output delivery, and finally add visual waveform verification. Each phase delivers a coherent, verifiable capability that unblocks the next. The app runs entirely client-side via FFmpeg WASM and deploys as a static site on Cloudflare Pages.
+
+## Phases
+
+**Phase Numbering:**
+- Integer phases (1, 2, 3): Planned milestone work
+- Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
+
+Decimal phases appear between their surrounding integers in numeric order.
+
+- [ ] **Phase 1: Foundation and File Input** - Deployable app shell with dark theme, file drop zone, and validated COOP/COEP headers on Cloudflare Pages
+- [ ] **Phase 2: Audio Sync Engine** - Extract audio from videos and cross-correlate to detect time offsets with confidence scoring
+- [ ] **Phase 3: Video Trimming and Output** - Trim videos to aligned start points and deliver downloadable synced files
+- [ ] **Phase 4: Waveform Visualization** - Render audio waveforms with sync point markers for visual verification of results
+
+## Phase Details
+
+### Phase 1: Foundation and File Input
+**Goal**: Users can open the app in a browser, see a professional dark-themed interface, and load 2-4 video files via drag-and-drop or file browser -- with zero installation and clear privacy messaging
+**Depends on**: Nothing (first phase)
+**Requirements**: FILE-01, FILE-02, FILE-03, FILE-04, UX-01, UX-02, UX-03, UX-04, UX-05
+**Success Criteria** (what must be TRUE):
+  1. User can drag-and-drop 2-4 video files (MP4, MOV, MKV, WebM) onto a drop zone and see them listed in the UI
+  2. User can alternatively browse to select video files if drag-and-drop is not preferred
+  3. App loads in a modern browser with a dark, professional UI theme and displays "files never leave your browser" privacy messaging
+  4. App is deployed and accessible as a static site on Cloudflare Pages with SharedArrayBuffer enabled (COOP/COEP headers validated)
+  5. FFmpeg WASM loads successfully in a Web Worker (verified by console or status indicator) with no server dependencies
+**Plans**: TBD
+
+Plans:
+- [ ] 01-01: TBD
+- [ ] 01-02: TBD
+- [ ] 01-03: TBD
+
+### Phase 2: Audio Sync Engine
+**Goal**: Users can trigger audio analysis on their loaded videos and see accurate time offsets and confidence scores -- the core algorithmic capability that makes the tool useful
+**Depends on**: Phase 1
+**Requirements**: SYNC-01, SYNC-02, SYNC-03, SYNC-04, SYNC-05
+**Success Criteria** (what must be TRUE):
+  1. App extracts audio tracks from all loaded videos using FFmpeg WASM without user intervention
+  2. App cross-correlates audio waveforms and displays the detected timecode offset for each video relative to the reference
+  3. App auto-selects a reference file (longest or first) and correlates all other files against it
+  4. App displays a sync confidence score (correlation strength as percentage) for each video pair
+**Plans**: TBD
+
+Plans:
+- [ ] 02-01: TBD
+- [ ] 02-02: TBD
+
+### Phase 3: Video Trimming and Output
+**Goal**: Users get downloadable, synchronized video files trimmed to a common start point -- completing the core value proposition from input to output
+**Depends on**: Phase 2
+**Requirements**: OUT-01, OUT-02, OUT-03, OUT-04, OUT-05
+**Success Criteria** (what must be TRUE):
+  1. App trims each video using stream-copy (no re-encode) to align start points based on detected offsets, keeping full remaining footage
+  2. UI presents synced videos in a list with offset info and individual per-file download buttons
+  3. App auto-downloads a zip containing all synced/trimmed video files
+  4. UI shows a multi-stage progress indicator during the entire pipeline (loading FFmpeg, extracting audio, analyzing, trimming)
+**Plans**: TBD
+
+Plans:
+- [ ] 03-01: TBD
+- [ ] 03-02: TBD
+
+### Phase 4: Waveform Visualization
+**Goal**: Users can visually verify sync accuracy by seeing audio waveforms with alignment markers overlaid -- building confidence that the automated sync is correct
+**Depends on**: Phase 2
+**Requirements**: SYNC-06
+**Success Criteria** (what must be TRUE):
+  1. App renders audio waveforms for each video on canvas elements in the results view
+  2. Waveforms display sync point markers showing where each video's audio aligns with the reference
+**Plans**: TBD
+
+Plans:
+- [ ] 04-01: TBD
+
+## Progress
+
+**Execution Order:**
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 1. Foundation and File Input | 0/3 | Not started | - |
+| 2. Audio Sync Engine | 0/2 | Not started | - |
+| 3. Video Trimming and Output | 0/2 | Not started | - |
+| 4. Waveform Visualization | 0/1 | Not started | - |
