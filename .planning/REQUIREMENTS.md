@@ -25,10 +25,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Output
 
-- [ ] **OUT-01**: App trims videos to align start points using stream-copy (no re-encode) via FFmpeg WASM
-- [ ] **OUT-02**: App keeps full remaining footage per video after trim (no forced end cut)
+- [x] **OUT-01**: App trims videos to align start points using stream-copy (no re-encode) via FFmpeg WASM
+- [x] **OUT-02**: App keeps full remaining footage per video after trim (no forced end cut)
 - [ ] **OUT-03**: UI presents individual synced videos in a list with offset info and per-file download buttons
-- [ ] **OUT-04**: App auto-downloads a zip of all synced/trimmed video files
+- [x] **OUT-04**: App auto-downloads a zip of all synced/trimmed video files
 - [ ] **OUT-05**: App shows multi-stage progress indicator during processing (loading, extracting, analyzing, trimming)
 
 ### UX
@@ -93,10 +93,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SYNC-03 | Phase 2: Audio Sync Engine | Complete |
 | SYNC-04 | Phase 2: Audio Sync Engine | Pending |
 | SYNC-05 | Phase 2: Audio Sync Engine | Complete |
-| OUT-01 | Phase 3: Video Trimming and Output | Pending |
-| OUT-02 | Phase 3: Video Trimming and Output | Pending |
+| OUT-01 | Phase 3: Video Trimming and Output | Complete |
+| OUT-02 | Phase 3: Video Trimming and Output | Complete |
 | OUT-03 | Phase 3: Video Trimming and Output | Pending |
-| OUT-04 | Phase 3: Video Trimming and Output | Pending |
+| OUT-04 | Phase 3: Video Trimming and Output | Complete |
 | OUT-05 | Phase 3: Video Trimming and Output | Pending |
 | SYNC-06 | Phase 4: Waveform Visualization | Pending |
 
