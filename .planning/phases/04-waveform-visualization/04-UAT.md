@@ -3,7 +3,7 @@ status: complete
 phase: 04-waveform-visualization
 source: [04-01-SUMMARY.md, 04-02-SUMMARY.md]
 started: 2026-03-02T18:10:00Z
-updated: 2026-03-02T18:20:00Z
+updated: 2026-03-02T19:00:00Z
 ---
 
 ## Current Test
@@ -36,7 +36,7 @@ severity: major
 
 ### 6. Linked Pan (Click-Drag)
 expected: Click and drag horizontally on any waveform to pan. ALL waveforms pan together — they move in unison.
-result: [pending]
+result: pass
 
 ### 7. Multi-Resolution Detail on Zoom
 expected: When zoomed in significantly, the waveform shows more detail (sharper peaks, not blocky). When zoomed out, it shows a smooth overview.
@@ -52,10 +52,10 @@ reason: No longer applicable — user wants scroll-without-Ctrl for zoom, so thi
 ## Summary
 
 total: 8
-passed: 5
+passed: 6
 issues: 2
 pending: 0
-skipped: 1
+skipped: 0
 
 ## Gaps
 
