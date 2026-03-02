@@ -35,8 +35,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [ ] **UX-01**: App has a dark, modern, professional UI theme
 - [ ] **UX-02**: App prominently displays "files never leave your browser" privacy messaging
-- [ ] **UX-03**: App runs entirely client-side with no server dependencies
-- [ ] **UX-04**: App can be deployed as a static site on Cloudflare Pages
+- [x] **UX-03**: App runs entirely client-side with no server dependencies
+- [x] **UX-04**: App can be deployed as a static site on Cloudflare Pages
 - [ ] **UX-05**: App requires zero configuration — smart defaults for everything, just drop files and go
 
 ## v2 Requirements
@@ -85,8 +85,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FILE-04 | Phase 1: Foundation and File Input | Pending |
 | UX-01 | Phase 1: Foundation and File Input | Pending |
 | UX-02 | Phase 1: Foundation and File Input | Pending |
-| UX-03 | Phase 1: Foundation and File Input | Pending |
-| UX-04 | Phase 1: Foundation and File Input | Pending |
+| UX-03 | Phase 1: Foundation and File Input | Complete (01-01) |
+| UX-04 | Phase 1: Foundation and File Input | Complete (01-01) |
 | UX-05 | Phase 1: Foundation and File Input | Pending |
 | SYNC-01 | Phase 2: Audio Sync Engine | Pending |
 | SYNC-02 | Phase 2: Audio Sync Engine | Pending |
@@ -107,4 +107,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-03-01*
-*Last updated: 2026-03-01 after roadmap creation*
+*Last updated: 2026-03-02 after 01-01-PLAN completion*
