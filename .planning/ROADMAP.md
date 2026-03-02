@@ -13,7 +13,7 @@ This roadmap delivers a browser-based multi-camera video synchronization tool in
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation and File Input** - Deployable app shell with dark theme, file drop zone, and validated COOP/COEP headers on Cloudflare Pages
-- [ ] **Phase 2: Audio Sync Engine** - Extract audio from videos and cross-correlate to detect time offsets with confidence scoring
+- [x] **Phase 2: Audio Sync Engine** - Extract audio from videos and cross-correlate to detect time offsets with confidence scoring
 - [ ] **Phase 3: Video Trimming and Output** - Trim videos to aligned start points and deliver downloadable synced files
 - [ ] **Phase 4: Waveform Visualization** - Render audio waveforms with sync point markers for visual verification of results
 
@@ -48,8 +48,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 02-01-PLAN.md -- Install SynAudio, define types/constants, create audio extraction and correlation engine modules
-- [ ] 02-02-PLAN.md -- Build SyncButton, SyncProgress, SyncResults components, wire sync pipeline into App.tsx, verify with real files
+- [x] 02-01-PLAN.md -- Install SynAudio, define types/constants, create audio extraction and correlation engine modules
+- [x] 02-02-PLAN.md -- Build SyncButton, SyncProgress, SyncResults components, wire sync pipeline into App.tsx, verify with real files
 
 ### Phase 3: Video Trimming and Output
 **Goal**: Users get downloadable, synchronized video files trimmed to a common start point -- completing the core value proposition from input to output
@@ -86,6 +86,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation and File Input | 3/3 | Complete | 2026-03-02 |
-| 2. Audio Sync Engine | 0/2 | Not started | - |
+| 2. Audio Sync Engine | 2/2 | Complete | 2026-03-02 |
 | 3. Video Trimming and Output | 0/2 | Not started | - |
 | 4. Waveform Visualization | 0/1 | Not started | - |

@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in-progress
-last_updated: "2026-03-02T04:28:00Z"
+last_updated: "2026-03-02T06:00:00Z"
 progress:
   total_phases: 2
-  completed_phases: 1
-  total_plans: 4
-  completed_plans: 4
+  completed_phases: 2
+  total_plans: 5
+  completed_plans: 5
 ---
 
 # Project State
@@ -18,34 +18,34 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-01)
 
 **Core value:** Accurately sync multiple camera angles by audio so users get aligned video files without installing any software
-**Current focus:** Phase 2: Audio Sync Engine
+**Current focus:** Phase 2 complete — ready for Phase 3: Video Trimming and Output
 
 ## Current Position
 
-Phase: 2 of 4 (Audio Sync Engine)
-Plan: 2 of 2 in current phase
-Status: Completed 02-01 (Audio Extraction and Correlation) -- Ready for 02-02 (Sync UI)
-Last activity: 2026-03-02 -- Completed 02-01-PLAN.md (audio extraction and cross-correlation engine)
+Phase: 2 of 4 (Audio Sync Engine) — COMPLETE
+Plan: 2 of 2 in current phase — COMPLETE
+Status: Phase 2 fully complete. Ready to plan Phase 3.
+Last activity: 2026-03-02 — Completed 02-02-PLAN.md (sync UI + zero-offset bug fix verified)
 
 Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: 6.8min
-- Total execution time: 0.45 hours
+- Total plans completed: 5
+- Average duration: 8.6min
+- Total execution time: ~0.7 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 1 - Foundation | 3 | 19min | 6.3min |
-| 2 - Audio Sync | 1 | 8min | 8min |
+| 2 - Audio Sync | 2 | 33min | 16.5min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (5min), 01-02 (2min), 01-03 (12min), 02-01 (8min)
-- Trend: Steady
+- Last 5 plans: 01-01 (5min), 01-02 (2min), 01-03 (12min), 02-01 (8min), 02-02 (25min)
+- Trend: 02-02 included cross-session bug investigation
 
 *Updated after each plan completion*
 
@@ -68,8 +68,10 @@ Recent decisions affecting current work:
 - 01-03: MAX_FILES increased from 4 to 30 per user feedback
 - 01-03: Full-page drag-and-drop via window-level listeners per user feedback
 - 02-01: Used syncWorkerConcurrent (per-pair Web Worker) over syncOneToMany for simpler debugging
-- 02-01: SynAudio initialized with shared: true leveraging COOP/COEP headers from Phase 1
 - 02-01: Installed vitest as test framework for TDD workflow
+- 02-02: Switched from syncWorkerConcurrent to syncWorker — avoids SynAudio thread-chunking bug
+- 02-02: Removed shared: true from SynAudio — syncWorker doesn't need SharedArrayBuffer
+- 02-02: Added robust WAV 'data' chunk parsing instead of hardcoded 44-byte offset
 
 ### Pending Todos
 
@@ -79,10 +81,11 @@ None yet.
 
 - ~~COOP/COEP header validation on Cloudflare Pages is a hard prerequisite (research pitfall #2)~~ RESOLVED in 01-01
 - ~~SynAudio vs fft.js decision deferred to Phase 2 planning~~ RESOLVED in 02-01: SynAudio selected
+- ~~SynAudio syncWorkerConcurrent zero-offset bug with 4+ threads~~ RESOLVED in 02-02: switched to syncWorker
 - Keyframe alignment precision for stream-copy trimming needs empirical validation in Phase 3
 
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Completed 02-01-PLAN.md (audio extraction and cross-correlation engine)
-Resume file: .planning/phases/02-audio-sync-engine/02-01-SUMMARY.md
+Stopped at: Phase 2 complete. Ready to plan Phase 3 (Video Trimming and Output).
+Resume file: none
