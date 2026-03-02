@@ -29,12 +29,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. App loads in a modern browser with a dark, professional UI theme and displays "files never leave your browser" privacy messaging
   4. App is deployed and accessible as a static site on Cloudflare Pages with SharedArrayBuffer enabled (COOP/COEP headers validated)
   5. FFmpeg WASM loads successfully in a Web Worker (verified by console or status indicator) with no server dependencies
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: TBD
-- [ ] 01-02: TBD
-- [ ] 01-03: TBD
+- [ ] 01-01-PLAN.md -- Scaffold Vite project, configure COOP/COEP headers, deploy skeleton to Cloudflare Pages
+- [ ] 01-02-PLAN.md -- Build dark theme UI shell, file drop zone, file validation, file list, privacy banner
+- [ ] 01-03-PLAN.md -- Integrate FFmpeg WASM lazy loading, wire all components, final deploy and verify
 
 ### Phase 2: Audio Sync Engine
 **Goal**: Users can trigger audio analysis on their loaded videos and see accurate time offsets and confidence scores -- the core algorithmic capability that makes the tool useful
@@ -85,7 +85,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation and File Input | 0/3 | Not started | - |
+| 1. Foundation and File Input | 0/3 | Planning complete | - |
 | 2. Audio Sync Engine | 0/2 | Not started | - |
 | 3. Video Trimming and Output | 0/2 | Not started | - |
 | 4. Waveform Visualization | 0/1 | Not started | - |
