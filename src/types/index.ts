@@ -21,20 +21,6 @@ export interface SyncResult {
   isReference: boolean;
 }
 
-export type SyncStage =
-  | 'idle'
-  | 'extracting'
-  | 'correlating'
-  | 'complete'
-  | 'error';
-
-export interface SyncProgress {
-  stage: SyncStage;
-  current: number;      // Current file index (0-based)
-  total: number;         // Total files
-  message: string;       // Human-readable progress message
-}
-
 export type PipelineStage =
   | 'idle'
   | 'extracting'
@@ -62,4 +48,10 @@ export interface TrimResult {
 export interface TrimmedFile {
   name: string;
   data: Uint8Array;
+}
+
+export interface DownloadableResult extends SyncResult {
+  trimmedData: Uint8Array | null; // null means skipped (use original file)
+  trimSeconds: number;
+  originalFile: File; // reference to original File for skipped downloads
 }

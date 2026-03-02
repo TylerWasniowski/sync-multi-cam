@@ -9,7 +9,7 @@ interface SyncButtonProps {
 export function SyncButton({ fileCount, isSyncing, onClick }: SyncButtonProps) {
   const isDisabled = fileCount < MIN_FILES || isSyncing;
   const label = isSyncing
-    ? 'Syncing...'
+    ? 'Processing...'
     : fileCount < MIN_FILES
       ? `Add ${MIN_FILES - fileCount} more file${MIN_FILES - fileCount > 1 ? 's' : ''} to sync`
       : 'Sync Videos';
