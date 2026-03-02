@@ -19,7 +19,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **SYNC-01**: App extracts audio from uploaded videos using FFmpeg WASM
 - [x] **SYNC-02**: App cross-correlates audio waveforms to detect time offsets between videos
 - [x] **SYNC-03**: App auto-selects reference file (longest or first) with no user input required
-- [ ] **SYNC-04**: App displays detected timecode offsets per video in the results UI
+- [x] **SYNC-04**: App displays detected timecode offsets per video in the results UI
 - [x] **SYNC-05**: App displays sync confidence score (correlation strength as percentage) per video
 - [ ] **SYNC-06**: App renders audio waveforms on canvas with sync point markers for visual verification
 
@@ -27,9 +27,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **OUT-01**: App trims videos to align start points using stream-copy (no re-encode) via FFmpeg WASM
 - [x] **OUT-02**: App keeps full remaining footage per video after trim (no forced end cut)
-- [ ] **OUT-03**: UI presents individual synced videos in a list with offset info and per-file download buttons
+- [x] **OUT-03**: UI presents individual synced videos in a list with offset info and per-file download buttons
 - [x] **OUT-04**: App auto-downloads a zip of all synced/trimmed video files
-- [ ] **OUT-05**: App shows multi-stage progress indicator during processing (loading, extracting, analyzing, trimming)
+- [x] **OUT-05**: App shows multi-stage progress indicator during processing (loading, extracting, analyzing, trimming)
 
 ### UX
 
@@ -91,13 +91,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SYNC-01 | Phase 2: Audio Sync Engine | Complete |
 | SYNC-02 | Phase 2: Audio Sync Engine | Complete |
 | SYNC-03 | Phase 2: Audio Sync Engine | Complete |
-| SYNC-04 | Phase 2: Audio Sync Engine | Pending |
+| SYNC-04 | Phase 2: Audio Sync Engine | Complete |
 | SYNC-05 | Phase 2: Audio Sync Engine | Complete |
 | OUT-01 | Phase 3: Video Trimming and Output | Complete |
 | OUT-02 | Phase 3: Video Trimming and Output | Complete |
-| OUT-03 | Phase 3: Video Trimming and Output | Pending |
+| OUT-03 | Phase 3: Video Trimming and Output | Complete |
 | OUT-04 | Phase 3: Video Trimming and Output | Complete |
-| OUT-05 | Phase 3: Video Trimming and Output | Pending |
+| OUT-05 | Phase 3: Video Trimming and Output | Complete |
 | SYNC-06 | Phase 4: Waveform Visualization | Pending |
 
 **Coverage:**
@@ -107,4 +107,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-03-01*
-*Last updated: 2026-03-02 after 01-01-PLAN completion*
+*Last updated: 2026-03-02 after 03-02-PLAN completion*
