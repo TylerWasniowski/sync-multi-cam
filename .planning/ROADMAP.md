@@ -60,11 +60,11 @@ Plans:
   2. UI presents synced videos in a list with offset info and individual per-file download buttons
   3. App auto-downloads a zip containing all synced/trimmed video files
   4. UI shows a multi-stage progress indicator during the entire pipeline (loading FFmpeg, extracting audio, analyzing, trimming)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 03-01: TBD
-- [ ] 03-02: TBD
+- [ ] 03-01-PLAN.md -- Extend types, create videoTrimmer (smart rendering), zipBuilder (fflate), and downloadHelper modules
+- [ ] 03-02-PLAN.md -- Refactor SyncProgress into PipelineProgress, extend SyncResults with download buttons, wire full pipeline into App.tsx
 
 ### Phase 4: Waveform Visualization
 **Goal**: Users can visually verify sync accuracy by seeing audio waveforms with alignment markers overlaid -- building confidence that the automated sync is correct
