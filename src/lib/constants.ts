@@ -8,7 +8,7 @@ export const ACCEPTED_MIME_TYPES = new Set([
 export const ACCEPTED_EXTENSIONS = new Set(['.mp4', '.mov', '.mkv', '.webm']);
 
 export const MIN_FILES = 2;
-export const MAX_FILES = 4;
+export const MAX_FILES = 30;
 
 export const FFMPEG_CORE_VERSION = '0.12.10';
 export const FFMPEG_CDN_BASE = 'https://cdn.jsdelivr.net/npm';

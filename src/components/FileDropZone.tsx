@@ -101,7 +101,7 @@ export function FileDropZone({
       }`}
     >
       <p className="text-gray-300 text-lg mb-4">
-        Drag and drop 2-4 video files here
+        Drag and drop video files here
       </p>
       <button
         type="button"
