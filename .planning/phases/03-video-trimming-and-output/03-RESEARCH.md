@@ -10,7 +10,9 @@ Phase 3 extends the existing FFmpeg WASM pipeline to trim and re-encode videos b
 
 The existing `extractAudio()` pattern in `audioExtractor.ts` establishes the exact write-exec-read-cleanup lifecycle needed for trimming. The trimming module will follow this identical shape but with different FFmpeg arguments (re-encode with `-ss` instead of audio extraction). For ZIP generation, `fflate` is the standard choice -- it is 8kB, supports store mode (level 0, no compression since videos are already compressed), and has a simple synchronous API via `zipSync`. The SyncProgress component needs refactoring from a sync-specific widget into a generic multi-stage pipeline progress component.
 
-**Primary recommendation:** Use the established `getFFmpeg()` singleton with sequential per-file re-encode via `-ss` (before `-i`) + `-accurate_seek` + `-c:v libx264 -crf 18 -preset fast -c:a aac`, collect output as `Uint8Array`, then ZIP with `fflate.zipSync` at level 0 (store). Track progress via `ffmpeg.on('progress')` using the `time` field (not the broken `progress` field) divided by expected output duration.
+**Primary recommendation: Smart Rendering (partial re-encode).** For each file: (1) probe keyframe positions, (2) re-encode ONLY from the precise trim point to the first keyframe after it (~0.5-2s of video), (3) stream-copy from that keyframe to end of file, (4) concat the two segments seamlessly. This gives frame-precise alignment with near stream-copy speed. Use the established `getFFmpeg()` singleton, collect output as `Uint8Array`, then ZIP with `fflate.zipSync` at level 0 (store). Track progress via `ffmpeg.on('progress')` using the `time` field (not the broken `progress` field).
+
+**Fallback:** If keyframe probing fails or smart rendering produces errors, fall back to full re-encode via `-ss` + `-accurate_seek` + `-c:v libx264 -crf 18 -preset fast -c:a aac`.
 
 <user_constraints>
 ## User Constraints (from CONTEXT.md)
@@ -22,9 +24,11 @@ The existing `extractAudio()` pattern in `audioExtractor.ts` establishes the exa
 - Both per-file download buttons AND zip download available
 - Zip auto-downloads when trimming completes (matches roadmap OUT-03)
 - Per-file buttons appear in the results list for individual grabs
-- Re-encode for frame-precise cuts (not stream-copy)
-- Accept slower processing time in exchange for exact sync alignment
-- This means FFmpeg will transcode video, not just copy streams
+- Smart rendering (partial re-encode) for frame-precise cuts with near stream-copy speed
+- Only re-encode the tiny segment from trim point to first keyframe (~0.5-2s)
+- Stream-copy everything from that keyframe to end of file
+- Concat the two segments seamlessly
+- Fallback to full re-encode if smart rendering fails
 - Re-architect SyncProgress into a generic pipeline progress component
 - Same component used for extraction, correlation, and trimming stages (different params as needed)
 - Not a bolt-on -- refactor the existing component to be stage-agnostic
@@ -99,60 +103,30 @@ src/
     └── index.ts               # Extended: new PipelineStage type, TrimResult type
 ```
 
-### Pattern 1: Sequential FFmpeg Re-encode with Cleanup
-**What:** Process each video file one at a time through FFmpeg WASM, cleaning up FS after each to prevent memory exhaustion.
-**When to use:** Always -- WASM FS uses browser RAM, so files must be cleaned up between operations.
+### Pattern 1: Smart Rendering — Partial Re-encode + Stream-Copy
+**What:** For frame-precise trimming with near stream-copy speed: (1) probe keyframes, (2) re-encode only the segment from trim point to first keyframe, (3) stream-copy the rest, (4) concat.
+**When to use:** Always as primary approach. Fall back to full re-encode if probing/concat fails.
 **Example:**
 ```typescript
-// Source: Matches established audioExtractor.ts pattern
-import { getFFmpeg } from './ffmpeg.ts';
-import { fetchFile } from '@ffmpeg/util';
+// Smart rendering approach per file:
+// Step 1: Write input file to WASM FS
+// Step 2: Probe to find first keyframe at or after trim point
+//   ffmpeg -i input -c copy -f null - (parse log for keyframes)
+//   OR use ffprobe-equivalent: ffmpeg -i input -select_streams v:0 -show_frames -of csv
+//   In WASM, parse ffmpeg log output for keyframe timestamps
+// Step 3: Re-encode ONLY from trim point to first keyframe
+//   ffmpeg -ss {trimPoint} -accurate_seek -i input -t {keyframe - trimPoint} -c:v libx264 -crf 18 -preset fast -c:a aac -b:a 192k start_segment.mp4
+// Step 4: Stream-copy from first keyframe to end
+//   ffmpeg -ss {keyframe} -i input -c copy rest_segment.mp4
+// Step 5: Concat the two segments
+//   ffmpeg -f concat -safe 0 -i concat_list.txt -c copy output.mp4
+// Step 6: Read output, clean up all intermediate files
 
-export async function trimVideo(
-  file: File,
-  offsetSeconds: number,
-  onProgress?: (ratio: number) => void
-): Promise<Uint8Array> {
-  const ffmpeg = await getFFmpeg();
-  const inputName = `trim_in_${crypto.randomUUID()}.mp4`;
-  const outputName = `trim_out_${crypto.randomUUID()}.mp4`;
-
-  // Register progress handler for this operation
-  const progressHandler = ({ time }: { progress: number; time: number }) => {
-    // time is in microseconds; estimate total from file duration
-    // (caller provides expected duration or we use a rough estimate)
-    if (onProgress && time > 0) {
-      onProgress(time / 1_000_000); // report seconds encoded so far
-    }
-  };
-  ffmpeg.on('progress', progressHandler);
-
-  try {
-    await ffmpeg.writeFile(inputName, await fetchFile(file));
-
-    // -ss before -i = fast input seek, -accurate_seek = frame precision
-    // No -t/-to = keep all remaining footage (OUT-02)
-    await ffmpeg.exec([
-      '-ss', String(offsetSeconds),
-      '-accurate_seek',
-      '-i', inputName,
-      '-c:v', 'libx264',
-      '-crf', '18',
-      '-preset', 'fast',
-      '-c:a', 'aac',
-      '-b:a', '192k',
-      outputName,
-    ]);
-
-    const data = await ffmpeg.readFile(outputName);
-    return data as Uint8Array;
-  } finally {
-    ffmpeg.off('progress', progressHandler);
-    await ffmpeg.deleteFile(inputName).catch(() => {});
-    await ffmpeg.deleteFile(outputName).catch(() => {});
-  }
-}
+// Fallback: If any step fails, full re-encode:
+//   ffmpeg -ss {trimPoint} -accurate_seek -i input -c:v libx264 -crf 18 -preset fast -c:a aac -b:a 192k output.mp4
 ```
+
+**Key detail:** The re-encoded start segment is typically only 0.5-2 seconds of video (one GOP). The rest is stream-copied at near-instant speed. Total processing time is dramatically less than full re-encode.
 
 ### Pattern 2: Blob Download via Anchor Click
 **What:** Trigger browser file download from in-memory data using `URL.createObjectURL` and a temporary anchor element.
@@ -273,12 +247,22 @@ export interface PipelineProgress {
 
 Verified patterns from official sources:
 
-### FFmpeg Trim with Re-encode (Frame-Accurate)
+### Smart Rendering: Partial Re-encode + Stream-Copy Concat
+```bash
+# Step 1: Probe keyframes (parse FFmpeg log for keyframe timestamps)
+# Step 2: Re-encode from trim point to first keyframe only
+ffmpeg -ss 2.345 -accurate_seek -i input.mp4 -t 0.655 -c:v libx264 -crf 18 -preset fast -c:a aac -b:a 192k start.mp4
+# Step 3: Stream-copy from first keyframe to end
+ffmpeg -ss 3.0 -i input.mp4 -c copy rest.mp4
+# Step 4: Concat seamlessly
+echo "file 'start.mp4'" > list.txt && echo "file 'rest.mp4'" >> list.txt
+ffmpeg -f concat -safe 0 -i list.txt -c copy output.mp4
+```
+
+### Fallback: Full Re-encode (Frame-Accurate)
 ```bash
 # Source: https://shotstack.io/learn/use-ffmpeg-to-trim-video/
-# -ss before -i = fast input seek
-# -accurate_seek = frame precision with re-encode
-# No -t/-to = keep all remaining footage
+# Used when smart rendering fails (probing error, concat error, etc.)
 ffmpeg -ss 2.345 -accurate_seek -i input.mp4 -c:v libx264 -crf 18 -preset fast -c:a aac -b:a 192k output.mp4
 ```
 
@@ -346,7 +330,7 @@ const trimAmounts = results.map(r => ({
 |--------------|------------------|--------------|--------|
 | JSZip for browser ZIP | fflate (8kB, 3x faster) | 2021+ | Smaller bundle, faster ZIP creation |
 | ffmpeg.wasm 0.11 `createFFmpeg()` | 0.12 class-based `new FFmpeg()` | 2023 | Already using 0.12 API in project |
-| Stream-copy trimming (`-c copy`) | Re-encode (`-c:v libx264`) for frame precision | User decision | Slower but frame-accurate; no keyframe alignment issues |
+| Stream-copy trimming (`-c copy`) | Smart rendering (partial re-encode + stream-copy concat) | User decision | Frame-precise at trim point with near stream-copy speed for bulk of file |
 | `progress` field in on('progress') | `time` field (progress is broken) | 0.12.4+ | Must use time/duration for progress ratio |
 
 **Deprecated/outdated:**
