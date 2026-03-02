@@ -9,10 +9,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### File Input
 
-- [ ] **FILE-01**: User can drag-and-drop video files onto a drop zone with visual feedback
-- [ ] **FILE-02**: User can browse to select video files as a fallback to drag-and-drop
-- [ ] **FILE-03**: App accepts common video formats (MP4, MOV, MKV, WebM)
-- [ ] **FILE-04**: App supports 2-4 video files simultaneously
+- [x] **FILE-01**: User can drag-and-drop video files onto a drop zone with visual feedback
+- [x] **FILE-02**: User can browse to select video files as a fallback to drag-and-drop
+- [x] **FILE-03**: App accepts common video formats (MP4, MOV, MKV, WebM)
+- [x] **FILE-04**: App supports 2-4 video files simultaneously
 
 ### Audio Sync
 
@@ -33,11 +33,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### UX
 
-- [ ] **UX-01**: App has a dark, modern, professional UI theme
-- [ ] **UX-02**: App prominently displays "files never leave your browser" privacy messaging
+- [x] **UX-01**: App has a dark, modern, professional UI theme
+- [x] **UX-02**: App prominently displays "files never leave your browser" privacy messaging
 - [x] **UX-03**: App runs entirely client-side with no server dependencies
 - [x] **UX-04**: App can be deployed as a static site on Cloudflare Pages
-- [ ] **UX-05**: App requires zero configuration — smart defaults for everything, just drop files and go
+- [x] **UX-05**: App requires zero configuration — smart defaults for everything, just drop files and go
 
 ## v2 Requirements
 
@@ -79,15 +79,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FILE-01 | Phase 1: Foundation and File Input | Pending |
-| FILE-02 | Phase 1: Foundation and File Input | Pending |
-| FILE-03 | Phase 1: Foundation and File Input | Pending |
-| FILE-04 | Phase 1: Foundation and File Input | Pending |
-| UX-01 | Phase 1: Foundation and File Input | Pending |
-| UX-02 | Phase 1: Foundation and File Input | Pending |
+| FILE-01 | Phase 1: Foundation and File Input | Complete |
+| FILE-02 | Phase 1: Foundation and File Input | Complete |
+| FILE-03 | Phase 1: Foundation and File Input | Complete |
+| FILE-04 | Phase 1: Foundation and File Input | Complete |
+| UX-01 | Phase 1: Foundation and File Input | Complete |
+| UX-02 | Phase 1: Foundation and File Input | Complete |
 | UX-03 | Phase 1: Foundation and File Input | Complete (01-01) |
 | UX-04 | Phase 1: Foundation and File Input | Complete (01-01) |
-| UX-05 | Phase 1: Foundation and File Input | Pending |
+| UX-05 | Phase 1: Foundation and File Input | Complete |
 | SYNC-01 | Phase 2: Audio Sync Engine | Pending |
 | SYNC-02 | Phase 2: Audio Sync Engine | Pending |
 | SYNC-03 | Phase 2: Audio Sync Engine | Pending |
