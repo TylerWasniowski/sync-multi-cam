@@ -16,11 +16,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Audio Sync
 
-- [ ] **SYNC-01**: App extracts audio from uploaded videos using FFmpeg WASM
-- [ ] **SYNC-02**: App cross-correlates audio waveforms to detect time offsets between videos
-- [ ] **SYNC-03**: App auto-selects reference file (longest or first) with no user input required
+- [x] **SYNC-01**: App extracts audio from uploaded videos using FFmpeg WASM
+- [x] **SYNC-02**: App cross-correlates audio waveforms to detect time offsets between videos
+- [x] **SYNC-03**: App auto-selects reference file (longest or first) with no user input required
 - [ ] **SYNC-04**: App displays detected timecode offsets per video in the results UI
-- [ ] **SYNC-05**: App displays sync confidence score (correlation strength as percentage) per video
+- [x] **SYNC-05**: App displays sync confidence score (correlation strength as percentage) per video
 - [ ] **SYNC-06**: App renders audio waveforms on canvas with sync point markers for visual verification
 
 ### Output
@@ -88,11 +88,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | UX-03 | Phase 1: Foundation and File Input | Complete (01-01) |
 | UX-04 | Phase 1: Foundation and File Input | Complete (01-01) |
 | UX-05 | Phase 1: Foundation and File Input | Complete |
-| SYNC-01 | Phase 2: Audio Sync Engine | Pending |
-| SYNC-02 | Phase 2: Audio Sync Engine | Pending |
-| SYNC-03 | Phase 2: Audio Sync Engine | Pending |
+| SYNC-01 | Phase 2: Audio Sync Engine | Complete |
+| SYNC-02 | Phase 2: Audio Sync Engine | Complete |
+| SYNC-03 | Phase 2: Audio Sync Engine | Complete |
 | SYNC-04 | Phase 2: Audio Sync Engine | Pending |
-| SYNC-05 | Phase 2: Audio Sync Engine | Pending |
+| SYNC-05 | Phase 2: Audio Sync Engine | Complete |
 | OUT-01 | Phase 3: Video Trimming and Output | Pending |
 | OUT-02 | Phase 3: Video Trimming and Output | Pending |
 | OUT-03 | Phase 3: Video Trimming and Output | Pending |
