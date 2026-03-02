@@ -1,16 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AudioData } from '../../types/index.ts';
 
+// Shared mock state
+const mockSyncWorkerConcurrent = vi.fn();
+const constructorCalls: unknown[][] = [];
+
 // Mock synaudio before importing the module under test
 vi.mock('synaudio', () => {
-  const mockSyncWorkerConcurrent = vi.fn();
-  const MockSynAudio = vi.fn().mockImplementation(() => ({
-    syncWorkerConcurrent: mockSyncWorkerConcurrent,
-  }));
+  class MockSynAudio {
+    constructor(...args: unknown[]) {
+      constructorCalls.push(args);
+    }
+    syncWorkerConcurrent = mockSyncWorkerConcurrent;
+  }
   return {
     default: MockSynAudio,
-    __mockSyncWorkerConcurrent: mockSyncWorkerConcurrent,
-    __MockSynAudio: MockSynAudio,
   };
 });
 
@@ -31,12 +35,9 @@ function makeTrack(fileId: string, fileName: string, samples: number): {
 }
 
 describe('syncAudioTracks', () => {
-  let mockSyncWorkerConcurrent: ReturnType<typeof vi.fn>;
-
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.resetAllMocks();
-    const synaudioMock = await import('synaudio');
-    mockSyncWorkerConcurrent = (synaudioMock as unknown as { __mockSyncWorkerConcurrent: ReturnType<typeof vi.fn> }).__mockSyncWorkerConcurrent;
+    constructorCalls.length = 0;
     mockSyncWorkerConcurrent.mockResolvedValue({
       sampleOffset: 8000,
       correlation: 0.85,
@@ -160,10 +161,6 @@ describe('syncAudioTracks', () => {
   });
 
   it('initializes SynAudio with shared: true', async () => {
-    await import('../audioSync.ts');
-    const synaudioMock = await import('synaudio');
-    const MockSynAudio = (synaudioMock as unknown as { __MockSynAudio: ReturnType<typeof vi.fn> }).__MockSynAudio;
-
     const tracks = [
       makeTrack('ref', 'ref.mp4', 48000),
       makeTrack('comp', 'comp.mp4', 16000),
@@ -172,7 +169,8 @@ describe('syncAudioTracks', () => {
     const { syncAudioTracks } = await import('../audioSync.ts');
     await syncAudioTracks(tracks);
 
-    expect(MockSynAudio).toHaveBeenCalledWith(
+    expect(constructorCalls.length).toBeGreaterThan(0);
+    expect(constructorCalls[0][0]).toEqual(
       expect.objectContaining({ shared: true })
     );
   });
