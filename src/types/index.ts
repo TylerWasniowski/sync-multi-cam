@@ -37,14 +37,6 @@ export interface PipelineProgress {
   message: string;
 }
 
-export interface TrimResult {
-  fileId: string;
-  fileName: string;
-  data: Uint8Array | null; // null when skipped (trimSeconds === 0)
-  trimSeconds: number;
-  skipped: boolean;
-}
-
 export interface TrimmedFile {
   name: string;
   data: Uint8Array;
@@ -54,4 +46,28 @@ export interface DownloadableResult extends SyncResult {
   trimmedData: Uint8Array | null; // null means skipped (use original file)
   trimSeconds: number;
   originalFile: File; // reference to original File for skipped downloads
+}
+
+export interface WaveformPeaks {
+  min: Float32Array;
+  max: Float32Array;
+  length: number; // number of buckets
+  sampleRate: number; // original sample rate (16000)
+  duration: number; // total duration in seconds
+  samplesPerBucket: number; // how many raw samples per bucket
+}
+
+export interface MultiResolutionPeaks {
+  overview: WaveformPeaks; // ~2,000 buckets
+  medium: WaveformPeaks; // ~20,000 buckets
+  detail: WaveformPeaks; // ~100,000 buckets
+  totalSamples: number;
+  sampleRate: number;
+  duration: number;
+}
+
+export interface ViewState {
+  samplesPerPixel: number; // controls zoom level
+  scrollOffset: number; // horizontal scroll position in samples
+  cursorTime: number | null; // hover position in seconds, null when not hovering
 }
