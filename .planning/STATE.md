@@ -82,10 +82,10 @@ None yet.
 - ~~COOP/COEP header validation on Cloudflare Pages is a hard prerequisite (research pitfall #2)~~ RESOLVED in 01-01
 - ~~SynAudio vs fft.js decision deferred to Phase 2 planning~~ RESOLVED in 02-01: SynAudio selected
 - ~~SynAudio syncWorkerConcurrent zero-offset bug with 4+ threads~~ RESOLVED in 02-02: switched to syncWorker
-- Keyframe alignment precision for stream-copy trimming needs empirical validation in Phase 3
+- ~~Keyframe alignment precision for stream-copy trimming needs empirical validation in Phase 3~~ RESOLVED: user chose re-encode for frame-precise cuts
 
 ## Session Continuity
 
-Last session: 2026-03-02
-Stopped at: Phase 2 complete. Ready to plan Phase 3 (Video Trimming and Output).
-Resume file: none
+Last session: 2026-03-01
+Stopped at: Phase 3 context gathered, ready to plan
+Resume file: .planning/phases/03-video-trimming-and-output/03-CONTEXT.md
