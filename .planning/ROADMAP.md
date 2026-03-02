@@ -56,14 +56,14 @@ Plans:
 **Depends on**: Phase 2
 **Requirements**: OUT-01, OUT-02, OUT-03, OUT-04, OUT-05
 **Success Criteria** (what must be TRUE):
-  1. App trims each video using stream-copy (no re-encode) to align start points based on detected offsets, keeping full remaining footage
+  1. App trims each video using stream-copy (keyframe-aligned via mp4box.js, no re-encode) to align start points based on detected offsets, keeping full remaining footage
   2. UI presents synced videos in a list with offset info and individual per-file download buttons
-  3. App auto-downloads a zip containing all synced/trimmed video files
+  3. App provides a ZIP of all synced/trimmed video files with per-file and full-ZIP download buttons
   4. UI shows a multi-stage progress indicator during the entire pipeline (loading FFmpeg, extracting audio, analyzing, trimming)
 **Plans**: 2 plans
 
 Plans:
-- [x] 03-01-PLAN.md -- Extend types, create videoTrimmer (smart rendering), zipBuilder (fflate), and downloadHelper modules
+- [x] 03-01-PLAN.md -- Extend types, create videoTrimmer (stream-copy via mp4box.js keyframe index), zipBuilder (fflate), and downloadHelper modules
 - [x] 03-02-PLAN.md -- Refactor SyncProgress into PipelineProgress, extend SyncResults with download buttons, wire full pipeline into App.tsx
 
 ### Phase 4: Waveform Visualization
@@ -73,10 +73,11 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. App renders audio waveforms for each video on canvas elements in the results view
   2. Waveforms display sync point markers showing where each video's audio aligns with the reference
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 04-01: TBD
+- [ ] 04-01-PLAN.md -- Define waveform types, build peak downsampling library (TDD), create stateless WaveformCanvas renderer
+- [ ] 04-02-PLAN.md -- Build WaveformTrack/WaveformPanel with linked zoom/pan/cursor interaction, wire into App.tsx pipeline
 
 ## Progress
 
@@ -88,4 +89,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | 1. Foundation and File Input | 3/3 | Complete | 2026-03-02 |
 | 2. Audio Sync Engine | 2/2 | Complete | 2026-03-02 |
 | 3. Video Trimming and Output | 2/2 | Complete | 2026-03-02 |
-| 4. Waveform Visualization | 0/1 | Not started | - |
+| 4. Waveform Visualization | 0/2 | Not started | - |
