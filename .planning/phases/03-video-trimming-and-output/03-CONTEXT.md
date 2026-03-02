@@ -23,10 +23,13 @@ Trim videos to aligned start points using sync offsets from Phase 2 and deliver 
 - Zip auto-downloads when trimming completes (matches roadmap OUT-03)
 - Per-file buttons appear in the results list for individual grabs
 
-### Keyframe precision
-- Re-encode for frame-precise cuts (not stream-copy)
-- Accept slower processing time in exchange for exact sync alignment
-- This means FFmpeg will transcode video, not just copy streams
+### Trimming strategy — smart rendering (partial re-encode)
+- Frame-precise cuts using "smart rendering" — NOT full re-encode, NOT pure stream-copy
+- Only re-encode the tiny segment from the precise trim point to the first keyframe (~0.5-2s of video)
+- Stream-copy everything from that keyframe to end of file (fast, no quality loss)
+- Concat the re-encoded start segment with the stream-copied remainder seamlessly
+- Steps per file: probe keyframes → re-encode start segment → stream-copy rest → concat
+- This gives frame-precise alignment with near stream-copy speed
 
 ### Progress architecture
 - Re-architect SyncProgress into a generic pipeline progress component
@@ -37,15 +40,18 @@ Trim videos to aligned start points using sync offsets from Phase 2 and deliver 
 - Output file naming convention (prefix/suffix/zip name)
 - Reference file handling in zip (include as-is or exclude)
 - Error handling strategy for individual file trim failures
-- Re-encode codec/quality settings (should match source quality)
+- Re-encode codec/quality settings for the start segment (should match source quality)
 - Exact progress detail level (per-file counts vs percentage)
+- Fallback strategy if keyframe probing fails (full re-encode as fallback)
 
 </decisions>
 
 <specifics>
 ## Specific Ideas
 
-No specific references — open to standard approaches. Key constraint: re-encode must produce quality comparable to source files.
+- Smart rendering approach: probe → partial re-encode (start only) → stream-copy (rest) → concat
+- Only the start segment (trim point to first keyframe) is re-encoded; rest is copied verbatim
+- Key constraint: re-encoded start segment must match source quality to avoid visible seam at the concat point
 
 </specifics>
 
