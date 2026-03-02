@@ -64,7 +64,7 @@ export function computeMultiResolutionPeaks(
       length: min.length,
       sampleRate,
       duration,
-      samplesPerBucket: Math.floor(samples.length / min.length),
+      samplesPerBucket: samples.length / min.length,
     };
   }
 

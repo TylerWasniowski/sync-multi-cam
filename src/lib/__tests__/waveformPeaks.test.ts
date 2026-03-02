@@ -136,15 +136,20 @@ describe('computeMultiResolutionPeaks', () => {
 
     const result = computeMultiResolutionPeaks(samples, sampleRate);
 
-    expect(result.overview.samplesPerBucket).toBe(
-      Math.floor(length / 2000),
-    );
-    expect(result.medium.samplesPerBucket).toBe(
-      Math.floor(length / 20000),
-    );
-    expect(result.detail.samplesPerBucket).toBe(
-      Math.floor(length / 100000),
-    );
+    expect(result.overview.samplesPerBucket).toBe(length / 2000);
+    expect(result.medium.samplesPerBucket).toBe(length / 20000);
+    expect(result.detail.samplesPerBucket).toBe(length / 100000);
+  });
+
+  it('stores float samplesPerBucket when samples do not divide evenly', () => {
+    // 195000 samples / 100000 detail buckets = 1.95 SPB
+    const samples = new Float32Array(195000);
+    for (let i = 0; i < samples.length; i++) samples[i] = Math.sin(i * 0.01);
+    const result = computeMultiResolutionPeaks(samples, 16000);
+    // Detail level: 100000 buckets, SPB = 195000 / 100000 = 1.95
+    expect(result.detail.samplesPerBucket).toBeCloseTo(1.95, 2);
+    // Overview level: 2000 buckets, SPB = 195000 / 2000 = 97.5
+    expect(result.overview.samplesPerBucket).toBeCloseTo(97.5, 2);
   });
 
   it('detail level clamps to sample count for short audio', () => {
