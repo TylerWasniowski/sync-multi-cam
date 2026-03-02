@@ -1,14 +1,14 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: MVP
-status: complete
-last_updated: "2026-03-02T22:30:00Z"
+milestone: v2.0
+milestone_name: Synced Playback & Export
+status: defining_requirements
+last_updated: "2026-03-02T23:00:00Z"
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 11
-  completed_plans: 11
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # Project State
@@ -18,31 +18,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** Accurately sync multiple camera angles by audio so users get aligned video files without installing any software
-**Current focus:** v1.0 shipped — planning next milestone
+**Current focus:** v2.0 Synced Playback & Export
 
 ## Current Position
 
-Phase: 4 of 4 (all complete)
-Milestone: v1.0 MVP — SHIPPED 2026-03-02
-Status: Milestone archived. Ready for next milestone.
-
-Progress: [██████████] 100%
-
-## Performance Metrics
-
-**Velocity:**
-- Total plans completed: 11
-- Total execution time: ~1.22 hours
-- Average duration: 6.7min per plan
-
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| 1 - Foundation | 3 | 19min | 6.3min |
-| 2 - Audio Sync | 2 | 33min | 16.5min |
-| 3 - Video Trimming | 2 | 8min | 4.0min |
-| 4 - Waveform Visualization | 4 | 19min | 4.8min |
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-02 — Milestone v2.0 started
 
 ## Accumulated Context
 
@@ -50,16 +33,22 @@ Progress: [██████████] 100%
 
 Full decision log in PROJECT.md Key Decisions table.
 
+### Performance Metrics (from v1.0)
+
+- 11 plans completed in ~1.22 hours
+- Average: 6.7min per plan
+- 4 phases, 72 commits, 3,334 LOC
+
 ### Pending Todos
 
 None.
 
 ### Blockers/Concerns
 
-All resolved during v1.0 development.
+None.
 
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: v1.0 milestone completed and archived
-Resume file: .planning/MILESTONES.md
+Stopped at: Defining v2.0 milestone requirements
+Resume file: .planning/STATE.md

@@ -25,7 +25,14 @@ Accurately sync multiple camera angles by audio so users get aligned video files
 
 ### Active
 
-(None — planning next milestone)
+<!-- Current milestone: v2.0 Synced Playback & Export -->
+
+- [ ] Synced multi-cam video grid playback with dynamic aspect-ratio-aware packing
+- [ ] Two display modes: preserve original aspect ratios vs fill tiles (crop)
+- [ ] Waveform-as-scrubbar integration with video playback (click to seek, scroll during play)
+- [ ] Audio mixing: all tracks by default, dropdown to select per-camera audio
+- [ ] GPU-accelerated export of grid composite as single MP4 (H.264) at 4K/1080p/720p
+- [ ] Progressive loading: waveforms interactive immediately while video buffers in background
 
 ### Out of Scope
 
@@ -66,5 +73,17 @@ Accurately sync multiple camera angles by audio so users get aligned video files
 | Multi-resolution peaks (3 LOD levels) | Zoom-responsive waveform rendering without recomputing | ✓ Good |
 | Panel-level zoom/pan handlers | Covers gaps between tracks; avoids dead zones | ✓ Good |
 
+## Current Milestone: v2.0 Synced Playback & Export
+
+**Goal:** Add synced multi-cam video playback in a dynamic grid layout with GPU-accelerated composite export.
+
+**Target features:**
+- Dynamic grid player with aspect-ratio-aware packing algorithm
+- Two display modes (preserve AR / fill tiles)
+- Synced playback with waveform scrubbar
+- Audio track selection (all mixed / per-camera)
+- GPU-rendered composite MP4 export (H.264, 4K/1080p/720p)
+- Progressive loading (audio-first, video buffers in background)
+
 ---
-*Last updated: 2026-03-02 after v1.0 milestone*
+*Last updated: 2026-03-02 after v2.0 milestone start*
