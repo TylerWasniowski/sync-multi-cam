@@ -1,16 +1,19 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import type { VideoFile, SyncResult, SyncProgress as SyncProgressType } from '../types/index.ts';
+import type { VideoFile, PipelineProgress as PipelineProgressType, DownloadableResult, TrimmedFile } from '../types/index.ts';
 import { MAX_FILES } from '../lib/constants.ts';
 import { validateFiles } from '../lib/fileValidation.ts';
 import { getFFmpeg } from '../lib/ffmpeg.ts';
 import { extractAudio } from '../lib/audioExtractor.ts';
 import { syncAudioTracks } from '../lib/audioSync.ts';
+import { trimVideo } from '../lib/videoTrimmer.ts';
+import { buildZip } from '../lib/zipBuilder.ts';
+import { triggerDownload } from '../lib/downloadHelper.ts';
 import { PrivacyBanner } from './PrivacyBanner.tsx';
 import { FileDropZone } from './FileDropZone.tsx';
 import { FileList } from './FileList.tsx';
 import { FFmpegStatus } from './FFmpegStatus.tsx';
 import { SyncButton } from './SyncButton.tsx';
-import { SyncProgress } from './SyncProgress.tsx';
+import { PipelineProgress } from './PipelineProgress.tsx';
 import { SyncResults } from './SyncResults.tsx';
 
 type FFmpegLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -58,17 +61,20 @@ export default function App() {
     setFiles((prev) => prev.filter((f) => f.id !== id));
   }, []);
 
-  const [syncProgress, setSyncProgress] = useState<SyncProgressType>({
+  const [syncProgress, setSyncProgress] = useState<PipelineProgressType>({
     stage: 'idle', current: 0, total: 0, message: '',
   });
-  const [syncResults, setSyncResults] = useState<SyncResult[]>([]);
+  const [syncResults, setSyncResults] = useState<DownloadableResult[]>([]);
   const [syncError, setSyncError] = useState<string | undefined>(undefined);
+  const [zipData, setZipData] = useState<Uint8Array | null>(null);
 
   const handleSync = useCallback(async () => {
     if (files.length < 2) return;
 
+    // Reset all state for new pipeline run
     setSyncResults([]);
     setSyncError(undefined);
+    setZipData(null);
     setSyncProgress({ stage: 'extracting', current: 0, total: files.length, message: 'Starting audio extraction...' });
 
     try {
@@ -108,15 +114,113 @@ export default function App() {
         });
       });
 
-      setSyncResults(results);
+      // Phase 3: Trim videos
+      // Calculate trim amounts: align all files to the latest-starting track
+      const maxOffset = Math.max(...results.map(r => r.offsetSeconds));
+      const trimAmounts = results.map(r => ({
+        ...r,
+        trimSeconds: maxOffset - r.offsetSeconds,
+      }));
+
+      setSyncProgress({
+        stage: 'trimming',
+        current: 0,
+        total: files.length,
+        message: 'Starting video trimming...',
+      });
+
+      const downloadableResults: DownloadableResult[] = [];
+      let trimFailCount = 0;
+
+      for (let i = 0; i < trimAmounts.length; i++) {
+        const trimInfo = trimAmounts[i];
+        const videoFile = files.find(f => f.id === trimInfo.fileId);
+        if (!videoFile) continue;
+
+        setSyncProgress({
+          stage: 'trimming',
+          current: i + 1,
+          total: files.length,
+          message: `Trimming ${trimInfo.fileName}...`,
+        });
+
+        let trimmedData: Uint8Array | null = null;
+        try {
+          trimmedData = await trimVideo(videoFile.file, trimInfo.trimSeconds);
+        } catch (err: unknown) {
+          console.warn(
+            `Failed to trim ${trimInfo.fileName}:`,
+            err instanceof Error ? err.message : err
+          );
+          trimFailCount++;
+        }
+
+        downloadableResults.push({
+          fileId: trimInfo.fileId,
+          fileName: trimInfo.fileName,
+          offsetSeconds: trimInfo.offsetSeconds,
+          offsetSamples: trimInfo.offsetSamples,
+          confidence: trimInfo.confidence,
+          isReference: trimInfo.isReference,
+          trimmedData,
+          trimSeconds: trimInfo.trimSeconds,
+          originalFile: videoFile.file,
+        });
+      }
+
+      // If ALL files failed trimming, set error state
+      if (trimFailCount === files.length) {
+        throw new Error('All files failed to trim. Please try again with different files.');
+      }
+
+      setSyncResults(downloadableResults);
+
+      // Phase 4: Build ZIP
+      setSyncProgress({
+        stage: 'zipping',
+        current: 0,
+        total: 1,
+        message: 'Creating ZIP archive...',
+      });
+
+      const zipFiles: TrimmedFile[] = [];
+      for (const result of downloadableResults) {
+        if (result.trimmedData) {
+          zipFiles.push({
+            name: `synced_${result.fileName}`,
+            data: result.trimmedData,
+          });
+        } else {
+          // Skipped file (reference/latest): include original
+          const buffer = await result.originalFile.arrayBuffer();
+          zipFiles.push({
+            name: result.fileName,
+            data: new Uint8Array(buffer),
+          });
+        }
+      }
+
+      const zip = buildZip(zipFiles);
+      setZipData(zip);
+
+      setSyncProgress({
+        stage: 'zipping',
+        current: 1,
+        total: 1,
+        message: 'ZIP ready',
+      });
+
+      // Phase 5: Auto-download ZIP and set complete
+      triggerDownload(zip, 'synced_videos.zip', 'application/zip');
+
       setSyncProgress({
         stage: 'complete',
         current: files.length,
         total: files.length,
-        message: `Sync complete — ${results.length} files analyzed`,
+        message: `Pipeline complete — ${files.length} files synced and ready for download`,
       });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Sync failed';
+      const message = err instanceof Error ? err.message : 'Pipeline failed';
       setSyncError(message);
       setSyncProgress({
         stage: 'error',
@@ -198,16 +302,16 @@ export default function App() {
           <div className="mt-6">
             <SyncButton
               fileCount={files.length}
-              isSyncing={syncProgress.stage === 'extracting' || syncProgress.stage === 'correlating'}
+              isSyncing={['extracting', 'correlating', 'trimming', 'zipping'].includes(syncProgress.stage)}
               onClick={handleSync}
             />
           </div>
         )}
 
-        {/* Progress -- visible during sync */}
+        {/* Progress -- visible during pipeline */}
         {syncProgress.stage !== 'idle' && (
           <div className="mt-4">
-            <SyncProgress progress={syncProgress} />
+            <PipelineProgress progress={syncProgress} />
           </div>
         )}
 
@@ -221,7 +325,7 @@ export default function App() {
         {/* Results -- visible after sync completes */}
         {syncResults.length > 0 && (
           <div className="mt-6">
-            <SyncResults results={syncResults} />
+            <SyncResults results={syncResults} zipData={zipData} />
           </div>
         )}
       </main>
