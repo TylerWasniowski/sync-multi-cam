@@ -15,6 +15,8 @@ const CENTER_LINE_COLOR = '#374151'; // gray-700
 const SYNC_MARKER_COLOR = '#3b82f6'; // blue-500
 const CURSOR_COLOR = '#9ca3af'; // gray-400
 const TRIM_OVERLAY_COLOR = 'rgba(0, 0, 0, 0.3)';
+const TRACK_END_COLOR = 'rgba(0, 0, 0, 0.35)'; // dimmed overlay beyond audio end
+const TRACK_END_LINE_COLOR = 'rgba(107, 114, 128, 0.5)'; // gray-500 at 50%
 const LABEL_FONT = '10px ui-monospace, monospace';
 const LABEL_COLOR = '#d1d5db'; // gray-300
 const LABEL_BG = 'rgba(0, 0, 0, 0.6)';
@@ -70,7 +72,10 @@ export function WaveformCanvas({
 
     // Calculate visible bucket range
     const startBucket = Math.floor(scrollOffset / peaks.samplesPerBucket);
-    const endBucket = Math.min(startBucket + width, peaks.length);
+    const endBucket = Math.min(
+      Math.ceil((scrollOffset + width * samplesPerPixel) / peaks.samplesPerBucket),
+      peaks.length,
+    );
 
     // Draw trimmed region overlay (before waveform so it's behind)
     if (!isReference && syncOffsetSeconds > 0) {
@@ -84,11 +89,12 @@ export function WaveformCanvas({
 
     // Draw waveform
     ctx.fillStyle = WAVEFORM_COLOR;
+    const barWidth = Math.max(1, Math.ceil(peaks.samplesPerBucket / samplesPerPixel));
     ctx.beginPath();
     for (let i = startBucket; i < endBucket; i++) {
       const x =
         (i * peaks.samplesPerBucket - scrollOffset) / samplesPerPixel;
-      if (x < -1 || x > width + 1) continue;
+      if (x < -barWidth || x > width + 1) continue;
 
       const minVal = peaks.min[i];
       const maxVal = peaks.max[i];
@@ -98,7 +104,7 @@ export function WaveformCanvas({
       const yBottom = halfHeight - minVal * halfHeight;
       const barHeight = Math.max(1, yBottom - yTop);
 
-      ctx.rect(x, yTop, 1, barHeight);
+      ctx.rect(x, yTop, barWidth, barHeight);
     }
     ctx.fill();
 
@@ -109,6 +115,9 @@ export function WaveformCanvas({
     ctx.moveTo(0, halfHeight);
     ctx.lineTo(width, halfHeight);
     ctx.stroke();
+
+    // Draw track-end boundary (dims empty space beyond audio)
+    drawTrackEnd(ctx, peaks.duration, viewState, peaks.sampleRate, width, height);
 
     // Draw sync marker
     drawSyncMarker(ctx, syncOffsetSeconds, isReference, viewState, peaks.sampleRate, width, height);
