@@ -1,12 +1,17 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import type { VideoFile } from '../types/index.ts';
+import type { VideoFile, SyncResult, SyncProgress as SyncProgressType } from '../types/index.ts';
 import { MAX_FILES } from '../lib/constants.ts';
 import { validateFiles } from '../lib/fileValidation.ts';
 import { getFFmpeg } from '../lib/ffmpeg.ts';
+import { extractAudio } from '../lib/audioExtractor.ts';
+import { syncAudioTracks } from '../lib/audioSync.ts';
 import { PrivacyBanner } from './PrivacyBanner.tsx';
 import { FileDropZone } from './FileDropZone.tsx';
 import { FileList } from './FileList.tsx';
 import { FFmpegStatus } from './FFmpegStatus.tsx';
+import { SyncButton } from './SyncButton.tsx';
+import { SyncProgress } from './SyncProgress.tsx';
+import { SyncResults } from './SyncResults.tsx';
 
 type FFmpegLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -52,6 +57,75 @@ export default function App() {
   const handleRemoveFile = useCallback((id: string) => {
     setFiles((prev) => prev.filter((f) => f.id !== id));
   }, []);
+
+  const [syncProgress, setSyncProgress] = useState<SyncProgressType>({
+    stage: 'idle', current: 0, total: 0, message: '',
+  });
+  const [syncResults, setSyncResults] = useState<SyncResult[]>([]);
+  const [syncError, setSyncError] = useState<string | undefined>(undefined);
+
+  const handleSync = useCallback(async () => {
+    if (files.length < 2) return;
+
+    setSyncResults([]);
+    setSyncError(undefined);
+    setSyncProgress({ stage: 'extracting', current: 0, total: files.length, message: 'Starting audio extraction...' });
+
+    try {
+      // Phase 1: Extract audio from all videos sequentially
+      const audioTracks = [];
+      for (let i = 0; i < files.length; i++) {
+        setSyncProgress({
+          stage: 'extracting',
+          current: i + 1,
+          total: files.length,
+          message: `Extracting audio from ${files[i].name}...`,
+        });
+
+        const audio = await extractAudio(files[i].file);
+        audioTracks.push({
+          fileId: files[i].id,
+          fileName: files[i].name,
+          audio,
+        });
+      }
+
+      // Phase 2: Correlate all tracks
+      setSyncProgress({
+        stage: 'correlating',
+        current: 0,
+        total: files.length - 1,
+        message: 'Analyzing audio for sync points...',
+      });
+
+      const results = await syncAudioTracks(audioTracks, (progress) => {
+        const completed = Math.round((progress / 100) * (files.length - 1));
+        setSyncProgress({
+          stage: 'correlating',
+          current: completed,
+          total: files.length - 1,
+          message: `Correlating track ${completed} of ${files.length - 1}...`,
+        });
+      });
+
+      setSyncResults(results);
+      setSyncProgress({
+        stage: 'complete',
+        current: files.length,
+        total: files.length,
+        message: `Sync complete — ${results.length} files analyzed`,
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Sync failed';
+      setSyncError(message);
+      setSyncProgress({
+        stage: 'error',
+        current: 0,
+        total: files.length,
+        message,
+      });
+    }
+  }, [files]);
 
   // Full-page drag-and-drop: listen on window so users can drop anywhere
   useEffect(() => {
@@ -118,6 +192,38 @@ export default function App() {
         <div className="mt-6">
           <FileList files={files} onRemove={handleRemoveFile} />
         </div>
+
+        {/* Sync Controls -- below file list */}
+        {files.length > 0 && (
+          <div className="mt-6">
+            <SyncButton
+              fileCount={files.length}
+              isSyncing={syncProgress.stage === 'extracting' || syncProgress.stage === 'correlating'}
+              onClick={handleSync}
+            />
+          </div>
+        )}
+
+        {/* Progress -- visible during sync */}
+        {syncProgress.stage !== 'idle' && (
+          <div className="mt-4">
+            <SyncProgress progress={syncProgress} />
+          </div>
+        )}
+
+        {/* Error -- visible on failure */}
+        {syncError && (
+          <div className="mt-4 bg-red-900/30 border border-red-800 rounded-lg p-4">
+            <p className="text-sm text-red-400">{syncError}</p>
+          </div>
+        )}
+
+        {/* Results -- visible after sync completes */}
+        {syncResults.length > 0 && (
+          <div className="mt-6">
+            <SyncResults results={syncResults} />
+          </div>
+        )}
       </main>
     </div>
   );
