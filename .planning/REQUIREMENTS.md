@@ -1,0 +1,91 @@
+# Requirements: Sync Multi-Cam
+
+**Defined:** 2026-03-01
+**Core Value:** Accurately sync multiple camera angles by audio so users get aligned video files without installing any software
+
+## v1 Requirements
+
+Requirements for initial release. Each maps to roadmap phases.
+
+### File Input
+
+- [ ] **FILE-01**: User can drag-and-drop video files onto a drop zone with visual feedback
+- [ ] **FILE-02**: User can browse to select video files as a fallback to drag-and-drop
+- [ ] **FILE-03**: App accepts common video formats (MP4, MOV, MKV, WebM)
+- [ ] **FILE-04**: App supports 2-4 video files simultaneously
+
+### Audio Sync
+
+- [ ] **SYNC-01**: App extracts audio from uploaded videos using FFmpeg WASM
+- [ ] **SYNC-02**: App cross-correlates audio waveforms to detect time offsets between videos
+- [ ] **SYNC-03**: App auto-selects reference file (longest or first) with no user input required
+- [ ] **SYNC-04**: App displays detected timecode offsets per video in the results UI
+- [ ] **SYNC-05**: App displays sync confidence score (correlation strength as percentage) per video
+- [ ] **SYNC-06**: App renders audio waveforms on canvas with sync point markers for visual verification
+
+### Output
+
+- [ ] **OUT-01**: App trims videos to align start points using stream-copy (no re-encode) via FFmpeg WASM
+- [ ] **OUT-02**: App keeps full remaining footage per video after trim (no forced end cut)
+- [ ] **OUT-03**: UI presents individual synced videos in a list with offset info and per-file download buttons
+- [ ] **OUT-04**: App auto-downloads a zip of all synced/trimmed video files
+- [ ] **OUT-05**: App shows multi-stage progress indicator during processing (loading, extracting, analyzing, trimming)
+
+### UX
+
+- [ ] **UX-01**: App has a dark, modern, professional UI theme
+- [ ] **UX-02**: App prominently displays "files never leave your browser" privacy messaging
+- [ ] **UX-03**: App runs entirely client-side with no server dependencies
+- [ ] **UX-04**: App can be deployed as a static site on Cloudflare Pages
+- [ ] **UX-05**: App requires zero configuration — smart defaults for everything, just drop files and go
+
+## v2 Requirements
+
+Deferred to future release. Tracked but not in current roadmap.
+
+### Sync Refinement
+
+- **SYNC-07**: User can manually adjust offsets by frames after auto-sync
+- **SYNC-08**: User can select which video is the reference file (override auto-selection)
+
+### Output Enhancement
+
+- **OUT-06**: App offers re-encode mode toggle for frame-exact trim precision
+- **OUT-07**: App exports NLE project file (FCP XML / Premiere XML) with pre-aligned clips
+
+### Reliability
+
+- **REL-01**: App detects and warns about audio clock drift in long recordings
+- **REL-02**: App validates file sizes upfront and warns when approaching browser memory limits
+
+## Out of Scope
+
+Explicitly excluded. Documented to prevent scope creep.
+
+| Feature | Reason |
+|---------|--------|
+| Real-time synced playback/preview | Massive memory/CPU usage, complex multi-stream sync — users verify in their NLE |
+| Video editing (cut, merge, transitions) | Scope creep into NLE territory — sync and trim only |
+| Multi-camera angle switching editor | Separate product entirely — export aligned files instead |
+| Server-side processing | Contradicts client-side premise, adds cost/privacy concerns |
+| Mobile support | FFmpeg WASM too memory-intensive for mobile browsers |
+| Account system / cloud storage | Users want stateless tool — no signup, no tracking |
+| Support for >4 videos | Memory scales linearly, correlation scales quadratically — desktop tools for larger setups |
+| Audio drift compensation | Extremely complex, only matters for 30+ min recordings — defer to v2+ |
+
+## Traceability
+
+Which phases cover which requirements. Updated during roadmap creation.
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| (populated during roadmap creation) | | |
+
+**Coverage:**
+- v1 requirements: 20 total
+- Mapped to phases: 0
+- Unmapped: 20 ⚠️
+
+---
+*Requirements defined: 2026-03-01*
+*Last updated: 2026-03-01 after initial definition*
