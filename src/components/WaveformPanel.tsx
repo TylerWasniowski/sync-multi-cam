@@ -138,17 +138,10 @@ export function WaveformPanel({ peaksMap, results }: WaveformPanelProps) {
 
   if (peaksMap.size === 0) return null;
 
-  // Compute zoom level for display
-  const zoomLevel = defaultSPP > 0 ? (defaultSPP / viewState.samplesPerPixel) : 1;
-  const zoomLabel = zoomLevel >= 10
-    ? `${Math.round(zoomLevel)}x`
-    : `${zoomLevel.toFixed(1)}x`;
-
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-      <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
+      <div className="px-4 py-3 border-b border-gray-800">
         <h2 className="text-sm font-medium text-gray-300">Audio Waveforms</h2>
-        <span className="text-xs text-gray-500">{zoomLabel} zoom</span>
       </div>
 
       <div ref={panelRef} className="divide-y divide-gray-800" onPointerLeave={handlePointerLeaveAll}>
