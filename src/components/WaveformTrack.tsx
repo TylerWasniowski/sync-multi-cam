@@ -230,6 +230,7 @@ export function WaveformTrack({
       <div
         ref={containerRef}
         className="flex-1 min-w-0"
+        data-waveform-canvas
         style={{
           touchAction: 'none',
           cursor: isDragging ? 'grabbing' : 'grab',

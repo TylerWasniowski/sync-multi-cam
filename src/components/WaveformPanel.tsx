@@ -147,9 +147,9 @@ export function WaveformPanel({ peaksMap, results }: WaveformPanelProps) {
   const panelRafRef = useRef<number>(0);
 
   const handlePanelPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    // Only handle clicks directly on the panel (gaps), not on tracks
-    if (e.target !== e.currentTarget && (e.target as HTMLElement).closest('[data-waveform-track]')) return;
     if (e.button !== 0) return;
+    // Skip if a track's canvas area is handling this (tracks have their own drag)
+    if ((e.target as HTMLElement).closest('[data-waveform-canvas]')) return;
     panelDragRef.current = true;
     panelDragStartXRef.current = e.clientX;
     panelDragStartOffsetRef.current = viewState.scrollOffset;
