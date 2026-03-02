@@ -34,3 +34,32 @@ export interface SyncProgress {
   total: number;         // Total files
   message: string;       // Human-readable progress message
 }
+
+export type PipelineStage =
+  | 'idle'
+  | 'extracting'
+  | 'correlating'
+  | 'trimming'
+  | 'zipping'
+  | 'complete'
+  | 'error';
+
+export interface PipelineProgress {
+  stage: PipelineStage;
+  current: number;
+  total: number;
+  message: string;
+}
+
+export interface TrimResult {
+  fileId: string;
+  fileName: string;
+  data: Uint8Array | null; // null when skipped (trimSeconds === 0)
+  trimSeconds: number;
+  skipped: boolean;
+}
+
+export interface TrimmedFile {
+  name: string;
+  data: Uint8Array;
+}
