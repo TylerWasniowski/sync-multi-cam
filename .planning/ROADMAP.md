@@ -52,10 +52,10 @@ Plans:
   1. User hears all camera audio tracks mixed together by default when playback starts
   2. User can select a single camera's audio from a dropdown and only that camera's audio plays
   3. Audio selection persists across seek, pause, and play actions within a session
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 06-01: TBD
+- [ ] 06-01-PLAN.md -- Audio mixer module + PlaybackSection/TransportBar integration + human verification
 
 ### Phase 7: Waveform Scrubbar Integration
 **Goal**: Waveform tracks serve as a visual scrubbar that stays synchronized with video playback
@@ -111,7 +111,7 @@ Plans:
 | 3. Video Trimming and Output | v1.0 | 2/2 | Complete | 2026-03-02 |
 | 4. Waveform Visualization | v1.0 | 4/4 | Complete | 2026-03-02 |
 | 5. Video Grid & Synchronized Playback | v2.0 | 0/3 | Planning complete | - |
-| 6. Audio Mixing | v2.0 | 0/? | Not started | - |
+| 6. Audio Mixing | v2.0 | 0/1 | Planning complete | - |
 | 7. Waveform Scrubbar Integration | v2.0 | 0/? | Not started | - |
 | 8. Composite Export | v2.0 | 0/? | Not started | - |
 | 9. Polish | v2.0 | 0/? | Not started | - |
