@@ -8,6 +8,7 @@ export interface WaveformCanvasProps {
   isReference: boolean;
   width: number; // CSS pixel width
   height: number; // CSS pixel height (recommend 80)
+  playheadTime?: number | null; // current playback position (0-based seconds)
 }
 
 const WAVEFORM_COLOR = 'rgba(59, 130, 246, 0.6)'; // blue-500 at 60%
@@ -19,6 +20,7 @@ const TRACK_END_COLOR = 'rgba(0, 0, 0, 0.35)'; // dimmed overlay beyond audio en
 const TRACK_END_LINE_COLOR = 'rgba(107, 114, 128, 0.5)'; // gray-500 at 50%
 const LABEL_FONT = '10px ui-monospace, monospace';
 const LABEL_COLOR = '#d1d5db'; // gray-300
+const PLAYHEAD_COLOR = '#ef4444'; // red-500 -- distinct from blue sync markers and gray cursor
 const LABEL_BG = 'rgba(0, 0, 0, 0.6)';
 
 /**
@@ -33,6 +35,7 @@ export function WaveformCanvas({
   isReference,
   width,
   height,
+  playheadTime,
 }: WaveformCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
@@ -124,7 +127,10 @@ export function WaveformCanvas({
 
     // Draw cursor line
     drawCursor(ctx, viewState.cursorTime, viewState, peaks.sampleRate, width, height);
-  }, [peaks, viewState, syncOffsetSeconds, isReference, width, height]);
+
+    // Draw playhead line (on top of cursor when they overlap)
+    drawPlayhead(ctx, playheadTime ?? null, viewState, peaks.sampleRate, width, height);
+  }, [peaks, viewState, syncOffsetSeconds, isReference, width, height, playheadTime]);
 
   return (
     <canvas
@@ -273,5 +279,35 @@ function drawCursor(
   ctx.fillStyle = CURSOR_COLOR;
   ctx.textBaseline = 'top';
   ctx.fillText(label, Math.max(0, labelX) + padding, labelY + 2);
+  ctx.restore();
+}
+
+/**
+ * Draw a solid red vertical playhead line at the current playback position.
+ * No time label -- the transport bar already shows timecode.
+ */
+function drawPlayhead(
+  ctx: CanvasRenderingContext2D,
+  playheadTime: number | null,
+  viewState: ViewState,
+  sampleRate: number,
+  canvasWidth: number,
+  canvasHeight: number,
+): void {
+  if (playheadTime === null) return;
+
+  const x =
+    (playheadTime * sampleRate - viewState.scrollOffset) /
+    viewState.samplesPerPixel;
+
+  if (x < 0 || x > canvasWidth) return;
+
+  ctx.save();
+  ctx.strokeStyle = PLAYHEAD_COLOR;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x, 0);
+  ctx.lineTo(x, canvasHeight);
+  ctx.stroke();
   ctx.restore();
 }

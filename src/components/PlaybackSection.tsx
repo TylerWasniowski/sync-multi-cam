@@ -42,6 +42,9 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
   // Poster extractors ref
   const extractorsRef = useRef<ReturnType<typeof createPosterExtractor>[]>([]);
 
+  // Scrub lifecycle: track whether playback was active before scrub started
+  const wasPlayingBeforeScrubRef = useRef(false);
+
   // Throttle timestamp for scrub
   const lastExtractTimeRef = useRef(0);
   const scrubRafRef = useRef(0);
@@ -379,6 +382,35 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
     [results],
   );
 
+  // Scrub lifecycle: pause on start, seek without pause/resume during drag, resume on end
+  const handleScrubStart = useCallback(() => {
+    wasPlayingBeforeScrubRef.current = isPlaying;
+    if (isPlaying) {
+      // Pause directly -- do NOT go through handlePause() to preserve was-playing state
+      const refs = videoRefs.current;
+      for (const video of refs) {
+        if (video) video.pause();
+      }
+      syncEngineRef.current?.stop();
+      setIsPlaying(false);
+    }
+  }, [isPlaying]);
+
+  const handleScrubEnd = useCallback(() => {
+    if (wasPlayingBeforeScrubRef.current) {
+      handlePlay();
+    }
+  }, [handlePlay]);
+
+  const handleScrubSeek = useCallback((seekTime: number) => {
+    const engine = syncEngineRef.current;
+    if (!engine) return;
+    // Convert 0-based aligned time to absolute video time
+    const absoluteTime = seekTime + leaderTrimSeconds;
+    engine.seek(absoluteTime);
+    setCurrentTime(seekTime);
+  }, [leaderTrimSeconds]);
+
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
       {/* Section header */}
@@ -408,8 +440,20 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
         onDisplayModeToggle={toggleDisplayMode}
       />
 
-      {/* Waveform panel -- rendered as-is to preserve existing behavior */}
-      <WaveformPanel peaksMap={peaksMap} results={results} mutedTracks={mutedTracks} onToggleMute={handleToggleMute} onScrub={handleScrub} />
+      {/* Waveform panel -- interactive scrubbar with seek/scrub/playhead */}
+      <WaveformPanel
+        peaksMap={peaksMap}
+        results={results}
+        mutedTracks={mutedTracks}
+        onToggleMute={handleToggleMute}
+        onScrub={handleScrub}
+        playheadTime={currentTime}
+        isPlaying={isPlaying}
+        onSeek={handleSeek}
+        onScrubStart={handleScrubStart}
+        onScrubEnd={handleScrubEnd}
+        onScrubSeek={handleScrubSeek}
+      />
     </div>
   );
 }
