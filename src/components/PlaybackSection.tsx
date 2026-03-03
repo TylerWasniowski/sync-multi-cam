@@ -191,6 +191,8 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
   }, [allVideosReady, results, leaderIndex, followerIndices, leaderTrimSeconds]);
 
   const handleAllReady = useCallback(() => {
+    console.log('[PlaybackSection] ALL VIDEOS READY — enabling transport');
+    console.log('[PlaybackSection] videoRefs:', videoRefs.current.map((v, i) => `[${i}] ${v ? 'HTMLVideoElement' : 'NULL'}`));
     setAllVideosReady(true);
   }, []);
 

@@ -32,123 +32,104 @@ describe('computeGridLayout', () => {
   });
 
   describe('single tile', () => {
-    it('returns 1 tile centered, filling the width at 16:9 ratio', () => {
+    it('returns 1 tile filling the entire container', () => {
       const result = computeGridLayout(800, 600, 1, AR_16_9);
       expect(result.tiles).toHaveLength(1);
       expect(result.columns).toBe(1);
       expect(result.rows).toBe(1);
 
       const tile = result.tiles[0];
-      // At 16:9 in an 800x600 container:
-      // Width-constrained: tileWidth=800, tileHeight=800/(16/9)=450
-      // 450 <= 600, so it fits
+      // Full cell: 800x600 (CSS object-fit handles aspect ratio)
       expect(tile.width).toBe(800);
-      expect(tile.height).toBe(450);
-      // Centered vertically: (600 - 450) / 2 = 75
+      expect(tile.height).toBe(600);
       expect(tile.x).toBe(0);
-      expect(tile.y).toBe(75);
+      expect(tile.y).toBe(0);
     });
   });
 
   describe('two tiles', () => {
-    it('returns 2 tiles side-by-side (2 cols x 1 row)', () => {
+    it('returns 2 tiles stacked vertically (1 col x 2 rows)', () => {
       const result = computeGridLayout(800, 600, 2, AR_16_9);
       expect(result.tiles).toHaveLength(2);
 
-      // 2 cols x 1 row: maxTileWidth=400, maxTileHeight=600
-      // Width-constrained: tileWidth=400, tileHeight=400/(16/9)=225
-      // Area = 400*225*2 = 180,000
-      // 1 col x 2 rows: maxTileWidth=800, maxTileHeight=300
-      // Height-constrained: tileHeight=300, tileWidth=300*(16/9)=533.33
-      // But 533.33 < 800, so width-constrained doesn't apply
-      // Area = 533.33*300*2 = 320,000
-      // Actually 1 col x 2 rows wins because more total area
-      // Let's check: for 1 col x 2 rows, tileWidth = min(800, 300*16/9) = min(800, 533.33) = 533.33
-      // But wait: 800/533.33 > 16/9 means height-constrained
-      // tileHeight = 300, tileWidth = 300 * (16/9) = 533.33
-      // Area per tile = 533.33 * 300 = 160,000, total = 320,000
-      //
-      // For 2 cols x 1 row: maxTileWidth=400, maxTileHeight=600
-      // 400/600 = 0.667 < 16/9=1.778, so width-constrained
-      // tileWidth=400, tileHeight=400/(16/9) = 225
-      // Area per tile = 400*225 = 90,000, total = 180,000
-      //
-      // 1 col x 2 rows wins with 320,000 total area
+      // 1 col x 2 rows wins by AR-area optimization:
+      //   cell=800x300, AR-constrained area=533.33*300*2=320,000
+      // vs 2 cols x 1 row:
+      //   cell=400x600, AR-constrained area=400*225*2=180,000
       expect(result.columns).toBe(1);
       expect(result.rows).toBe(2);
 
-      // Tiles should be stacked vertically, centered horizontally
+      // Full cell dimensions
       const [tile0, tile1] = result.tiles;
-      const expectedW = Math.round(300 * (16 / 9)); // 533
-      const expectedH = 300;
-      expect(tile0.width).toBe(expectedW);
-      expect(tile0.height).toBe(expectedH);
-      expect(tile1.width).toBe(expectedW);
-      expect(tile1.height).toBe(expectedH);
-
-      // Centered horizontally: offset = (800 - 533) / 2 = 133.5 -> rounds to 134
-      const expectedOffsetX = Math.round((800 - expectedW) / 2);
-      expect(tile0.x).toBe(expectedOffsetX);
+      expect(tile0.width).toBe(800);
+      expect(tile0.height).toBe(300);
+      expect(tile0.x).toBe(0);
       expect(tile0.y).toBe(0);
-      expect(tile1.x).toBe(expectedOffsetX);
+      expect(tile1.width).toBe(800);
+      expect(tile1.height).toBe(300);
+      expect(tile1.x).toBe(0);
       expect(tile1.y).toBe(300);
     });
   });
 
   describe('four tiles', () => {
-    it('returns 4 tiles in a 2x2 grid', () => {
+    it('returns 4 tiles in a 2x2 grid with full cell dimensions', () => {
       const result = computeGridLayout(800, 600, 4, AR_16_9);
       expect(result.tiles).toHaveLength(4);
       expect(result.columns).toBe(2);
       expect(result.rows).toBe(2);
 
-      // 2 cols x 2 rows: maxTileWidth=400, maxTileHeight=300
-      // 400/300 = 1.333 < 16/9 = 1.778, so width-constrained
-      // tileWidth=400, tileHeight=400/(16/9)=225
-      // Area = 400*225*4 = 360,000
+      // Full cell: 400x300
       for (const tile of result.tiles) {
         expect(tile.width).toBe(400);
-        expect(tile.height).toBe(225);
+        expect(tile.height).toBe(300);
       }
     });
   });
 
   describe('three tiles', () => {
-    it('returns 3 tiles in optimal arrangement maximizing tile area', () => {
+    it('returns 3 tiles in 2x2 grid with last tile centered', () => {
       const result = computeGridLayout(800, 600, 3, AR_16_9);
       expect(result.tiles).toHaveLength(3);
 
-      // Options:
-      // 1 col x 3 rows: maxTileW=800, maxTileH=200
-      //   800/200=4 > 1.778, height-constrained: tileH=200, tileW=200*1.778=355.56
-      //   Area = 355.56*200*3 = 213,333
-      // 2 cols x 2 rows: maxTileW=400, maxTileH=300
-      //   400/300=1.333 < 1.778, width-constrained: tileW=400, tileH=225
-      //   Area = 400*225*3 = 270,000
-      // 3 cols x 1 row: maxTileW=266.67, maxTileH=600
-      //   266.67/600=0.444 < 1.778, width-constrained: tileW=266.67, tileH=150
-      //   Area = 266.67*150*3 = 120,000
-      // Winner: 2 cols x 2 rows with area 270,000
+      // 2 cols x 2 rows wins (same area optimization as before)
       expect(result.columns).toBe(2);
       expect(result.rows).toBe(2);
+
+      // Full cell: 400x300
+      const [tile0, tile1, tile2] = result.tiles;
+      expect(tile0.width).toBe(400);
+      expect(tile0.height).toBe(300);
+      expect(tile0.x).toBe(0);
+      expect(tile0.y).toBe(0);
+
+      expect(tile1.width).toBe(400);
+      expect(tile1.height).toBe(300);
+      expect(tile1.x).toBe(400);
+      expect(tile1.y).toBe(0);
+
+      // Last row: 1 tile centered. Extra offset = (1 empty * 400) / 2 = 200
+      expect(tile2.width).toBe(400);
+      expect(tile2.height).toBe(300);
+      expect(tile2.x).toBe(200);
+      expect(tile2.y).toBe(300);
     });
   });
 
   describe('six tiles', () => {
-    it('returns 6 tiles in optimal arrangement', () => {
+    it('returns 6 tiles in optimal arrangement with full cell dimensions', () => {
       const result = computeGridLayout(800, 600, 6, AR_16_9);
       expect(result.tiles).toHaveLength(6);
 
-      // Options (checking key ones):
-      // 2 cols x 3 rows: maxTileW=400, maxTileH=200
-      //   400/200=2 > 1.778, height-constrained: tileH=200, tileW=200*1.778=355.56
-      //   Area = 355.56*200*6 = 426,667
-      // 3 cols x 2 rows: maxTileW=266.67, maxTileH=300
-      //   266.67/300=0.889 < 1.778, width-constrained: tileW=266.67, tileH=150
-      //   Area = 266.67*150*6 = 240,000
-      // Winner: 2 cols x 3 rows
+      // 2 cols x 3 rows wins by AR-area optimization
       expect(result.columns).toBe(2);
       expect(result.rows).toBe(3);
+
+      // Full cell: 400x200
+      for (const tile of result.tiles) {
+        expect(tile.width).toBe(400);
+        expect(tile.height).toBe(200);
+      }
     });
   });
 
@@ -207,16 +188,32 @@ describe('computeGridLayout', () => {
       }
     });
 
-    it('grid is centered within the container', () => {
+    it('grid fills the container (no centering gap for full-cell tiles)', () => {
       const result = computeGridLayout(800, 600, 1, AR_16_9);
-      // Single tile: 800x450, centered in 800x600
-      // offsetX = 0, offsetY = 75
       const tile = result.tiles[0];
-      const rightGap = 800 - (tile.x + tile.width);
-      const bottomGap = 600 - (tile.y + tile.height);
-      // Symmetric centering: left gap ~= right gap, top gap ~= bottom gap
-      expect(Math.abs(tile.x - rightGap)).toBeLessThanOrEqual(1); // rounding tolerance
-      expect(Math.abs(tile.y - bottomGap)).toBeLessThanOrEqual(1);
+      // Single tile fills the entire container
+      expect(tile.x).toBe(0);
+      expect(tile.y).toBe(0);
+      expect(tile.width).toBe(800);
+      expect(tile.height).toBe(600);
+    });
+
+    it('last row is centered when incomplete', () => {
+      // 5 tiles in 800x600: 3 cols x 2 rows or 2 cols x 3 rows
+      const result = computeGridLayout(800, 600, 5, AR_16_9);
+      const { columns, rows, tiles } = result;
+      const tilesInLastRow = 5 - (rows - 1) * columns;
+
+      if (tilesInLastRow < columns) {
+        // Last row tiles should be centered
+        const lastRowTiles = tiles.slice(-tilesInLastRow);
+        const firstLastRowX = lastRowTiles[0].x;
+        const lastLastRowRight = lastRowTiles[tilesInLastRow - 1].x + lastRowTiles[tilesInLastRow - 1].width;
+        const leftGap = firstLastRowX;
+        const rightGap = 800 - lastLastRowRight;
+        // Left and right gaps should be approximately equal (within rounding)
+        expect(Math.abs(leftGap - rightGap)).toBeLessThanOrEqual(2);
+      }
     });
   });
 
@@ -224,9 +221,7 @@ describe('computeGridLayout', () => {
     it('handles 4:3 aspect ratio', () => {
       const result = computeGridLayout(800, 600, 4, 4 / 3);
       expect(result.tiles).toHaveLength(4);
-      // 2x2: maxTileW=400, maxTileH=300
-      // 400/300=1.333 > 4/3=1.333 -- exactly equal, width-constrained
-      // tileW=400, tileH=300
+      // 2x2 grid: full cell = 400x300
       expect(result.columns).toBe(2);
       expect(result.rows).toBe(2);
       expect(result.tiles[0].width).toBe(400);
@@ -236,9 +231,8 @@ describe('computeGridLayout', () => {
     it('handles 1:1 (square) aspect ratio', () => {
       const result = computeGridLayout(800, 600, 4, 1);
       expect(result.tiles).toHaveLength(4);
-      // 2x2: maxTileW=400, maxTileH=300
-      // 400/300=1.333 > 1, height-constrained: tileH=300, tileW=300
-      expect(result.tiles[0].width).toBe(300);
+      // 2x2 grid: full cell = 400x300 (object-fit handles square display)
+      expect(result.tiles[0].width).toBe(400);
       expect(result.tiles[0].height).toBe(300);
     });
   });

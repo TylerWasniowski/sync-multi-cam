@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { DisplayMode } from '../types/index.ts';
 
 export interface VideoTileProps {
@@ -6,7 +6,7 @@ export interface VideoTileProps {
   posterUrl: string | null;
   displayMode: DisplayMode;
   style: React.CSSProperties;
-  videoRef: React.RefObject<HTMLVideoElement | null>;
+  videoRef: (el: HTMLVideoElement | null) => void;
   onReady: () => void;
 }
 
@@ -19,20 +19,29 @@ export function VideoTile({
   onReady,
 }: VideoTileProps) {
   const [loading, setLoading] = useState(true);
+  const localRef = useRef<HTMLVideoElement | null>(null);
 
-  // Create a stable blob URL from the File
-  const blobUrl = useMemo(() => URL.createObjectURL(file), [file]);
+  // Blob URL managed in useEffect so each StrictMode cycle gets a fresh URL
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
 
-  // Revoke blob URL on unmount
   useEffect(() => {
+    const url = URL.createObjectURL(file);
+    setBlobUrl(url);
     return () => {
-      URL.revokeObjectURL(blobUrl);
+      URL.revokeObjectURL(url);
+      setBlobUrl(null);
     };
-  }, [blobUrl]);
+  }, [file]);
+
+  // Combined ref callback: sets both local ref and parent callback
+  const setRef = useCallback((el: HTMLVideoElement | null) => {
+    localRef.current = el;
+    videoRef(el);
+  }, [videoRef]);
 
   // Listen for canplay event and check readyState on mount
   useEffect(() => {
-    const video = videoRef.current;
+    const video = localRef.current;
     if (!video) return;
 
     const handleCanPlay = () => {
@@ -50,7 +59,7 @@ export function VideoTile({
     return () => {
       video.removeEventListener('canplay', handleCanPlay);
     };
-  }, [videoRef, onReady]);
+  }, [onReady, blobUrl]);
 
   const objectFit = displayMode === 'fill' ? 'cover' : 'contain';
 
@@ -63,11 +72,10 @@ export function VideoTile({
       }}
     >
       <video
-        ref={videoRef}
-        src={blobUrl}
+        ref={setRef}
+        src={blobUrl ?? undefined}
         poster={posterUrl ?? undefined}
         preload="auto"
-        muted
         playsInline
         style={{
           width: '100%',

@@ -40,7 +40,7 @@ export function createSyncEngine(
   function syncFollowers(leaderTime: number): void {
     for (let i = 0; i < followers.length; i++) {
       const follower = followers[i];
-      const expectedTime = leaderTime - offsets[i];
+      const expectedTime = leaderTime + offsets[i];
       // Clamp to valid range
       const clampedExpected = Math.max(0, Math.min(expectedTime, follower.duration || Infinity));
       const actualTime = follower.currentTime;
@@ -105,7 +105,7 @@ export function createSyncEngine(
     seek(time: number): void {
       leader.currentTime = time;
       for (let i = 0; i < followers.length; i++) {
-        const expectedTime = time - offsets[i];
+        const expectedTime = time + offsets[i];
         // Clamp to valid range
         followers[i].currentTime = Math.max(
           0,

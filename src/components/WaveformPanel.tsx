@@ -84,10 +84,8 @@ export function WaveformPanel({ peaksMap, results, onScrub }: WaveformPanelProps
       hasUserZoomedRef.current = true;
     }
 
-    // Surface cursor time changes to parent via onScrub callback
-    if (update.cursorTime !== undefined) {
-      onScrub?.(update.cursorTime);
-    }
+    // Cursor time updates are visual-only (hover indicator).
+    // Scrub-to-seek interaction will be wired in Phase 7.
 
     pendingUpdateRef.current = { ...pendingUpdateRef.current, ...update };
 

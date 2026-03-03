@@ -9,7 +9,9 @@
  * Algorithm: Brute-force column iteration. For each possible column
  * count (1..N), compute the maximum tile size that fits the container
  * while maintaining the given aspect ratio. Pick the configuration
- * that maximizes total tile area.
+ * that maximizes total tile area. Tiles use full cell dimensions
+ * (CSS object-fit handles aspect-ratio display). Incomplete last
+ * rows are centered horizontally.
  */
 
 export interface GridTile {
@@ -31,9 +33,10 @@ export interface LayoutResult {
  * Compute optimal tile arrangement for N videos in a container.
  *
  * Iterates all possible column counts (1..N) and picks the layout
- * that maximizes total tile area within the container bounds.
+ * that maximizes AR-constrained tile area (proxy for "cells closest
+ * to desired aspect ratio"). Final tile dimensions fill cells fully;
+ * CSS object-fit handles cropping / letterboxing.
  *
- * Tile aspect ratio is assumed uniform (most common: 16:9).
  * All returned coordinates are rounded to integers.
  *
  * @param containerWidth  - Container width in pixels
@@ -64,7 +67,8 @@ export function computeGridLayout(
     return { tiles, gridWidth: 0, gridHeight: 0, columns: 0, rows: 0 };
   }
 
-  let bestLayout: LayoutResult | null = null;
+  // Find optimal column count using AR-constrained tile area as proxy
+  let bestCols = 1;
   let bestArea = -1;
 
   for (let cols = 1; cols <= tileCount; cols++) {
@@ -74,16 +78,14 @@ export function computeGridLayout(
     const maxTileWidth = containerWidth / cols;
     const maxTileHeight = containerHeight / rows;
 
-    // Constrain by aspect ratio
+    // Constrain by aspect ratio (for comparison only)
     let tileWidth: number;
     let tileHeight: number;
 
     if (maxTileWidth / maxTileHeight > tileAspectRatio) {
-      // Height-constrained: tile height fills the cell height
       tileHeight = maxTileHeight;
       tileWidth = tileHeight * tileAspectRatio;
     } else {
-      // Width-constrained: tile width fills the cell width
       tileWidth = maxTileWidth;
       tileHeight = tileWidth / tileAspectRatio;
     }
@@ -92,33 +94,38 @@ export function computeGridLayout(
 
     if (totalArea > bestArea) {
       bestArea = totalArea;
-
-      // Round tile dimensions
-      const roundedWidth = Math.round(tileWidth);
-      const roundedHeight = Math.round(tileHeight);
-
-      // Center the grid within the container
-      const gridWidth = roundedWidth * cols;
-      const gridHeight = roundedHeight * rows;
-      const offsetX = (containerWidth - gridWidth) / 2;
-      const offsetY = (containerHeight - gridHeight) / 2;
-
-      // Generate absolute pixel positions
-      const tiles: GridTile[] = [];
-      for (let i = 0; i < tileCount; i++) {
-        const col = i % cols;
-        const row = Math.floor(i / cols);
-        tiles.push({
-          x: Math.round(offsetX + col * roundedWidth),
-          y: Math.round(offsetY + row * roundedHeight),
-          width: roundedWidth,
-          height: roundedHeight,
-        });
-      }
-
-      bestLayout = { tiles, gridWidth, gridHeight, columns: cols, rows };
+      bestCols = cols;
     }
   }
 
-  return bestLayout!;
+  // Generate layout with full-cell tile dimensions
+  const rows = Math.ceil(tileCount / bestCols);
+  const cellWidth = Math.round(containerWidth / bestCols);
+  const cellHeight = Math.round(containerHeight / rows);
+
+  const gridWidth = cellWidth * bestCols;
+  const gridHeight = cellHeight * rows;
+  const offsetX = Math.round((containerWidth - gridWidth) / 2);
+  const offsetY = Math.round((containerHeight - gridHeight) / 2);
+
+  // Last-row centering for incomplete rows
+  const tilesInLastRow = tileCount - (rows - 1) * bestCols;
+  const lastRowEmpty = bestCols - tilesInLastRow;
+  const lastRowExtraOffset = Math.round((lastRowEmpty * cellWidth) / 2);
+
+  const tiles: GridTile[] = [];
+  for (let i = 0; i < tileCount; i++) {
+    const col = i % bestCols;
+    const row = Math.floor(i / bestCols);
+    const isLastRow = row === rows - 1 && tilesInLastRow < bestCols;
+
+    tiles.push({
+      x: Math.round(offsetX + col * cellWidth + (isLastRow ? lastRowExtraOffset : 0)),
+      y: Math.round(offsetY + row * cellHeight),
+      width: cellWidth,
+      height: cellHeight,
+    });
+  }
+
+  return { tiles, gridWidth, gridHeight, columns: bestCols, rows };
 }

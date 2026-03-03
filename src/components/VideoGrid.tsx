@@ -24,25 +24,21 @@ export function VideoGrid({
   const readyCountRef = useRef(0);
   const allReadyFiredRef = useRef(false);
 
-  // Create individual refs for each video element
-  const tileRefs = useRef<(React.RefObject<HTMLVideoElement | null>)[]>([]);
-
-  // Ensure we have a ref for each result
-  if (tileRefs.current.length !== results.length) {
-    tileRefs.current = results.map(
-      (_, i) => tileRefs.current[i] ?? { current: null },
-    );
+  // Ensure videoRefs array has the right length
+  if (videoRefs.current.length !== results.length) {
+    videoRefs.current = new Array(results.length).fill(null);
   }
 
-  // Sync individual tile refs back to the parent videoRefs array
-  useEffect(() => {
-    const syncRefs = () => {
-      videoRefs.current = tileRefs.current.map((ref) => ref.current);
-    };
-
-    // Use a MutationObserver-like approach: update after each render
-    syncRefs();
-  });
+  // Stable callback refs that write directly to videoRefs.current[i]
+  const videoRefCallbacks = useMemo(
+    () =>
+      results.map(
+        (_, i) => (el: HTMLVideoElement | null) => {
+          videoRefs.current[i] = el;
+        },
+      ),
+    [results.length, videoRefs],
+  );
 
   // Measure container width via ResizeObserver
   useEffect(() => {
@@ -60,19 +56,9 @@ export function VideoGrid({
 
   // Detect intrinsic aspect ratio from the first loaded video
   useEffect(() => {
-    const firstRef = tileRefs.current[0];
-    if (!firstRef) return;
-
-    const checkMetadata = () => {
-      const video = firstRef.current;
-      if (video && video.videoWidth > 0 && video.videoHeight > 0) {
-        setAspectRatio(video.videoWidth / video.videoHeight);
-      }
-    };
-
     // Check periodically until we get metadata (video may not be mounted yet)
     const interval = setInterval(() => {
-      const video = firstRef.current;
+      const video = videoRefs.current[0];
       if (!video) return;
 
       if (video.videoWidth > 0 && video.videoHeight > 0) {
@@ -81,11 +67,17 @@ export function VideoGrid({
         return;
       }
 
+      const checkMetadata = () => {
+        if (video.videoWidth > 0 && video.videoHeight > 0) {
+          setAspectRatio(video.videoWidth / video.videoHeight);
+          clearInterval(interval);
+        }
+      };
       video.addEventListener('loadedmetadata', checkMetadata, { once: true });
     }, 100);
 
     return () => clearInterval(interval);
-  }, [results.length]);
+  }, [results.length, videoRefs]);
 
   // Compute layout
   const layout = useMemo(() => {
@@ -99,8 +91,6 @@ export function VideoGrid({
   // Compute container height from layout
   const containerHeight = useMemo(() => {
     if (!layout || containerWidth <= 0) return 0;
-    // Scale layout gridHeight relative to the actual containerWidth
-    // The layout was computed with containerWidth as-is, so gridHeight is already proportional
     return layout.gridHeight;
   }, [layout, containerWidth]);
 
@@ -143,7 +133,7 @@ export function VideoGrid({
                 width: tile.width,
                 height: tile.height,
               }}
-              videoRef={tileRefs.current[index]}
+              videoRef={videoRefCallbacks[index]}
               onReady={handleTileReady}
             />
           );

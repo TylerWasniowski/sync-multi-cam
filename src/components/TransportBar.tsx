@@ -92,7 +92,7 @@ export function TransportBar({
         onClick={onDisplayModeToggle}
         className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded px-2 py-1 transition-colors"
       >
-        {displayMode === 'fill' ? 'Letterbox' : 'Fill'}
+        {displayMode === 'fill' ? 'Fill' : 'Letterbox'}
       </button>
     </div>
   );
