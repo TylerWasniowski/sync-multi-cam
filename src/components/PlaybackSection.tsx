@@ -414,6 +414,41 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
     updateVideoVisibility(seekTime);
   }, [updateVideoVisibility]);
 
+  // Keyboard shortcuts for transport controls
+  useEffect(() => {
+    if (!allVideosReady) return;
+
+    const SEEK_STEP = 5; // seconds, matches YouTube convention
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't capture events when user is in a form field
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      switch (e.key) {
+        case ' ':
+          e.preventDefault(); // prevents page scroll
+          if (isPlaying) handlePause();
+          else handlePlay();
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          handleSeek(Math.max(0, currentTime - SEEK_STEP));
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          handleSeek(Math.min(duration, currentTime + SEEK_STEP));
+          break;
+        case 'Escape':
+          setExpandedIndex(null);
+          break;
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [allVideosReady, isPlaying, currentTime, duration, handlePlay, handlePause, handleSeek]);
+
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
       {/* Section header */}
