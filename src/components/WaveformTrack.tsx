@@ -18,6 +18,10 @@ export interface WaveformTrackProps {
   onViewStateChange: (update: Partial<ViewState>) => void;
   onPointerEnter: () => void;
   onPointerLeave: () => void;
+  playheadTime?: number | null;
+  onScrubSeek?: (time: number) => void;
+  onScrubStart?: () => void;
+  onScrubEnd?: () => void;
 }
 
 export function WaveformTrack({
@@ -32,16 +36,33 @@ export function WaveformTrack({
   onViewStateChange,
   onPointerEnter,
   onPointerLeave,
+  playheadTime,
+  onScrubSeek,
+  onScrubStart,
+  onScrubEnd,
 }: WaveformTrackProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
 
-  // Drag state refs (not React state to avoid re-renders during drag)
-  const isDraggingRef = useRef(false);
+  // Interaction mode: bare click/drag = scrub, Shift+drag = pan
+  const modeRef = useRef<'idle' | 'pan' | 'scrub'>('idle');
   const dragStartXRef = useRef(0);
   const dragStartOffsetRef = useRef(0);
   const rafRef = useRef<number>(0);
   const [isDragging, setIsDragging] = useState(false);
+
+  // Shift key tracking for dynamic cursor style
+  const [shiftHeld, setShiftHeld] = useState(false);
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Shift') setShiftHeld(true); };
+    const onKeyUp = (e: KeyboardEvent) => { if (e.key === 'Shift') setShiftHeld(false); };
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keyup', onKeyUp);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('keyup', onKeyUp);
+    };
+  }, []);
 
   // Touch state refs
   const activeTouchesRef = useRef<{ id: number; clientX: number; clientY: number }[]>([]);
@@ -70,48 +91,79 @@ export function WaveformTrack({
     : peaks.overview;
 
 
-  // --- Pointer drag (pan) ---
+  // --- Pointer interaction: bare click/drag = seek/scrub, Shift+drag = pan ---
   const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
-    isDraggingRef.current = true;
-    dragStartXRef.current = e.clientX;
-    dragStartOffsetRef.current = viewState.scrollOffset;
-    setIsDragging(true);
     (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
-  }, [viewState.scrollOffset]);
+
+    if (e.shiftKey) {
+      // Shift+drag: pan mode (existing behavior)
+      modeRef.current = 'pan';
+      dragStartXRef.current = e.clientX;
+      dragStartOffsetRef.current = viewState.scrollOffset;
+      setIsDragging(true);
+    } else {
+      // Bare click/drag: seek/scrub mode
+      modeRef.current = 'scrub';
+      dragStartXRef.current = e.clientX;
+      setIsDragging(true);
+      onScrubStart?.();
+
+      // Immediately seek to click position
+      const rect = e.currentTarget.getBoundingClientRect();
+      const offsetX = e.clientX - rect.left;
+      const time = (viewState.scrollOffset + offsetX * viewState.samplesPerPixel) / peaks.sampleRate;
+      onScrubSeek?.(Math.max(0, time));
+    }
+  }, [viewState.scrollOffset, viewState.samplesPerPixel, peaks.sampleRate, onScrubSeek, onScrubStart]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (isDraggingRef.current) {
-      // Drag panning
+    if (modeRef.current === 'pan') {
+      // Shift+drag panning
       const deltaX = dragStartXRef.current - e.clientX;
       const deltaSamples = deltaX * viewState.samplesPerPixel;
       const newOffset = dragStartOffsetRef.current + deltaSamples;
-
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       rafRef.current = requestAnimationFrame(() => {
         onViewStateChange({ scrollOffset: Math.max(0, newOffset) });
       });
+    } else if (modeRef.current === 'scrub') {
+      // Bare drag: continuous scrub seek
+      const rect = e.currentTarget.getBoundingClientRect();
+      const offsetX = e.clientX - rect.left;
+      const time = (viewState.scrollOffset + offsetX * viewState.samplesPerPixel) / peaks.sampleRate;
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        onScrubSeek?.(Math.max(0, time));
+      });
     } else {
-      // Hover cursor tracking
+      // Hover cursor tracking (no drag active)
       const rect = e.currentTarget.getBoundingClientRect();
       const offsetX = e.clientX - rect.left;
       const time = (viewState.scrollOffset + offsetX * viewState.samplesPerPixel) / peaks.sampleRate;
       onViewStateChange({ cursorTime: time });
     }
-  }, [viewState.samplesPerPixel, viewState.scrollOffset, peaks.sampleRate, onViewStateChange]);
+  }, [viewState.samplesPerPixel, viewState.scrollOffset, peaks.sampleRate, onViewStateChange, onScrubSeek]);
 
   const handlePointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDraggingRef.current) return;
-    isDraggingRef.current = false;
-    setIsDragging(false);
+    const mode = modeRef.current;
+    if (mode === 'idle') return;
+
     (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId);
 
-    // Commit final offset
-    const deltaX = dragStartXRef.current - e.clientX;
-    const deltaSamples = deltaX * viewState.samplesPerPixel;
-    const newOffset = dragStartOffsetRef.current + deltaSamples;
-    onViewStateChange({ scrollOffset: Math.max(0, newOffset) });
-  }, [viewState.samplesPerPixel, onViewStateChange]);
+    if (mode === 'pan') {
+      // Commit final pan offset
+      const deltaX = dragStartXRef.current - e.clientX;
+      const deltaSamples = deltaX * viewState.samplesPerPixel;
+      const newOffset = dragStartOffsetRef.current + deltaSamples;
+      onViewStateChange({ scrollOffset: Math.max(0, newOffset) });
+    } else if (mode === 'scrub') {
+      onScrubEnd?.();
+    }
+
+    modeRef.current = 'idle';
+    setIsDragging(false);
+  }, [viewState.samplesPerPixel, onViewStateChange, onScrubEnd]);
 
   // --- Touch gesture handlers ---
   const handleTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
@@ -261,7 +313,9 @@ export function WaveformTrack({
         data-waveform-canvas
         style={{
           touchAction: 'none',
-          cursor: isDragging ? 'grabbing' : 'grab',
+          cursor: isDragging
+            ? (modeRef.current === 'pan' ? 'grabbing' : 'col-resize')
+            : (shiftHeld ? 'grab' : 'crosshair'),
         }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -281,6 +335,7 @@ export function WaveformTrack({
             isReference={isReference}
             width={containerWidth}
             height={TRACK_HEIGHT}
+            playheadTime={playheadTime}
           />
         )}
       </div>
