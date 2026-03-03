@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Synced Playback & Export
-status: executing
-last_updated: "2026-03-03T19:52:36.658Z"
+status: complete
+last_updated: "2026-03-03"
 progress:
-  total_phases: 4
-  completed_phases: 3
-  total_plans: 8
-  completed_plans: 7
+  total_phases: 5
+  completed_phases: 5
+  total_plans: 9
+  completed_plans: 9
 ---
 
 # Project State
@@ -18,23 +18,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** Accurately sync multiple camera angles by audio so users get aligned video files without installing any software
-**Current focus:** Phase 8 -- Composite Export (REWORK -- replacing FFmpeg WASM with WebCodecs)
+**Current focus:** Phase 9 -- Polish (camera labels, fullscreen tile, keyboard shortcuts)
 
 ## Current Position
 
-Phase: 8 of 9 (Composite Export) -- REWORK IN PROGRESS
-Plan: 1 of 2 in Phase 8 (rework) -- COMPLETE
-Status: Executing Phase 8 Rework
-Last activity: 2026-03-03 -- Completed 08-01 WebCodecs export pipeline infrastructure
+Phase: 9 of 9 (Polish) -- COMPLETE
+Plan: 1 of 1 in Phase 9
+Status: v2.0 milestone complete -- all phases done
+Last activity: 2026-03-03 -- Completed 09-01 Playback polish (camera labels, expand, keyboard shortcuts)
 
-Progress: [█████████░] 90% (rework: 1/2 plans complete)
+Progress: [██████████] 100% (All phases 5-9 complete)
 
 ## Performance Metrics
 
 **Velocity (from v1.0):**
-- Total plans completed: 13
-- Average duration: 7.9 min
-- Total execution time: ~1.71 hours
+- Total plans completed: 16
+- Average duration: 7.5 min
+- Total execution time: ~1.74 hours
 
 **By Phase (v2.0):**
 
@@ -44,9 +44,12 @@ Progress: [█████████░] 90% (rework: 1/2 plans complete)
 | 06 | 1/1 | 15min | 15min |
 | 07 | 1/2 | 4min | 4min |
 | 08 | 2/2 | 24min | 12min |
+| 09 | 1/1 | 2min | 2min |
 
 *Updated after each plan completion*
 | Phase 08 P01 | 6min | 2 tasks | 7 files |
+| Phase 08 P02 | 18min | 2 tasks | 8 files |
+| Phase 09 P01 | 2min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -78,17 +81,26 @@ Full decision log in PROJECT.md Key Decisions table.
 - 08-01 (rework): Even dimension rounding via bitwise AND ~1 for H.264 compliance
 - 08-01 (rework): Audio mixing via OfflineAudioContext at 48kHz stereo
 - 08-01 (rework): CanvasSource.add() await for encoder backpressure
+- 08-02: tileAspectRatio dynamically detected from video metadata (was hardcoded 16/9)
+- 08-02: displayMode (fill/letterbox) passed through to export worker for cover/contain drawing
+- 08-02: Edge CDP for Playwright tests -- real HEVC decode testing
+- 08-02: In-browser fetch() bypasses 50MB CDP file transfer limit
+- 09-01: Expand state lifted to PlaybackSection so keyboard Escape and tile click share same state
+- 09-01: Expanded tile forces letterbox mode for full-frame viewing
+- 09-01: 200ms ease-in-out CSS transition for expand/collapse
+- 09-01: Form field guard (INPUT/TEXTAREA/SELECT) prevents shortcut capture during text entry
 
 ### Pending Todos
 
-None.
+- **Mixed aspect ratio export:** When videos have different aspect ratios (e.g., landscape and portrait mixed in same grid), all cells currently use the first video's aspect ratio. A future milestone should compute per-cell aspect ratios for correct compositing. (Noted during 08-02 verification)
 
 ### Blockers/Concerns
 
-None. (Previously: xstack filter generation and audio strategy -- resolved in 08-01)
+None.
 
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed 08-01-PLAN.md (rework)
+Stopped at: Completed 09-01 Playback Polish -- v2.0 milestone complete
 Resume file: None
+Next: v2.0 milestone ship-ready -- all features implemented

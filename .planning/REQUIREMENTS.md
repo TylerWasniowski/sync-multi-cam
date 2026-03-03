@@ -43,9 +43,9 @@ Requirements for synced playback and composite export. Each maps to roadmap phas
 
 ### Polish
 
-- [ ] **POL-01**: Camera filename labels display on tiles during preview (not baked into export)
-- [ ] **POL-02**: User can click a tile to expand it fullscreen, click again to return to grid
-- [ ] **POL-03**: Keyboard shortcuts work for transport: space (play/pause), arrow keys (seek)
+- [x] **POL-01**: Camera filename labels display on tiles during preview (not baked into export)
+- [x] **POL-02**: User can click a tile to expand it fullscreen, click again to return to grid
+- [x] **POL-03**: Keyboard shortcuts work for transport: space (play/pause), arrow keys (seek)
 
 ## Future Requirements
 
@@ -100,9 +100,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EXP-02 | Phase 8 | Complete |
 | EXP-03 | Phase 8 | Complete |
 | EXP-04 | Phase 8 | Complete |
-| POL-01 | Phase 9 | Pending |
-| POL-02 | Phase 9 | Pending |
-| POL-03 | Phase 9 | Pending |
+| POL-01 | Phase 9 | Complete |
+| POL-02 | Phase 9 | Complete |
+| POL-03 | Phase 9 | Complete |
 
 **Coverage:**
 - v2.0 requirements: 22 total
