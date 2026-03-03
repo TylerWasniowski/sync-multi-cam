@@ -38,7 +38,7 @@ Requirements for synced playback and composite export. Each maps to roadmap phas
 
 - [x] **EXP-01**: User can download a single MP4 (H.264) containing all camera angles composited in the grid layout
 - [x] **EXP-02**: User can select export resolution: 4K (default), 1080p, or 720p
-- [ ] **EXP-03**: Export shows frame-level progress indicator
+- [x] **EXP-03**: Export shows frame-level progress indicator
 - [x] **EXP-04**: User can select which audio track(s) to include in the exported video
 
 ### Polish
@@ -98,7 +98,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | WAVE-05 | Phase 7 | Pending |
 | EXP-01 | Phase 8 | Complete |
 | EXP-02 | Phase 8 | Complete |
-| EXP-03 | Phase 8 | Pending |
+| EXP-03 | Phase 8 | Complete |
 | EXP-04 | Phase 8 | Complete |
 | POL-01 | Phase 9 | Pending |
 | POL-02 | Phase 9 | Pending |

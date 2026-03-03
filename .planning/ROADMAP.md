@@ -85,8 +85,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 08-01-PLAN.md -- Pure filtergraph builder (TDD): buildExportArgs with scale+xstack, audio args, resolution presets
-- [ ] 08-02-PLAN.md -- Export pipeline + ExportPanel UI: MEMFS I/O, progress reporting, download, resolution picker, wired into PlaybackSection
+- [x] 08-01-PLAN.md -- Pure filtergraph builder (TDD): buildExportArgs with scale+xstack, audio args, resolution presets
+- [x] 08-02-PLAN.md -- Export pipeline + ExportPanel UI: MEMFS I/O, progress reporting, download, resolution picker, wired into PlaybackSection
 
 ### Phase 9: Polish
 **Goal**: Quality-of-life improvements that make the playback experience feel complete

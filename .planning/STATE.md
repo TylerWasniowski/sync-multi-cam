@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Synced Playback & Export
 status: executing
-last_updated: "2026-03-03T18:19:21Z"
+last_updated: "2026-03-03T18:44:38.453Z"
 progress:
   total_phases: 3
   completed_phases: 3
   total_plans: 8
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Project State
@@ -18,23 +18,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** Accurately sync multiple camera angles by audio so users get aligned video files without installing any software
-**Current focus:** Phase 8 -- Composite Export (IN PROGRESS)
+**Current focus:** Phase 8 -- Composite Export (COMPLETE)
 
 ## Current Position
 
-Phase: 8 of 9 (Composite Export) -- IN PROGRESS
-Plan: 1 of 2 in Phase 8 -- COMPLETE
-Status: Executing Phase 8
-Last activity: 2026-03-03 -- Completed 08-01 Filtergraph Builder
+Phase: 8 of 9 (Composite Export) -- COMPLETE
+Plan: 2 of 2 in Phase 8 -- COMPLETE
+Status: Phase 8 Complete
+Last activity: 2026-03-03 -- Completed 08-02 Export Pipeline & UI
 
-Progress: [████████░░] 88%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity (from v1.0):**
-- Total plans completed: 12
-- Average duration: 6.9 min
-- Total execution time: ~1.38 hours
+- Total plans completed: 13
+- Average duration: 7.9 min
+- Total execution time: ~1.71 hours
 
 **By Phase (v2.0):**
 
@@ -43,7 +43,7 @@ Progress: [████████░░] 88%
 | 05 | 3/3 | 9min | 3min |
 | 06 | 1/1 | 15min | 15min |
 | 07 | 1/2 | 4min | 4min |
-| 08 | 1/2 | 4min | 4min |
+| 08 | 2/2 | 24min | 12min |
 
 *Updated after each plan completion*
 
@@ -75,6 +75,10 @@ Full decision log in PROJECT.md Key Decisions table.
 - 08-01: Audio amix uses normalize=0 and duration=longest for predictable output
 - 08-01: Single-element mix array optimized to direct map (no amix overhead)
 - 08-01: Video and audio filter parts combined into single -filter_complex string
+- 08-02: Copy Uint8Array before FFmpeg writeFile to prevent ArrayBuffer detachment via postMessage
+- 08-02: Audio config derived from mute state (all muted = none, else mix unmuted)
+- 08-02: ExportPanel uses preparing/encoding state distinction for user feedback clarity
+- 08-02: Auto-download on completion with 2s display before reset to idle
 
 ### Pending Todos
 
@@ -87,5 +91,5 @@ None. (Previously: xstack filter generation and audio strategy -- resolved in 08
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed 08-01-PLAN.md
+Stopped at: Completed 08-02-PLAN.md
 Resume file: None
