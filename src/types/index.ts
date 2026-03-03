@@ -79,4 +79,32 @@ export type DisplayMode = 'fill' | 'letterbox';
 export type MutedTracks = Set<number>;
 
 /** Export pipeline state machine */
-export type ExportState = 'idle' | 'preparing' | 'encoding' | 'complete' | 'error';
+export type ExportState = 'idle' | 'preparing' | 'encoding' | 'complete' | 'error' | 'cancelled';
+
+/** Audio track selection for export */
+export type AudioConfig =
+  | { mode: 'single'; trackIndex: number }
+  | { mode: 'mix'; trackIndices: number[] }
+  | { mode: 'none' };
+
+/** Messages sent TO the export worker */
+export type ExportWorkerCommand =
+  | {
+      type: 'start';
+      files: File[];
+      offsets: number[];
+      resolution: { width: number; height: number };
+      fps: number;
+      bitrate: number;
+      audioConfig: AudioConfig;
+      totalDurationSeconds: number;
+      tileAspectRatio: number;
+    }
+  | { type: 'cancel' };
+
+/** Messages sent FROM the export worker */
+export type ExportWorkerMessage =
+  | { type: 'progress'; ratio: number }
+  | { type: 'complete'; data: ArrayBuffer }
+  | { type: 'error'; message: string }
+  | { type: 'cancelled' };

@@ -1,6 +1,8 @@
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { toBlobURL } from '@ffmpeg/util';
-import { FFMPEG_CORE_VERSION, FFMPEG_CDN_BASE } from './constants.ts';
+
+const FFMPEG_CORE_VERSION = '0.12.10';
+const FFMPEG_CDN_BASE = 'https://cdn.jsdelivr.net/npm';
 
 let ffmpegInstance: FFmpeg | null = null;
 
