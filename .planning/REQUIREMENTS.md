@@ -29,8 +29,10 @@ Requirements for synced playback and composite export. Each maps to roadmap phas
 ### Waveform Integration
 
 - [ ] **WAVE-01**: User can click anywhere on a waveform track to seek all videos to that time position
-- [ ] **WAVE-02**: An animated playhead cursor tracks current playback position across all waveform tracks
-- [ ] **WAVE-03**: Waveform zoom/pan and video playback position stay synchronized
+- [ ] **WAVE-02**: User can drag along a waveform track to scrub playback position in real time
+- [ ] **WAVE-03**: An animated playhead cursor tracks current playback position across all waveform tracks
+- [ ] **WAVE-04**: Panning requires Shift+drag (changed from bare drag); a visible UI hint communicates this
+- [ ] **WAVE-05**: Waveform zoom/pan and video playback position stay synchronized
 
 ### Composite Export
 
@@ -66,11 +68,11 @@ Explicitly excluded. Documented to prevent scope creep.
 
 | Feature | Reason |
 |---------|--------|
-| Real-time canvas compositing during playback | Fights browser compositor, degrades quality — use native `<video>` elements |
+| Real-time canvas compositing during playback | Fights browser compositor, degrades quality -- use native `<video>` elements |
 | Camera labels baked into export | User explicitly requested labels in preview only |
-| WebCodecs export for v2.0 | Firefox H.264 encoder broken, Safari pre-26 absent — defer to v3+ |
-| More than 8 cameras in export | FFmpeg WASM memory constraint — sync supports 30 files but export caps at 8 |
-| Video editing (cuts, effects, transitions) | Out of scope — sync, preview, and composite export only |
+| WebCodecs export for v2.0 | Firefox H.264 encoder broken, Safari pre-26 absent -- defer to v3+ |
+| More than 8 cameras in export | FFmpeg WASM memory constraint -- sync supports 30 files but export caps at 8 |
+| Video editing (cuts, effects, transitions) | Out of scope -- sync, preview, and composite export only |
 | Audio drift compensation | Extremely complex, only matters for 30+ min recordings |
 
 ## Traceability
@@ -79,32 +81,34 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GRID-01 | — | Pending |
-| GRID-02 | — | Pending |
-| GRID-03 | — | Pending |
-| PLAY-01 | — | Pending |
-| PLAY-02 | — | Pending |
-| PLAY-03 | — | Pending |
-| PLAY-04 | — | Pending |
-| AUD-01 | — | Pending |
-| AUD-02 | — | Pending |
-| AUD-03 | — | Pending |
-| WAVE-01 | — | Pending |
-| WAVE-02 | — | Pending |
-| WAVE-03 | — | Pending |
-| EXP-01 | — | Pending |
-| EXP-02 | — | Pending |
-| EXP-03 | — | Pending |
-| EXP-04 | — | Pending |
-| POL-01 | — | Pending |
-| POL-02 | — | Pending |
-| POL-03 | — | Pending |
+| GRID-01 | Phase 5 | Pending |
+| GRID-02 | Phase 5 | Pending |
+| GRID-03 | Phase 5 | Pending |
+| PLAY-01 | Phase 5 | Pending |
+| PLAY-02 | Phase 5 | Pending |
+| PLAY-03 | Phase 5 | Pending |
+| PLAY-04 | Phase 5 | Pending |
+| AUD-01 | Phase 6 | Pending |
+| AUD-02 | Phase 6 | Pending |
+| AUD-03 | Phase 6 | Pending |
+| WAVE-01 | Phase 7 | Pending |
+| WAVE-02 | Phase 7 | Pending |
+| WAVE-03 | Phase 7 | Pending |
+| WAVE-04 | Phase 7 | Pending |
+| WAVE-05 | Phase 7 | Pending |
+| EXP-01 | Phase 8 | Pending |
+| EXP-02 | Phase 8 | Pending |
+| EXP-03 | Phase 8 | Pending |
+| EXP-04 | Phase 8 | Pending |
+| POL-01 | Phase 9 | Pending |
+| POL-02 | Phase 9 | Pending |
+| POL-03 | Phase 9 | Pending |
 
 **Coverage:**
-- v2.0 requirements: 20 total
-- Mapped to phases: 0
-- Unmapped: 20 ⚠️
+- v2.0 requirements: 22 total
+- Mapped to phases: 22
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-02*
-*Last updated: 2026-03-02 after initial definition*
+*Last updated: 2026-03-02 after roadmap creation*
