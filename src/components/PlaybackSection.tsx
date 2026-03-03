@@ -8,6 +8,7 @@ import type { AudioMixer } from '../lib/audioMixer.ts';
 import { VideoGrid } from './VideoGrid.tsx';
 import { TransportBar } from './TransportBar.tsx';
 import { WaveformPanel } from './WaveformPanel.tsx';
+import { ExportPanel } from './ExportPanel.tsx';
 
 export interface PlaybackSectionProps {
   results: DownloadableResult[];
@@ -447,6 +448,14 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
         onScrubStart={handleScrubStart}
         onScrubEnd={handleScrubEnd}
         onScrubSeek={handleScrubSeek}
+      />
+
+      {/* Export panel -- resolution picker, export button, progress bar */}
+      <ExportPanel
+        results={results}
+        mutedTracks={mutedTracks}
+        totalDurationSeconds={duration}
+        disabled={!allVideosReady}
       />
     </div>
   );
