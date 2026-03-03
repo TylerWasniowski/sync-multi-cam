@@ -8,9 +8,15 @@ export interface WaveformPanelProps {
   mutedTracks: MutedTracks;
   onToggleMute: (index: number) => void;
   onScrub?: (time: number | null) => void;
+  playheadTime?: number | null;
+  isPlaying?: boolean;
+  onSeek?: (time: number) => void;
+  onScrubStart?: () => void;
+  onScrubEnd?: () => void;
+  onScrubSeek?: (time: number) => void;
 }
 
-export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, onScrub }: WaveformPanelProps) {
+export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, onScrub, playheadTime, isPlaying, onSeek, onScrubStart, onScrubEnd, onScrubSeek }: WaveformPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const [panelWidth, setPanelWidth] = useState(0);
 
@@ -87,7 +93,6 @@ export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, on
     }
 
     // Cursor time updates are visual-only (hover indicator).
-    // Scrub-to-seek interaction will be wired in Phase 7.
 
     pendingUpdateRef.current = { ...pendingUpdateRef.current, ...update };
 
@@ -146,25 +151,60 @@ export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, on
     return () => el.removeEventListener('wheel', handleWheel);
   }, [handleWheel]);
 
-  // --- Panel-level pointer drag (pan) for gaps between tracks ---
-  const panelDragRef = useRef(false);
+  // --- Panel-level pointer drag for gaps between tracks ---
+  // Bare click/drag = seek/scrub, Shift+drag = pan
+  const panelModeRef = useRef<'idle' | 'pan' | 'scrub'>('idle');
   const panelDragStartXRef = useRef(0);
   const panelDragStartOffsetRef = useRef(0);
   const panelRafRef = useRef<number>(0);
+
+  // Shift key tracking for dynamic cursor
+  const [shiftHeld, setShiftHeld] = useState(false);
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Shift') setShiftHeld(true); };
+    const onKeyUp = (e: KeyboardEvent) => { if (e.key === 'Shift') setShiftHeld(false); };
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keyup', onKeyUp);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('keyup', onKeyUp);
+    };
+  }, []);
+
+  // Compute time from pointer position in panel gap areas
+  const panelPointerToTime = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const el = panelRef.current;
+    if (!el) return 0;
+    const rect = el.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left - 176;
+    const clampedX = Math.max(0, offsetX);
+    return (viewState.scrollOffset + clampedX * viewState.samplesPerPixel) / sampleRate;
+  }, [viewState.scrollOffset, viewState.samplesPerPixel, sampleRate]);
 
   const handlePanelPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
     // Skip if a track's canvas area is handling this (tracks have their own drag)
     if ((e.target as HTMLElement).closest('[data-waveform-canvas]')) return;
-    panelDragRef.current = true;
-    panelDragStartXRef.current = e.clientX;
-    panelDragStartOffsetRef.current = viewState.scrollOffset;
+
     (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
-  }, [viewState.scrollOffset]);
+
+    if (e.shiftKey) {
+      // Shift+drag: pan mode
+      panelModeRef.current = 'pan';
+      panelDragStartXRef.current = e.clientX;
+      panelDragStartOffsetRef.current = viewState.scrollOffset;
+    } else {
+      // Bare click/drag: seek/scrub mode
+      panelModeRef.current = 'scrub';
+      onScrubStart?.();
+      const time = panelPointerToTime(e);
+      onScrubSeek?.(Math.max(0, time));
+    }
+  }, [viewState.scrollOffset, onScrubStart, onScrubSeek, panelPointerToTime]);
 
   const handlePanelPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (panelDragRef.current) {
-      // Drag panning
+    if (panelModeRef.current === 'pan') {
+      // Shift+drag panning
       const deltaX = panelDragStartXRef.current - e.clientX;
       const deltaSamples = deltaX * viewState.samplesPerPixel;
       const newOffset = panelDragStartOffsetRef.current + deltaSamples;
@@ -172,6 +212,13 @@ export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, on
       if (panelRafRef.current) cancelAnimationFrame(panelRafRef.current);
       panelRafRef.current = requestAnimationFrame(() => {
         handleViewStateChange({ scrollOffset: Math.max(0, newOffset) });
+      });
+    } else if (panelModeRef.current === 'scrub') {
+      // Bare drag: continuous scrub seek
+      const time = panelPointerToTime(e);
+      if (panelRafRef.current) cancelAnimationFrame(panelRafRef.current);
+      panelRafRef.current = requestAnimationFrame(() => {
+        onScrubSeek?.(Math.max(0, time));
       });
     } else {
       // Hover cursor tracking in gap areas
@@ -183,18 +230,25 @@ export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, on
       const time = (viewState.scrollOffset + clampedX * viewState.samplesPerPixel) / sampleRate;
       handleViewStateChange({ cursorTime: time });
     }
-  }, [viewState.samplesPerPixel, viewState.scrollOffset, sampleRate, handleViewStateChange]);
+  }, [viewState.samplesPerPixel, viewState.scrollOffset, sampleRate, handleViewStateChange, onScrubSeek, panelPointerToTime]);
 
   const handlePanelPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (!panelDragRef.current) return;
-    panelDragRef.current = false;
+    const mode = panelModeRef.current;
+    if (mode === 'idle') return;
+
     (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId);
 
-    const deltaX = panelDragStartXRef.current - e.clientX;
-    const deltaSamples = deltaX * viewState.samplesPerPixel;
-    const newOffset = panelDragStartOffsetRef.current + deltaSamples;
-    handleViewStateChange({ scrollOffset: Math.max(0, newOffset) });
-  }, [viewState.samplesPerPixel, handleViewStateChange]);
+    if (mode === 'pan') {
+      const deltaX = panelDragStartXRef.current - e.clientX;
+      const deltaSamples = deltaX * viewState.samplesPerPixel;
+      const newOffset = panelDragStartOffsetRef.current + deltaSamples;
+      handleViewStateChange({ scrollOffset: Math.max(0, newOffset) });
+    } else if (mode === 'scrub') {
+      onScrubEnd?.();
+    }
+
+    panelModeRef.current = 'idle';
+  }, [viewState.samplesPerPixel, handleViewStateChange, onScrubEnd]);
 
   const handlePointerLeaveAll = useCallback(() => {
     handleViewStateChange({ cursorTime: null });
@@ -241,7 +295,7 @@ export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, on
       <div
         ref={panelRef}
         className="divide-y divide-gray-800"
-        style={{ cursor: 'grab', userSelect: 'none' }}
+        style={{ cursor: shiftHeld ? 'grab' : 'crosshair', userSelect: 'none' }}
         onPointerDown={handlePanelPointerDown}
         onPointerMove={handlePanelPointerMove}
         onPointerUp={handlePanelPointerUp}
@@ -261,9 +315,16 @@ export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, on
               onViewStateChange={handleViewStateChange}
               onPointerEnter={handlePointerEnter}
               onPointerLeave={handlePointerLeaveAll}
+              playheadTime={playheadTime}
+              onScrubSeek={onScrubSeek}
+              onScrubStart={onScrubStart}
+              onScrubEnd={onScrubEnd}
             />
           </div>
         ))}
+      </div>
+      <div className="px-4 py-1 text-[10px] text-gray-600 text-right select-none">
+        Shift + drag to pan &middot; Scroll to zoom
       </div>
     </div>
   );
