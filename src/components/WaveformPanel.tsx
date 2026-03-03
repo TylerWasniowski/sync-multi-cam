@@ -116,6 +116,9 @@ export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, on
     });
   }, [maxTotalSamples, canvasWidth, onScrub]);
 
+  // Track whether user is actively interacting (pan or scrub) to suppress auto-follow and playhead-anchored zoom
+  const userInteractingRef = useRef(false);
+
   // --- Wheel zoom at panel level (covers tracks + gaps) ---
   const MIN_SAMPLES_PER_PIXEL = 1;
   const maxSamplesPerPixel = Math.ceil(maxTotalSamples / 200);
@@ -133,15 +136,26 @@ export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, on
     const oldSPP = viewState.samplesPerPixel;
     const newSPP = Math.max(MIN_SAMPLES_PER_PIXEL, Math.min(maxSamplesPerPixel, oldSPP * factor));
 
-    // Keep the cursor sample position stable under the pointer
-    const cursorSample = viewState.scrollOffset + clampedX * oldSPP;
-    const newOffset = cursorSample - clampedX * newSPP;
-
-    handleViewStateChange({
-      samplesPerPixel: newSPP,
-      scrollOffset: Math.max(0, newOffset),
-    });
-  }, [viewState.samplesPerPixel, viewState.scrollOffset, maxSamplesPerPixel, canvasWidth, handleViewStateChange]);
+    if (isPlaying && playheadTime != null && !userInteractingRef.current) {
+      // Anchor zoom on playhead during active playback
+      const anchorSample = playheadTime * sampleRate;
+      const playheadPixel = (anchorSample - viewState.scrollOffset) / viewState.samplesPerPixel;
+      const clampedPlayheadX = Math.max(0, Math.min(playheadPixel, canvasWidth));
+      const newOffset = anchorSample - clampedPlayheadX * newSPP;
+      handleViewStateChange({
+        samplesPerPixel: newSPP,
+        scrollOffset: Math.max(0, newOffset),
+      });
+    } else {
+      // Pointer-anchored zoom (paused, scrubbing, or not playing)
+      const cursorSample = viewState.scrollOffset + clampedX * oldSPP;
+      const newOffset = cursorSample - clampedX * newSPP;
+      handleViewStateChange({
+        samplesPerPixel: newSPP,
+        scrollOffset: Math.max(0, newOffset),
+      });
+    }
+  }, [viewState.samplesPerPixel, viewState.scrollOffset, maxSamplesPerPixel, canvasWidth, handleViewStateChange, isPlaying, playheadTime, sampleRate]);
 
   // Attach native wheel listener with passive: false so preventDefault() works
   useEffect(() => {
@@ -151,8 +165,25 @@ export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, on
     return () => el.removeEventListener('wheel', handleWheel);
   }, [handleWheel]);
 
+  // --- Playhead follow mode: auto-scroll to keep playhead visible during playback ---
+  useEffect(() => {
+    if (!isPlaying || playheadTime == null || userInteractingRef.current) return;
+
+    const playheadSample = playheadTime * sampleRate;
+    const viewStart = viewState.scrollOffset;
+    const viewEnd = viewState.scrollOffset + canvasWidth * viewState.samplesPerPixel;
+
+    // If playhead is outside visible viewport, page-turn forward
+    if (playheadSample < viewStart || playheadSample > viewEnd) {
+      // Page turn: place playhead at ~10% from left edge (not centered, to show upcoming content)
+      const newOffset = playheadSample - canvasWidth * viewState.samplesPerPixel * 0.1;
+      handleViewStateChange({ scrollOffset: Math.max(0, newOffset) });
+    }
+  }, [playheadTime, isPlaying, sampleRate, viewState.scrollOffset, viewState.samplesPerPixel, canvasWidth, handleViewStateChange]);
+
   // --- Panel-level pointer drag for gaps between tracks ---
   // Bare click/drag = seek/scrub, Shift+drag = pan
+
   const panelModeRef = useRef<'idle' | 'pan' | 'scrub'>('idle');
   const panelDragStartXRef = useRef(0);
   const panelDragStartOffsetRef = useRef(0);
@@ -191,11 +222,13 @@ export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, on
     if (e.shiftKey) {
       // Shift+drag: pan mode
       panelModeRef.current = 'pan';
+      userInteractingRef.current = true;
       panelDragStartXRef.current = e.clientX;
       panelDragStartOffsetRef.current = viewState.scrollOffset;
     } else {
       // Bare click/drag: seek/scrub mode
       panelModeRef.current = 'scrub';
+      userInteractingRef.current = true;
       onScrubStart?.();
       const time = panelPointerToTime(e);
       onScrubSeek?.(Math.max(0, time));
@@ -248,6 +281,7 @@ export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, on
     }
 
     panelModeRef.current = 'idle';
+    userInteractingRef.current = false;
   }, [viewState.samplesPerPixel, handleViewStateChange, onScrubEnd]);
 
   const handlePointerLeaveAll = useCallback(() => {
