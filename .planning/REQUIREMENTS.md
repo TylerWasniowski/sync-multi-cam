@@ -28,10 +28,10 @@ Requirements for synced playback and composite export. Each maps to roadmap phas
 
 ### Waveform Integration
 
-- [ ] **WAVE-01**: User can click anywhere on a waveform track to seek all videos to that time position
-- [ ] **WAVE-02**: User can drag along a waveform track to scrub playback position in real time
-- [ ] **WAVE-03**: An animated playhead cursor tracks current playback position across all waveform tracks
-- [ ] **WAVE-04**: Panning requires Shift+drag (changed from bare drag); a visible UI hint communicates this
+- [x] **WAVE-01**: User can click anywhere on a waveform track to seek all videos to that time position
+- [x] **WAVE-02**: User can drag along a waveform track to scrub playback position in real time
+- [x] **WAVE-03**: An animated playhead cursor tracks current playback position across all waveform tracks
+- [x] **WAVE-04**: Panning requires Shift+drag (changed from bare drag); a visible UI hint communicates this
 - [ ] **WAVE-05**: Waveform zoom/pan and video playback position stay synchronized
 
 ### Composite Export
@@ -91,10 +91,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AUD-01 | Phase 6 | Complete |
 | AUD-02 | Phase 6 | Complete |
 | AUD-03 | Phase 6 | Complete |
-| WAVE-01 | Phase 7 | Pending |
-| WAVE-02 | Phase 7 | Pending |
-| WAVE-03 | Phase 7 | Pending |
-| WAVE-04 | Phase 7 | Pending |
+| WAVE-01 | Phase 7 | Complete |
+| WAVE-02 | Phase 7 | Complete |
+| WAVE-03 | Phase 7 | Complete |
+| WAVE-04 | Phase 7 | Complete |
 | WAVE-05 | Phase 7 | Pending |
 | EXP-01 | Phase 8 | Pending |
 | EXP-02 | Phase 8 | Pending |
