@@ -1,181 +1,167 @@
 # Technology Stack
 
-**Project:** Sync Multi-Cam
-**Researched:** 2026-03-01
+**Project:** Sync Multi-Cam — v2.0 Additions (Synced Playback & GPU Export)
+**Researched:** 2026-03-02
+**Confidence:** HIGH (core export pipeline), MEDIUM (sync correction approach)
 
-## Recommended Stack
+---
 
-### Build Tool & Framework
+## Context: What the Existing Stack Already Covers
 
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| Vite | ^7.3.1 | Build tool, dev server, bundler | First-class WASM support, native Cloudflare Pages integration via `@cloudflare/vite-plugin`, fastest HMR. Vite 7 is current stable (8 is in development with Rolldown). React template scaffolding is built-in. | HIGH |
-| React | ^19.2.4 | UI framework | Stable release with improved concurrent features. Component model fits this app well: drag-drop zone, progress indicators, file list, download actions. No SSR needed -- pure SPA. | HIGH |
-| TypeScript | ^5.9.3 | Type safety | Current stable. TS 6.0 is in beta (bridge release before Go-based 7.0) -- stick with 5.9 for production stability. WASM interop benefits enormously from typed interfaces. | HIGH |
+The following are already in place from v1.0 and do NOT need to be re-evaluated:
 
-### Styling
+| Capability | Covered By |
+|------------|-----------|
+| Build, bundling, dev server | Vite ^7.3.1 |
+| UI components and state | React ^19.2.0 + TypeScript ~5.9.3 |
+| Styling | Tailwind CSS ^4.2.1 |
+| Video file I/O (trim, remux, stream-copy) | @ffmpeg/ffmpeg ^0.12.15 + @ffmpeg/core-mt |
+| ZIP archive generation | fflate ^0.8.2 |
+| Keyframe index reading | mp4box ^2.3.0 |
+| Audio cross-correlation | synaudio ^0.4.0 |
+| COOP/COEP headers (required for SharedArrayBuffer) | Cloudflare Pages _headers file |
 
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| Tailwind CSS | ^4.2.1 | Utility-first CSS | v4 has first-party Vite plugin (`@tailwindcss/vite`), zero-config auto-detection, 5x faster builds. Dark theme is trivial with `dark:` variants. Professional video tool aesthetic maps well to utility classes. | HIGH |
+Everything below is **new** for v2.0.
 
-### Video/Audio Processing (Core)
+---
 
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| @ffmpeg/ffmpeg | ^0.12.15 | FFmpeg WASM wrapper API | Official package. Provides `load()`, `writeFile()`, `exec()`, `readFile()` API for running FFmpeg commands in-browser. Spawns a Web Worker internally. TypeScript types included. | HIGH |
-| @ffmpeg/util | ^0.12.x | Utility functions (fetchFile, etc.) | Required companion to @ffmpeg/ffmpeg. Provides `fetchFile()` for loading files into the virtual filesystem and `toBlobURL()` for loading core from CDN. | HIGH |
-| @ffmpeg/core-mt | ^0.12.10 | Multi-threaded FFmpeg WASM core | Multi-threaded variant uses SharedArrayBuffer for parallel processing. Significant speedup for audio extraction and video trimming. **Requires COOP/COEP headers** (see Infrastructure). Single-thread fallback: `@ffmpeg/core` ^0.12.10. | HIGH |
+## New Stack Additions for v2.0
 
-### Audio Cross-Correlation
+### Core Technologies
 
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| fft.js | ^4.0.4 | Fast Fourier Transform | Fastest pure-JS FFT implementation (Radix-4/Radix-2). 15,676 ops/sec at 4096-size vs ~4,000-8,000 for alternatives. Provides `realTransform()` and `inverseTransform()` needed for frequency-domain cross-correlation. Zero dependencies, 23 releases, MIT license. | MEDIUM |
-| Web Audio API (built-in) | N/A | Audio decoding | `AudioContext.decodeAudioData()` decodes audio from ArrayBuffer to AudioBuffer (Float32Array PCM samples). Available in all modern browsers. Alternative to using FFmpeg for audio extraction -- faster for just getting raw PCM data. | HIGH |
+| Technology | Version | Purpose | Why Recommended | Confidence |
+|------------|---------|---------|-----------------|------------|
+| Web Audio API (built-in) | N/A | Audio routing and mixing for multi-cam playback | `createMediaElementSource()` wraps each `<video>` element as an `AudioNode`. `GainNode` controls per-track volume. `AudioDestinationNode` provides final output. Route all to destination for "mix all", mute all but one for "per-camera" selection. Zero dependencies, universally supported. | HIGH |
+| HTMLVideoElement (built-in) | N/A | Per-camera video playback element | Native browser video element. `src` set to `URL.createObjectURL(file)` for the synced files in memory. Offset-aware seek on load (`currentTime = offset / 1000`). `muted` to suppress native audio output (Web Audio API handles it). `playsInline` for consistent behavior. | HIGH |
+| WebCodecs API (built-in) | N/A | GPU-accelerated composite export — canvas frame → H.264 encode | `VideoEncoder` with `codec: "avc1.4d002a"` (H.264 High Profile) encodes `VideoFrame` objects captured from composite canvas. Hardware-accelerated when available (browser decides). Check support with `VideoEncoder.isConfigSupported()` before use. Browser support: Chrome 94+, Firefox 130+, Safari 26.0+ (full); iOS Safari 16.4+ (partial, video-only). **Global coverage: ~94%.** | HIGH |
+| mediabunny | ^1.34.5 | MP4 muxing — wraps H.264 encoded chunks into a valid MP4 container | Pure TypeScript, zero dependencies, ~5 kB gzipped, tree-shakable. Succeeds `mp4-muxer` (deprecated July 2025). WebCodecs-native: designed specifically for `VideoEncoder` / `AudioEncoder` output. Supports H.264/AVC, H.265/HEVC, AAC, MP4/MOV/WebM containers. Actively maintained (v1.34.5 as of March 2026). | HIGH |
+| OffscreenCanvas (built-in) | N/A | Move grid compositing off the main thread during export | Transfers canvas rendering into a Worker via `transferControlToOffscreen()`. Keeps the UI responsive during 4K export (which can take minutes). Pair with `requestAnimationFrame` on a Worker for frame rendering. | MEDIUM |
 
-**Cross-correlation approach:** Extract audio as PCM Float32Array (via Web Audio API `decodeAudioData` or FFmpeg), downsample to ~8kHz mono (reduce computation), compute FFT-based cross-correlation to find the time offset that maximizes similarity. FFT cross-correlation is O(N log N) vs O(N^2) for naive time-domain correlation.
+### Supporting Libraries
 
-**Decision: Web Audio API vs FFmpeg for audio extraction.** Use Web Audio API's `decodeAudioData()` for extracting PCM audio data -- it is faster than running an FFmpeg command because the browser's native decoder handles it without WASM overhead. Reserve FFmpeg for the final trim/remux step where you need actual video file manipulation.
+| Library | Version | Purpose | When to Use | Confidence |
+|---------|---------|---------|-------------|------------|
+| requestVideoFrameCallback (built-in) | N/A | Precise per-frame sync correction during playback | Fires when each `<video>` delivers a new frame to the compositor. Use to detect drift between the "primary" video's presented frame time and the others, then apply micro-corrections via `currentTime` nudges. Chrome 83+, Safari 15.4+, Firefox 132+. | MEDIUM |
 
-### File Output
+### What NOT to Add
 
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| client-zip | ^2.5.0 | ZIP archive generation | 40x faster than legacy JSZip, 2.6 kB gzipped, zero dependencies, streaming API. Constant memory usage (~36 MB) even for multi-GB archives. Perfect for bundling 2-4 synced video files. | MEDIUM |
-| file-saver | ^2.0.5 | Trigger browser downloads | 5.1M weekly downloads, battle-tested `saveAs()` for triggering file downloads from Blobs. Simple API: `saveAs(blob, filename)`. | HIGH |
+| Do Not Add | Why | What Handles It Instead |
+|------------|-----|------------------------|
+| FFmpeg WASM for H.264 encode | FFmpeg WASM H.264 encoding is single-threaded WASM — slow and memory-capped at 2 GB. At 4K, frame buffers alone exceed practical WASM limits. WebCodecs uses hardware-accelerated encode, runs 10x+ faster. | WebCodecs `VideoEncoder` + mediabunny |
+| MediaRecorder | Quality limitations, output is always WebM in Chrome (not MP4), adds FFmpeg WASM re-wrap step anyway. Cannot control bitrate or profile cleanly. | WebCodecs `VideoEncoder` |
+| Three.js / WebGL library | Grid compositing is 2D blitting of video frames to canvas grid cells — no 3D, no shaders needed. A simple `OffscreenCanvas` + `2d` context with `drawImage()` is sufficient and avoids a large dependency. | Native Canvas 2D API |
+| Remotion | Heavy React video framework. Adds 100+ KB to bundle and a distinct render model incompatible with the existing architecture. Overkill for a fixed grid composite. | Custom WebCodecs pipeline |
+| video.js / hls.js | Stream-protocol players. Files are local Blobs, not HLS/DASH streams. No protocol support needed. | `HTMLVideoElement` with `URL.createObjectURL()` |
+| mp4-muxer | Deprecated July 2025 in favor of mediabunny. Still works but receives no new features or bug fixes. | mediabunny |
 
-### Infrastructure
+---
 
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| Cloudflare Pages | N/A | Static hosting | Free tier, global CDN, git-based deploys. Supports custom `_headers` file for COOP/COEP. No server-side compute needed. | HIGH |
-| Wrangler | latest | CLI for Cloudflare deployment | `npx wrangler pages deploy dist` for manual deploys, or connect git repo for automatic deploys. | HIGH |
+## Architecture of the New Pipeline
 
-### Dev Dependencies
-
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| @tailwindcss/vite | ^4.2.1 | Tailwind Vite plugin | First-party plugin, replaces PostCSS-based setup. Zero config. | HIGH |
-| @types/react | ^19.x | React type definitions | Required for TypeScript + React | HIGH |
-| @types/react-dom | ^19.x | React DOM type definitions | Required for TypeScript + React DOM | HIGH |
-| ESLint | ^9.x | Linting | Vite scaffolding includes ESLint config out of the box | MEDIUM |
-
-## Critical Configuration: Cross-Origin Isolation
-
-SharedArrayBuffer (required by `@ffmpeg/core-mt`) demands cross-origin isolation headers. Create a `_headers` file in the `public/` directory:
+### Playback (Runtime)
 
 ```
-/*
-  Cross-Origin-Embedder-Policy: require-corp
-  Cross-Origin-Opener-Policy: same-origin
+File (Blob) → URL.createObjectURL() → <video muted>
+                                           ↓
+                        MediaElementAudioSourceNode (Web Audio API)
+                                           ↓
+                                       GainNode (volume 0 or 1)
+                                           ↓
+                                  AudioDestinationNode (speakers)
+
+Primary video drives time → requestVideoFrameCallback → check all videos'
+currentTime vs expected → nudge lagging videos (currentTime += delta)
 ```
 
-**Warning:** These headers break embedding of cross-origin resources that don't set `Cross-Origin-Resource-Policy`. This is fine for this app (no external embeds), but be aware if adding analytics scripts or external CDN resources later -- they must support CORP/CORS or be loaded differently.
+### Export (Composite MP4)
 
-For local development, Vite's dev server needs these headers too:
-
-```typescript
-// vite.config.ts
-export default defineConfig({
-  server: {
-    headers: {
-      'Cross-Origin-Embedder-Policy': 'require-corp',
-      'Cross-Origin-Opener-Policy': 'same-origin',
-    },
-  },
-});
 ```
+<video> elements (paused, seeking frame-by-frame)
+         ↓
+OffscreenCanvas (grid layout via Canvas 2D drawImage)
+         ↓
+VideoFrame (new VideoFrame(canvas, { timestamp }))
+         ↓
+VideoEncoder (codec: "avc1.4d002a", hardware-accelerated)
+         ↓
+EncodedVideoChunk callbacks → mediabunny MP4 muxer
+         ↓
+ArrayBuffer → Blob → URL.createObjectURL() → <a download>
+```
+
+### Dynamic Grid Layout
+
+The grid layout algorithm is custom, not a library. Given N videos with known aspect ratios and a container width/height:
+
+1. Compute optimal number of columns `c` that minimizes wasted space
+2. For "preserve AR" mode: render each cell at its natural aspect ratio within its grid cell, with letterboxing
+3. For "fill tiles" mode: CSS `object-fit: cover` on `<video>` element clipped to cell bounds
+4. Grid cell sizes computed once on mount and on resize (ResizeObserver)
+
+No external bin-packing library is needed. The uniform-column approach (like video conferencing UIs — Zoom, Google Meet) is proven, simple, and produces predictable layouts. True bin-packing (mixed cell sizes) is complex to implement correctly and rarely improves visual quality for < 8 videos.
+
+---
 
 ## Alternatives Considered
 
-| Category | Recommended | Alternative | Why Not |
-|----------|-------------|-------------|---------|
-| Build tool | Vite 7 | Webpack 5 | Slower, more config overhead, Vite is the standard for new React projects |
-| Build tool | Vite 7 | Next.js | SSR/SSG framework adds complexity for a pure client-side SPA with no routing needs |
-| UI framework | React 19 | Vanilla JS | This app has enough state (file list, progress, offsets, download states) that a component model pays for itself. React is the safest bet for hiring/maintenance. |
-| UI framework | React 19 | Svelte 5 | Svelte is excellent but smaller ecosystem. React's ecosystem of drag-drop, progress, and file handling components is deeper. |
-| UI framework | React 19 | Vue 3 | Both are fine. React chosen for broader ecosystem and TypeScript-first DX in 2025+. |
-| Styling | Tailwind CSS 4 | CSS Modules | Tailwind is faster to build dark-themed UIs, fewer files, better DX with Vite plugin |
-| Styling | Tailwind CSS 4 | shadcn/ui | Overkill for a single-page tool. If the UI grows, can add shadcn components on top of Tailwind later. |
-| FFT | fft.js | kissfft-js | KissFFT-js is WASM-compiled and theoretically faster, but adds WASM complexity for a non-critical path. fft.js is fast enough for audio correlation on a few minutes of 8kHz mono audio. |
-| FFT | fft.js | Web Audio AnalyserNode | AnalyserNode is designed for real-time visualization, not batch cross-correlation of full audio tracks |
-| ZIP | client-zip | JSZip 3.10 | JSZip works but is 40% slower on modern versions (40x slower on older versions). client-zip's streaming approach uses constant memory -- critical when zipping multiple video files. |
-| ZIP | client-zip | Browser native CompressionStream | Only does gzip/deflate on raw streams, not ZIP archive format |
-| Download | file-saver | Native anchor trick | file-saver handles edge cases (large files, Safari quirks) that the `<a download>` trick misses |
-| Video processing | @ffmpeg/core-mt | @ffmpeg/core (single-thread) | Multi-thread is 2-4x faster for encode/decode. Single-thread is fallback only for browsers without SharedArrayBuffer. |
-| Audio extraction | Web Audio API | FFmpeg audio extraction | Web Audio API's native decoder is faster than WASM for decoding audio to PCM. Use FFmpeg only for the final trim/remux. |
+| Recommended | Alternative | When Alternative Makes Sense |
+|-------------|-------------|-------------------------------|
+| WebCodecs + mediabunny | FFmpeg WASM re-encode | If the user needs server-side quality control or extremely wide codec support. NOT in-browser at 4K. |
+| WebCodecs + mediabunny | MediaRecorder | Never for this use case — MediaRecorder produces WebM-only in Chrome and has no frame-by-frame seek control for offline export. |
+| HTMLVideoElement sync | WebCodecs VideoDecoder for playback | WebCodecs VideoDecoder is appropriate for frame-accurate scrubbing (no buffering). For continuous playback, native `<video>` elements are simpler and handle codec/container diversity (HEVC, HDR, H.264) automatically. Reserve WebCodecs decode for the export path only if needed. |
+| Simple column-count grid | External bin-packing library | If layouts need masonry or mixed portrait/landscape arrangements. The Zoom/Meet column-grid approach handles up to ~9 cameras well. |
+| OffscreenCanvas (Worker) | Main-thread canvas | Only needed for export. Playback rendering happens in the DOM (CSS handles layout), so main-thread canvas is fine for previewing the composite. |
 
-## What NOT to Use
+---
 
-| Technology | Why Not |
-|------------|---------|
-| Next.js / Remix / Astro | Server framework overhead for a pure client-side SPA. No routing, no SSR, no API routes needed. |
-| WebCodecs API | Newer browser API for video encoding/decoding. Limited browser support, complex API, and FFmpeg WASM already handles everything needed. Would be premature optimization. |
-| Opus/Vorbis WASM decoders | Unnecessary when Web Audio API handles decoding natively and FFmpeg handles everything else. |
-| Web Workers (manual) | FFmpeg WASM already runs in a Web Worker internally. The cross-correlation computation is fast enough on the main thread for 8kHz downsampled audio (a few hundred KB). Only add a worker if profiling shows UI jank. |
-| IndexedDB / OPFS | File storage APIs add complexity. Files live in memory (via FFmpeg's virtual filesystem and Blob URLs) for the duration of processing. The 2-4 file limit keeps memory manageable. |
-| State management (Redux, Zustand) | React 19's built-in state (`useState`, `useReducer`, context) is sufficient for a single-page tool with straightforward state: file list, processing status, offsets, downloads. |
+## Version Compatibility
+
+| Package | Compatible With | Notes |
+|---------|-----------------|-------|
+| mediabunny ^1.34.5 | WebCodecs API (native browser) | No npm peers needed. WebCodecs is the only dependency — must check `VideoEncoder.isConfigSupported()` at runtime. |
+| @ffmpeg/ffmpeg ^0.12.15 | mediabunny (no conflict) | FFmpeg handles trim/stream-copy; WebCodecs+mediabunny handles composite export. The two pipelines are independent. |
+| WebCodecs VideoEncoder | Firefox 130+ for H.264 encode | **Caveat:** Firefox 130 has known bugs where `isConfigSupported()` returns `true` for H.264 but the encoder then fails. Mitigation: catch encoder errors and surface a "please use Chrome" fallback message. |
+
+---
 
 ## Installation
 
 ```bash
-# Scaffold project
-npm create vite@latest sync-multi-cam -- --template react-ts
-cd sync-multi-cam
-
-# Core dependencies
-npm install @ffmpeg/ffmpeg @ffmpeg/util @ffmpeg/core-mt fft.js client-zip file-saver
-
-# Styling
-npm install tailwindcss @tailwindcss/vite
-
-# Type definitions
-npm install -D @types/file-saver
+# Only new package needed for v2.0
+npm install mediabunny
 ```
 
-**Note:** `@ffmpeg/core-mt` WASM and JS files need to be served from the same origin or a CDN with proper CORS. The recommended approach is to use `toBlobURL()` from `@ffmpeg/util` to load core files, which handles CORS by converting to blob URLs:
+Web Audio API, WebCodecs, HTMLVideoElement, OffscreenCanvas, and `requestVideoFrameCallback` are all browser-native — no npm packages required.
 
-```typescript
-import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { toBlobURL } from '@ffmpeg/util';
+---
 
-const ffmpeg = new FFmpeg();
-const baseURL = 'https://unpkg.com/@ffmpeg/core-mt@0.12.10/dist/esm';
+## Browser Requirements (v2.0 additions)
 
-await ffmpeg.load({
-  coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-  wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-  workerURL: await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, 'text/javascript'),
-});
-```
+| Feature | Minimum Version | Notes |
+|---------|----------------|-------|
+| WebCodecs VideoEncoder (H.264) | Chrome 94+, Edge 94+, Firefox 130+, Safari 26.0+ | ~94% global coverage as of March 2026. Firefox has known H.264 encoder bugs — detect and warn. |
+| requestVideoFrameCallback | Chrome 83+, Safari 15.4+, Firefox 132+ | Fallback: `requestAnimationFrame` + `currentTime` polling for sync correction (acceptable, ~16ms resolution). |
+| OffscreenCanvas | Chrome 69+, Firefox 105+, Safari 16.4+ | Export can fall back to main-thread canvas if not available (degraded UX but functional). |
+| Web Audio API createMediaElementSource | All modern browsers | Universally supported. No concern. |
 
-## Browser Requirements
-
-| Requirement | Why | Browser Support |
-|-------------|-----|-----------------|
-| WebAssembly | FFmpeg WASM runtime | All modern browsers (Chrome 57+, Firefox 52+, Safari 11+, Edge 16+) |
-| SharedArrayBuffer | Multi-threaded FFmpeg core | Chrome 91+, Firefox 79+, Safari 15.2+, Edge 91+ (requires COOP/COEP headers) |
-| Web Audio API | Audio decoding for cross-correlation | All modern browsers |
-| File API / Drag and Drop | File input | All modern browsers |
-| Blob / URL.createObjectURL | File output / downloads | All modern browsers |
-
-**Minimum practical target:** Chrome 91+, Firefox 79+, Safari 15.2+, Edge 91+ (driven by SharedArrayBuffer requirement).
+---
 
 ## Sources
 
-- [ffmpeg.wasm GitHub](https://github.com/ffmpegwasm/ffmpeg.wasm) - Official repository, verified v0.12.15 (HIGH confidence)
-- [ffmpeg.wasm docs](https://ffmpegwasm.netlify.app/) - Installation and usage patterns (HIGH confidence)
-- [@ffmpeg/core-mt npm](https://www.npmjs.com/package/@ffmpeg/core-mt) - v0.12.10 verified (HIGH confidence)
-- [fft.js GitHub](https://github.com/indutny/fft.js/) - v4.0.4, benchmarks verified (MEDIUM confidence)
-- [Vite Getting Started](https://vite.dev/guide/) - v7.3.1, Node 20.19+ required (HIGH confidence)
-- [React v19](https://react.dev/blog/2024/12/05/react-19) - v19.2.4 current stable (HIGH confidence)
-- [TypeScript npm](https://www.npmjs.com/package/typescript) - v5.9.3 stable (HIGH confidence)
-- [Tailwind CSS v4](https://tailwindcss.com/blog/tailwindcss-v4) - v4.2.1, Vite plugin (HIGH confidence)
-- [@tailwindcss/vite npm](https://www.npmjs.com/package/@tailwindcss/vite) - v4.2.1 verified (HIGH confidence)
-- [client-zip GitHub](https://github.com/Touffy/client-zip) - v2.5.0, performance claims verified (MEDIUM confidence)
-- [file-saver npm](https://www.npmjs.com/package/file-saver) - v2.0.5, 5.1M weekly downloads (HIGH confidence)
-- [Cloudflare Pages Headers](https://developers.cloudflare.com/pages/configuration/headers/) - _headers file format verified (HIGH confidence)
-- [MDN SharedArrayBuffer](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer) - COOP/COEP requirements (HIGH confidence)
-- [MDN decodeAudioData](https://developer.mozilla.org/en-US/docs/Web/API/BaseAudioContext/decodeAudioData) - Web Audio API for PCM extraction (HIGH confidence)
-- [web.dev COOP/COEP](https://web.dev/articles/coop-coep) - Cross-origin isolation guide (HIGH confidence)
+- [MDN WebCodecs API](https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API) — Browser support, VideoEncoder/VideoDecoder APIs (HIGH confidence)
+- [Chrome Developers: Video processing with WebCodecs](https://developer.chrome.com/docs/web-platform/best-practices/webcodecs) — VideoFrame + Canvas integration patterns (HIGH confidence)
+- [Can I use: WebCodecs](https://caniuse.com/webcodecs) — 94.03% global coverage confirmed, Safari 26.0 full support (HIGH confidence)
+- [Can I use: requestVideoFrameCallback](https://caniuse.com/mdn-api_htmlvideoelement_requestvideoframecallback) — Chrome 83+, Safari 15.4+, Firefox 132+ (HIGH confidence)
+- [devtails: Canvas to MP4 via WebCodecs](https://devtails.xyz/adam/how-to-save-html-canvas-to-mp4-using-web-codecs-api) — Export pipeline pattern, 10x realtime performance (MEDIUM confidence)
+- [mediabunny npm](https://www.npmjs.com/package/mediabunny) — v1.34.5, 5 kB gzipped, zero dependencies (HIGH confidence)
+- [mediabunny: Supported formats & codecs](https://mediabunny.dev/guide/supported-formats-and-codecs) — H.264/AVC confirmed, MP4 write confirmed (HIGH confidence)
+- [mp4-muxer GitHub](https://github.com/Vanilagy/mp4-muxer) — Deprecated v5.2.2, migrated to mediabunny (HIGH confidence)
+- [MDN MediaElementAudioSourceNode](https://developer.mozilla.org/en-US/docs/Web/API/MediaElementAudioSourceNode) — Multi-video Web Audio routing (HIGH confidence)
+- [MDN HTMLVideoElement requestVideoFrameCallback](https://developer.mozilla.org/en-US/docs/Web/API/HTMLVideoElement/requestVideoFrameCallback) — Frame-accurate sync callbacks (HIGH confidence)
+- [Bugzilla 1918769](https://bugzilla.mozilla.org/show_bug.cgi?id=1918769) — Firefox H.264 VideoDecoder/Encoder bug (HIGH confidence, documented defect)
+- [ffmpegwasm discussions #516, #755, #224](https://github.com/ffmpegwasm/ffmpeg.wasm/discussions/516) — 2 GB file limit, 4K memory issues (HIGH confidence)
+- [WebGPU hits critical mass](https://www.webgpu.com/news/webgpu-hits-critical-mass-all-major-browsers/) — All major browsers ship WebGPU as of Nov 2025 (MEDIUM confidence — noted but not chosen; Canvas 2D is sufficient)
+
+---
+*Stack research for: synced multi-cam video playback and GPU-accelerated composite export*
+*Researched: 2026-03-02*

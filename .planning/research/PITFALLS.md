@@ -1,161 +1,298 @@
 # Pitfalls Research
 
-**Domain:** Browser-based multi-cam video sync (FFmpeg WASM + audio cross-correlation)
-**Researched:** 2026-03-01
-**Confidence:** HIGH (verified across official docs, GitHub issues, and multiple community sources)
+**Domain:** Browser-based synced multi-cam playback + GPU-accelerated composite video export
+**Researched:** 2026-03-02
+**Confidence:** HIGH (verified across MDN, W3C WebCodecs spec issues, Chromium/Firefox bug trackers, community post-mortems)
+
+> **Scope:** This document covers v2.0 pitfalls — adding synced video grid playback and GPU-rendered composite export to an existing app. v1.0 pitfalls (FFmpeg WASM memory, COOP/COEP, cross-correlation accuracy, stream-copy performance) are documented in the prior research cycle and already addressed in the shipped codebase.
+
+---
 
 ## Critical Pitfalls
 
-### Pitfall 1: MEMFS Double-Buffering Blows Through Browser Memory
+### Pitfall 1: Video Element Sync Drifts Without Active Correction
 
 **What goes wrong:**
-FFmpeg WASM uses an in-memory virtual filesystem (MEMFS). When you load a video file into the browser (via File API), you hold it in JS memory as an ArrayBuffer. Then you write it to MEMFS with `ffmpeg.writeFile()`, creating a second copy. During processing, FFmpeg allocates additional working memory and produces output files -- also in MEMFS. For a single 500MB video, you easily consume 1.5-2GB of RAM. With 4 videos, you are at 6-8GB before the cross-correlation even starts.
+Starting multiple `HTMLVideoElement` instances at the same time via `play()` does not keep them synchronized. Within seconds, visible drift accumulates. The `timeupdate` event fires "every 15 to 250ms, or whenever the MediaController's media controller position changes" — it is not frame-accurate and it is not consistent across elements. Using `timeupdate` to nudge lagging videos creates visible jank without correcting drift reliably.
 
-The hard ceiling: FFmpeg WASM's virtual filesystem has a **2GB file size limit** per file (WebAssembly 32-bit address space). Browser tabs in Chrome typically crash around 4GB total memory usage, though this varies by OS and available RAM.
+The root problem: HTML5 does not impose a shared clock across media elements. Two `<video>` elements playing simultaneously may follow different internal clocks. Over 10+ minutes, they can diverge by several frames — and there is no event that signals this drift is occurring.
 
 **Why it happens:**
-Developers think in terms of "the file is 500MB, so I need 500MB." They forget: (1) JS ArrayBuffer holding the file, (2) MEMFS copy, (3) FFmpeg working memory during decode/encode, (4) output file in MEMFS, (5) JS ArrayBuffer when reading output back. That is 3-5x the source file size in simultaneous memory usage.
+Developers assume that `video.play()` called on multiple elements simultaneously means they stay in lockstep. They do not. Each element's playback rate is also subject to buffering stalls, decode backpressure, and OS scheduler preemption. Short test clips look fine; long clips drift.
 
 **How to avoid:**
-- Process files sequentially, not in parallel. Load one video, extract its audio, read the output, then `ffmpeg.deleteFile()` and `ffmpeg.terminate()` before processing the next.
-- Extract audio only (small PCM/WAV output) before doing any video trimming. Audio extraction is the lightweight step; defer the expensive video trim until sync offsets are known.
-- Delete source files from MEMFS immediately after processing: `ffmpeg.deleteFile('input.mp4')` before reading output.
-- Set explicit file size limits in the UI (warn at 200MB per file, reject above 500MB) with clear messaging about browser constraints.
-- Consider using the single-threaded FFmpeg core (`@ffmpeg/core` not `@ffmpeg/core-mt`) to reduce baseline memory overhead.
+- Do not use `timeupdate` for sync. Use `requestVideoFrameCallback()` or `requestAnimationFrame()` to run a continuous sync loop.
+- Each frame callback: compare all secondary videos' `currentTime` against the primary (master) video. If drift exceeds one frame duration (e.g., 33ms at 30fps), force-correct with `video.currentTime = master.currentTime`.
+- Only correct when drift exceeds threshold — constant micro-corrections cause their own jank. A good threshold is 1–2 frame durations.
+- For seeking (waveform scrubbar click): call `video.currentTime = targetTime` on all elements simultaneously in one synchronous block. Do not use `Promise.all([video.play()])` — the async nature introduces ordering delays.
+- Mute all secondary video elements. Route audio through Web Audio API from a single primary element (or a selected audio source). This removes audio sync as a compounding variable.
 
 **Warning signs:**
-- Browser tab becomes unresponsive during file loading.
-- `RuntimeError: memory access out of bounds` in console.
-- Chrome's Task Manager shows tab memory exceeding 2GB.
-- Processing silently fails with no error (WASM OOM can kill the worker without surfacing an error to the main thread).
+- Lips visibly out of sync with audio after 30–60 seconds of playback.
+- Different cameras appear to be at different moments on the same frame.
+- `currentTime` values diverge by > 100ms across elements.
+- Sync looks fine in Chrome but drifts in Firefox (different decode scheduling).
 
 **Phase to address:**
-Phase 1 (Foundation/Core Architecture). The file handling pipeline and memory management strategy must be designed correctly from the start. Retrofitting sequential processing onto a parallel architecture is a rewrite.
+Synced playback phase. This is the foundational constraint — the sync loop architecture must be decided before any other playback work is built on top of it.
 
 ---
 
-### Pitfall 2: SharedArrayBuffer / Cross-Origin Isolation Misconfiguration
+### Pitfall 2: requestVideoFrameCallback Is Best-Effort, Not Guaranteed
 
 **What goes wrong:**
-FFmpeg WASM's multi-threaded version (`@ffmpeg/core-mt`) requires `SharedArrayBuffer`, which browsers only expose in cross-origin isolated contexts. Without the correct HTTP headers, `SharedArrayBuffer` is `undefined`, and ffmpeg.load() fails silently or throws a cryptic error. Even the single-threaded version benefits from running in a Web Worker, which can also be affected by CORS policies.
+`requestVideoFrameCallback()` (rVFC) fires "as a best effort" synchronized to video frames. The spec explicitly states it may fire "one vsync late relative to when a video frame was rendered." For a 60Hz display showing 30fps video, that means the callback could fire 16ms after the frame actually appeared on screen.
 
-On Cloudflare Pages, you must configure a `_headers` file in the static asset output directory. If this file is missing, misconfigured, or placed in the wrong directory, the headers are not applied and nothing works.
+More critically: **rVFC is not available in Firefox as of early 2026** and has inconsistent behavior in Safari. A sync loop built exclusively on rVFC will silently degrade or break in non-Chromium browsers.
+
+Additionally, rVFC runs on the main thread — if any synchronous main-thread work takes >16ms, the callback is delayed, causing missed frames in the sync loop.
 
 **Why it happens:**
-- Developers get it working in `localhost` dev servers (which some frameworks auto-configure) and assume production will work the same.
-- The `_headers` file must be in the build output directory (e.g., `dist/`), not the project root. Build tools can silently exclude it.
-- Setting `Cross-Origin-Embedder-Policy: require-corp` breaks loading of third-party resources (fonts, analytics, CDN scripts) that do not set `Cross-Origin-Resource-Policy` headers. This causes mysterious blank pages or broken assets.
-- Hot module replacement (HMR) in development does not re-apply header changes; you must fully restart the dev server.
+The API is elegant and purpose-built for this use case, so developers adopt it without checking the "best effort" caveat or browser support matrix. The fallback to `requestAnimationFrame` is not obvious.
 
 **How to avoid:**
-- Create a `_headers` file with exact content:
-  ```
-  /*
-    Cross-Origin-Embedder-Policy: require-corp
-    Cross-Origin-Opener-Policy: same-origin
-  ```
-- Ensure build tooling copies `_headers` to the output directory. In Vite, place it in `public/`. Verify post-build with `ls dist/_headers`.
-- Test in a production-like environment early (deploy to Cloudflare Pages on day 1, not after weeks of localhost development).
-- Verify headers in browser DevTools: Network tab -> select document -> check Response Headers.
-- Avoid loading any third-party resources from external CDNs, or add `crossorigin` attributes and ensure those CDNs set `Cross-Origin-Resource-Policy: cross-origin`. Self-host everything (fonts, scripts) if possible.
-- Use `coi-serviceworker` as a fallback for environments that cannot set headers, but be aware it requires a page reload on first visit and does not work in all browsers.
+- Feature-detect rVFC before using it: `if ('requestVideoFrameCallback' in HTMLVideoElement.prototype)`.
+- Fall back to `requestAnimationFrame` for the sync loop when rVFC is unavailable. rAF-based sync is slightly less tight but works everywhere.
+- Never assume rVFC fires in the same vsync as the frame it reports on. Use `metadata.expectedDisplayTime` to detect if the frame is already stale before acting on it.
+- Keep the sync loop callback lightweight (< 2ms). Do not perform layout reads, WebGL operations, or heavy computation inside it.
 
 **Warning signs:**
-- `SharedArrayBuffer is not defined` in console.
-- FFmpeg loads but immediately errors on `.exec()`.
-- Third-party fonts/scripts suddenly stop loading after adding COEP headers.
-- Works on localhost but breaks in production deployment.
+- App works correctly in Chrome but sync loop does not execute in Firefox.
+- Sync loop fires intermittently under load (main thread is busy).
+- Canvas overlay or waveform cursor visually lags behind video playback.
 
 **Phase to address:**
-Phase 1 (Foundation). This must be validated on Cloudflare Pages before any FFmpeg integration work begins. A 30-minute spike to deploy a skeleton with the headers and verify `SharedArrayBuffer` availability saves days of debugging later.
+Synced playback phase. Feature detection must be in the initial implementation, not added as a later compatibility fix.
 
 ---
 
-### Pitfall 3: Audio Cross-Correlation Accuracy Failures
+### Pitfall 3: Multiple Decoded Video Streams Cause GPU Memory Exhaustion
 
 **What goes wrong:**
-Cross-correlation assumes the audio signals share a common acoustic event recorded by different microphones. Several real-world conditions break this assumption:
+Each active `<video>` element with a decoded stream consumes GPU memory for its decoded frame buffer. On Firefox and Chrome, HD video elements with `preload="auto"` consume 30–80MB of GPU-committed memory each. With 10–30 video elements active simultaneously — as this app supports — total GPU memory consumption can reach 300MB–2.4GB before any WebGL compositing textures are allocated.
 
-1. **Sample rate mismatch:** Camera A records at 48kHz, Camera B at 44.1kHz. Cross-correlation on raw samples produces garbage offsets because the time grids do not align.
-2. **Clock drift:** Consumer cameras have imprecise internal clocks. Over a 30-minute recording, cameras can drift 1-5 frames apart. Cross-correlation finds the best single offset, but the videos gradually desynchronize. This is not solvable by simple trimming.
-3. **Low signal-to-noise ratio:** If the room is quiet or one camera is far from the sound source, cross-correlation may lock onto noise or HVAC hum rather than the actual shared audio event.
-4. **Phase inversion:** Some microphone setups produce inverted phase. Standard cross-correlation finds the wrong peak (negative correlation maximum vs. positive).
+Browsers do not reliably free GPU memory when a video element is paused, muted, or hidden. There are known unfixed Chromium and Firefox bugs where GPU memory from video elements accumulates across a session and is not released until the tab is closed.
+
+Additionally: creating a WebGL texture from a video element (`gl.texImage2D(target, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, videoElement)`) uploads the decoded frame to GPU memory as a texture — but does NOT free the video element's own GPU memory allocation. You now hold two GPU copies.
 
 **Why it happens:**
-Developers test with clean, short clips from the same device and assume that represents real-world input. Real multi-cam shoots use different camera brands, different rooms, different mic distances, and run for 30-90 minutes.
+Developers think about video elements as lightweight DOM nodes. The `<video>` element itself is lightweight; its decoded frame buffer is not. With many concurrent active video elements, the GPU memory budget is consumed before compositing even starts.
 
 **How to avoid:**
-- **Always resample all audio to a common sample rate** (e.g., 16kHz mono) before cross-correlation. Use FFmpeg to extract: `ffmpeg -i input.mp4 -ar 16000 -ac 1 -f wav output.wav`. Lower sample rates also dramatically reduce cross-correlation computation time.
-- **Use FFT-based cross-correlation** (multiply spectra) rather than naive time-domain correlation. Time-domain is O(n^2); FFT-based is O(n log n). For a 30-minute audio at 16kHz that is ~28M samples -- naive correlation is computationally infeasible in a browser.
-- **Validate the correlation peak:** Check that the peak correlation coefficient exceeds a minimum threshold (e.g., 0.3). If it does not, warn the user that sync confidence is low rather than silently producing a bad offset.
-- **Use a subset of audio for correlation:** Correlate the first 30-60 seconds of audio (where a clap or speech onset likely exists) rather than the entire file. This reduces memory and computation by 30-60x.
-- **Handle clock drift in documentation, not code (for MVP):** Acknowledge that drift over long recordings is a known limitation. Solving drift requires time-stretching or segmented re-sync, which is out of scope for a trim-and-align tool.
+- Apply `preload="metadata"` to all video elements initially. Only switch to `preload="auto"` for the subset visible in the current grid layout.
+- Limit simultaneously decoded video streams. For >8 cameras, consider pausing and unloading off-screen videos (those not visible in the current grid page), keeping only the active grid's worth decoding.
+- After uploading a frame to a WebGL texture, do not hold the video element in an active-play state if it is not visible. Use `video.pause()` on off-screen elements.
+- Explicitly call `video.src = ''` and `video.load()` on elements removed from the DOM to release browser resources.
+- Do not use `URL.revokeObjectURL()` until the video element has fully loaded its data — call it in `loadeddata` or `canplay`, not immediately after setting `src`.
 
 **Warning signs:**
-- Sync results look correct for short test clips but fail for real-world recordings.
-- Computed offsets are wildly different from expected (e.g., minutes instead of seconds).
-- Two runs on the same files produce different offsets (noise sensitivity).
-- Users report that videos start in sync but gradually diverge.
+- Chrome Task Manager shows GPU Memory climbing continuously during playback.
+- Browser becomes sluggish or crashes after 5–10 minutes of playback with many cameras.
+- WebGL operations start returning `OUT_OF_MEMORY` errors.
+- Tab crashes without a JavaScript error (silent GPU OOM).
 
 **Phase to address:**
-Phase 2 (Audio Extraction + Sync Algorithm). This is the algorithmic core. Build it with test fixtures from real multi-cam shoots (different cameras, different sample rates, noisy environments). Do not test only with synthetic data.
+Synced playback phase (initial loading strategy), and grid layout phase (managing which videos are actively decoded based on visible grid).
 
 ---
 
-### Pitfall 4: FFmpeg WASM Performance is 12-25x Slower Than Native
+### Pitfall 4: VideoFrame.close() Omission Causes Unrecoverable GPU Memory Leaks
 
 **What goes wrong:**
-Developers prototype with short clips (10-30 seconds) and find acceptable performance. Then a real user loads four 10-minute 1080p videos and the trim operation takes 20-40 minutes. The browser shows "Page Unresponsive" dialogs. Users close the tab thinking the app is broken.
+When capturing frames from `<video>` elements for WebGL or WebCodecs processing, the `VideoFrame` object (created via `new VideoFrame(videoElement)`) holds actual GPU memory. JavaScript's garbage collector cannot reliably free GPU resources — `VideoFrame` objects must be explicitly closed via `videoFrame.close()`. Missing a single `close()` call in an error path or loop means that GPU memory accumulates permanently for the session.
 
-Official benchmarks: a WebM-to-MP4 conversion that takes 5.2s natively takes **128.8s in single-threaded WASM** (25x slower) or **60.4s in multi-threaded WASM** (12x slower). Video re-encoding is the bottleneck. Audio extraction (codec copy) is significantly faster because it avoids re-encoding.
+The same applies to `ImageBitmap` objects created via `createImageBitmap(videoElement)`. Unreleased `ImageBitmap`s are a slower leak but just as real.
 
 **Why it happens:**
-FFmpeg WASM is transpiled C code running in a sandboxed WASM VM without access to hardware acceleration (GPU, SIMD optimizations, etc.). The performance gap is inherent and cannot be optimized away at the application level.
+JavaScript developers are not accustomed to manual resource management. The fact that a JS object must be explicitly `close()`d — and that forgetting to do so causes non-GC-able leaks — is a paradigm from C++, not idiomatic JavaScript. The WebCodecs spec requires it, but the failure mode is silent and delayed.
 
 **How to avoid:**
-- **Use `-c copy` (stream copy) for trimming** wherever possible. Stream copy remuxes without re-encoding and runs at near-native speed. Instead of: `ffmpeg -i input.mp4 -ss 5.0 output.mp4` (which re-encodes), use: `ffmpeg -ss 5.0 -i input.mp4 -c copy output.mp4` (stream copy, near-instant).
-- **Extract audio using codec copy first:** `ffmpeg -i input.mp4 -vn -acodec copy audio.aac` avoids re-encoding audio entirely.
-- **Place `-ss` before `-i` for fast seeking** in stream copy mode. Placing it after `-i` forces FFmpeg to decode all frames up to the seek point.
-- **Run all FFmpeg operations in a Web Worker** to keep the main thread responsive. FFmpeg WASM does this by default in newer versions, but verify.
-- **Show accurate, granular progress feedback.** FFmpeg WASM supports a progress callback (`ffmpeg.on('progress', ...)`) but it is experimental and can return `NaN`. Implement a fallback timer-based progress estimation.
-- **Set user expectations:** Show estimated processing time before starting (based on file sizes and a rough heuristic). "Processing 4 videos (~2GB total) -- estimated 5-10 minutes."
+- Treat every `VideoFrame` and `ImageBitmap` like a file handle: open it, use it, close it — always in a try/finally block.
+- Never pass `VideoFrame` objects across async boundaries without tracking ownership. Establish a clear rule: the creator closes it, or ownership is explicitly transferred.
+- In the render loop: create frame → upload to GPU → immediately `frame.close()`. Do not store frames in arrays for later processing.
+- Add a debug counter in development: increment on `new VideoFrame()`, decrement on `.close()`. Log the count at the end of each render loop. Any non-zero count is a leak.
 
 **Warning signs:**
-- Processing takes more than 2x the expected time.
-- Progress bar stalls at 0% for extended periods (FFmpeg progress reporting is unreliable).
-- User closes tab or navigates away during processing.
-- "Page Unresponsive" browser dialog appears.
+- GPU memory climbs monotonically during export or canvas rendering even when the content is not changing.
+- Export pipeline runs fine for short durations but crashes or slows severely for long exports.
+- `console.memory` heap size is stable but GPU memory (visible in Task Manager) grows continuously.
 
 **Phase to address:**
-Phase 2 (Video Trimming) and Phase 3 (UX/Polish). The technical optimization (stream copy) belongs in the trimming phase. The UX treatment (progress, time estimates, "do not close tab" warnings) belongs in polish.
+GPU compositing and export phases. Must be enforced from first implementation — retrofitting correct `close()` calls into an existing pipeline requires auditing every frame path.
 
 ---
 
-### Pitfall 5: decodeAudioData Memory Explosion for Audio Analysis
+### Pitfall 5: WebCodecs H.264 Encoder Unavailable or Broken in Non-Chrome Browsers
 
 **What goes wrong:**
-If you use the Web Audio API's `decodeAudioData()` to decode audio for cross-correlation, it decodes the entire compressed audio file into uncompressed 32-bit float PCM in memory. A 5MB compressed audio file becomes ~55MB of PCM data. A 60-minute stereo file at 44.1kHz/32-bit requires **1.2GB of memory** -- for one file. With 4 videos, you need 4-5GB just for decoded audio buffers, on top of the source files and FFmpeg memory.
+The WebCodecs API `VideoEncoder` with H.264 has incomplete and inconsistent support across browsers as of early 2026:
 
-Worse, `decodeAudioData()` can cause **hard browser crashes** (not graceful errors) when memory is low. The browser crashes to desktop with no recovery possible.
+- **Chrome/Edge:** Full support, hardware-accelerated H.264 encoding works reliably.
+- **Firefox:** `VideoEncoder.isConfigSupported()` reports H.264 as supported, but the actual encoder returns "codec not supported" at runtime — a known Firefox bug. This means feature detection produces false positives.
+- **Safari:** `VideoEncoder` (encoding) is not supported as of mid-2025. `VideoDecoder` is supported but `VideoEncoder` is absent.
+
+A pipeline that uses `VideoEncoder` without a fallback silently fails or throws uncaught exceptions in ~30% of browsers.
 
 **Why it happens:**
-`decodeAudioData()` is designed for short audio clips (sound effects, music tracks), not for analyzing long-form recordings. There is no streaming alternative in the Web Audio API -- it is all-or-nothing.
+Developers check `VideoEncoder.isConfigSupported()` and trust the result. Firefox's false positive breaks this pattern. Safari is commonly tested for decoding workflows and assumed to have equivalent encoding support.
 
 **How to avoid:**
-- **Do NOT use decodeAudioData for long audio files.** Instead, use FFmpeg WASM to extract audio as low-sample-rate mono WAV (e.g., `ffmpeg -i input.mp4 -ar 8000 -ac 1 -t 60 output.wav`). This produces a small, manageable PCM file.
-- `-ar 8000` downsamples to 8kHz (sufficient for cross-correlation -- you need timing, not fidelity).
-- `-ac 1` converts to mono (halves the data).
-- `-t 60` limits extraction to the first 60 seconds (cross-correlation only needs a representative segment).
-- A 60-second, 8kHz, mono, 16-bit WAV file is only **960KB** -- manageable even with 4 files.
-- Parse the WAV file header manually to read raw PCM samples as a typed array (Float32Array). This avoids the Web Audio API decode path entirely.
+- Do not rely solely on `isConfigSupported()`. After configuring the encoder, wrap the first `encode()` call in a try/catch to detect runtime failures.
+- Implement a graceful degradation path: if WebCodecs VideoEncoder fails, fall back to FFmpeg WASM encoding for export (slower but universally available given the app already has it).
+- Show browser compatibility notice before export: "GPU-accelerated export requires Chrome or Edge. Export will use software encoding in your browser."
+- Structure the export pipeline as an interface with two implementations: `WebCodecsExporter` and `FFmpegExporter`. The orchestrator selects based on capability detection.
 
 **Warning signs:**
-- Browser crashes (not just errors -- full crash) during audio analysis.
-- Memory usage spikes dramatically when audio processing begins.
-- Processing works for short test clips but fails for real-world recordings.
+- Export works in Chrome but silently fails or produces no output in Firefox/Safari.
+- `VideoEncoder` constructor throws in Safari with no clear error message.
+- `isConfigSupported()` returns `{supported: true}` in Firefox but encoding immediately errors.
 
 **Phase to address:**
-Phase 2 (Audio Extraction). The extraction command parameters are the critical decision. Get this wrong and the entire sync pipeline is memory-bound.
+Export phase. Capability detection and the fallback architecture must be in place before shipping export to users.
+
+---
+
+### Pitfall 6: WebCodecs Encoder Queue Overflow Corrupts or Drops Frames
+
+**What goes wrong:**
+`VideoEncoder.encode()` is asynchronous and non-blocking — it queues frames for encoding without waiting for completion. If you encode frames faster than the encoder processes them (e.g., rendering a WebGL composite at 60fps into an encoder targeting 30fps), `encodeQueueSize` grows without bound. When the queue overflows, frames are silently dropped or the encoder enters an error state.
+
+Additionally, calling `encoder.flush()` too frequently — or inside the render loop — forces the encoder to emit a new keyframe after each flush, dramatically increasing file size and reducing quality. The spec states flush "should only be called once all desired work is queued" and "is not intended to force progress at regular intervals."
+
+**Why it happens:**
+Developers treat `encode()` like a synchronous write, expecting back-pressure. There is none by default. The `flush()` pattern from streaming contexts (where you flush periodically to get output) is actively harmful here.
+
+**How to avoid:**
+- Monitor `encoder.encodeQueueSize` before each `encode()` call. If it exceeds a threshold (2–4 frames), drop the current frame rather than encoding it.
+- Never call `flush()` inside the render/export loop. Call it exactly once at the very end of the export, after all frames are queued.
+- Target a fixed output framerate (e.g., 30fps) and render composite frames at exactly that rate — do not render at display refresh rate and encode every frame.
+- Set a reasonable keyframe interval. WebCodecs defaults to 10,000 (effectively keyframe-only-on-first-frame), which produces large P-frame chains that may not seek well. Explicitly force keyframes every 2–5 seconds: `encoder.encode(frame, { keyFrame: frameIndex % (fps * 2) === 0 })`.
+
+**Warning signs:**
+- Exported video has unexpected file size (too large: unnecessary keyframes; too small: frames silently dropped).
+- Export "completes" quickly but the output video is shorter than expected (frames were dropped).
+- Browser becomes unresponsive during export (encode queue is backing up and consuming memory).
+- Encoder enters error state with "EncodingError" after running for several seconds.
+
+**Phase to address:**
+Export phase. The encoding loop architecture — rate limiting, queue monitoring, keyframe scheduling — must be designed correctly from the start.
+
+---
+
+### Pitfall 7: MP4 Muxer Timestamp Discontinuities Corrupt Playback
+
+**What goes wrong:**
+WebCodecs provides encoded `EncodedVideoChunk` objects but no container muxer. Third-party muxers (mp4-muxer, Mediabunny) must be used to package chunks into a playable MP4. These muxers are strict about timestamp monotonicity and continuity:
+
+- Timestamps must be strictly increasing (no duplicate or out-of-order timestamps).
+- The timescale used for encoding must match the timescale configured in the muxer.
+- MP4 works in a timescale (typically 90,000 ticks/second) while WebCodecs works in microseconds. Conversion precision errors produce timestamp jitter that some players (particularly QuickTime) reject.
+- Audio and video timestamps must be synchronized in the muxed container. If audio chunks are muxed at different timestamps than video chunks, A/V sync in the output file is broken.
+
+**Why it happens:**
+Developers compute timestamps as `frameIndex * (1_000_000 / fps)` with integer math, which accumulates rounding error. At 30fps after 1 minute (1800 frames), the accumulated error can be 30+ microseconds — enough to confuse strict muxers.
+
+**Why `mp4-muxer` matters:** As of early 2026, mp4-muxer has been deprecated in favor of Mediabunny. New implementations should use Mediabunny. Projects inheriting mp4-muxer will not receive bug fixes.
+
+**How to avoid:**
+- Use Mediabunny (the maintained successor to mp4-muxer) for new implementations.
+- Compute timestamps using the same formula as the encoder clock to avoid drift: `timestamp = frameIndex * frameDurationMicroseconds` where `frameDurationMicroseconds = Math.round(1_000_000 / fps)`. Compute once, reuse — do not recalculate per frame.
+- Encode audio from the same source that plays during the composite (the selected audio track from the Web Audio API mix) with matching timestamps.
+- Test exported files in QuickTime (macOS), Windows Media Player, and VLC — these three players cover the spectrum from most-strict to most-lenient timestamp handling.
+
+**Warning signs:**
+- Exported MP4 plays in Chrome but fails to open in QuickTime or Windows Media Player.
+- Video plays but audio is offset by a constant duration.
+- Video duration in the exported file is wrong (too long or too short).
+- Muxer throws an error about "timestamp must be greater than previous."
+
+**Phase to address:**
+Export phase. Muxer selection and timestamp computation must be locked in before building the full encoding pipeline.
+
+---
+
+### Pitfall 8: Canvas 2D drawImage Is Too Slow for 4K Composite at 30fps
+
+**What goes wrong:**
+`CanvasRenderingContext2D.drawImage(videoElement, ...)` is the naive approach for compositing a video grid. It works for low resolutions or a small number of cameras, but has a hard ceiling:
+
+- At 4K (3840×2160) with 4+ camera tiles, each `drawImage` requires a CPU-side pixel blit if the video element is in a different memory space (GPU texture) than the canvas. This round-trip (GPU → CPU → GPU) for each video element costs ~5ms per frame per video on high-end hardware.
+- With 8 cameras at 4K export, Canvas 2D compositing takes 40+ ms per frame — slower than the 33ms budget for 30fps. Export produces <30fps output or falls behind in real time.
+
+WebGL compositing avoids this by keeping video frames as GPU textures and compositing directly on the GPU, reducing the per-frame cost from ~5ms to ~0.1ms per video at comparable resolutions.
+
+**Why it happens:**
+Canvas 2D drawImage is the obvious, documented approach. It works fine in demos and at 1080p with 2-4 cameras. The performance cliff at 4K or with many cameras is not obvious until the export pipeline is built and measured.
+
+**How to avoid:**
+- Use WebGL for the compositing canvas from the start. The API is more complex, but the performance characteristics scale correctly.
+- Specifically: create an `OffscreenCanvas` with a WebGL context, upload each camera's current frame as a texture using `gl.texImage2D(target, ..., videoElement)`, render a full-screen quad for each camera tile, then read the result.
+- Use `OffscreenCanvas` in a Web Worker to move compositing off the main thread, keeping the UI responsive during export.
+- Do not support 4K export with Canvas 2D — explicitly limit Canvas 2D compositing to 1080p or use it only as a fallback when WebGL is unavailable.
+
+**Warning signs:**
+- Canvas compositing takes longer per frame than the target frame duration (measure with `performance.now()` around each drawImage block).
+- Export framerate drops below target (output video is shorter than expected with fewer frames).
+- Main thread is saturated (DevTools profiler shows long tasks blocking user interaction).
+
+**Phase to address:**
+GPU compositing phase. Technology choice must be made before building the compositing layer — retrofitting WebGL onto a Canvas 2D compositing pipeline is effectively a rewrite.
+
+---
+
+### Pitfall 9: OffscreenCanvas Cannot Be Transferred Back to Main Thread After Use
+
+**What goes wrong:**
+`OffscreenCanvas` transferred to a Web Worker with `canvas.transferControlToOffscreen()` is **permanently owned by the worker**. It cannot be sent back to the main thread. This seems obvious in hindsight, but common patterns break because of it:
+
+- You cannot render composited frames on a worker-owned `OffscreenCanvas` and then display them in the main thread by transferring the canvas back.
+- The correct pattern is: render on the worker's `OffscreenCanvas`, use `transferToImageBitmap()` to get an `ImageBitmap`, `postMessage` it to the main thread with transfer ownership, then `drawImage(imageBitmap, ...)` on the visible canvas.
+- Each `ImageBitmap` transfer (even with structured clone) temporarily holds two copies in memory: the worker-side source and the main-thread destination. For a 4K frame at RGBA, that is 33MB per frame transfer. At 30fps, that is 1GB/sec of transfer pressure — likely causing GC pauses and memory spikes.
+
+**Why it happens:**
+The pattern `canvas.transferControlToOffscreen()` → worker → main thread looks like it should round-trip. The spec forbids the return trip and developers discover this only when building the preview/playback feedback loop.
+
+**How to avoid:**
+- For export: keep compositing entirely in the worker. The muxer also runs in the worker. The main thread only receives progress updates via `postMessage`.
+- For real-time preview (playback): do not try to move compositing to a worker. Use WebGL on the main thread (or `requestAnimationFrame` with Canvas 2D for lower-resolution preview). The export worker is separate from the preview renderer.
+- If you must transfer frames from worker to main thread for preview: use `ImageBitmap` transfer, but limit preview to 1/4 resolution (960×540) to keep transfer size manageable (~1MB per frame at 30fps = 30MB/sec — acceptable).
+
+**Warning signs:**
+- `transferControlToOffscreen()` throws a `DOMException` when called a second time on the same canvas.
+- Main thread canvas shows a blank/black frame after the worker starts rendering (the canvas is in a broken state).
+- Attempting to get a 2D or WebGL context on the main thread after transferring to a worker fails silently.
+
+**Phase to address:**
+GPU compositing phase (architecture decision). The preview vs. export rendering architecture must be decided before any OffscreenCanvas code is written.
+
+---
+
+### Pitfall 10: Audio Track Selection Breaks if Web Audio API Autoplay Policy Blocks Context Resume
+
+**What goes wrong:**
+The Web Audio API's `AudioContext` is suspended by default until a user gesture. When the app creates a MediaElementAudioSourceNode for each video element (to enable the "all tracks mixed / single track selected" audio feature), the AudioContext may be in a suspended state if not properly resumed. The result: video plays but there is no audio, with no error message.
+
+Additionally, connecting the same `<video>` element to a `MediaElementAudioSourceNode` takes over its audio output. If you then want the video to also produce its own audio (for the non-Web-Audio path), you cannot — the audio is now fully routed through the AudioContext and the element's `volume` property no longer controls what the user hears.
+
+A second pitfall: creating a `MediaElementAudioSourceNode` for the same `<video>` element more than once throws an `InvalidStateError`. If the component mounts/unmounts (e.g., grid layout changes), you must track which elements already have a source node.
+
+**Why it happens:**
+Autoplay policies have become stricter over time. The specific rule that `AudioContext` starts suspended is not always handled in tutorials, which show examples where a user click implicitly resumes the context. In a video player, the "play" button click should resume the context — but if play state is set programmatically (e.g., after seeking), no user gesture is recorded.
+
+**How to avoid:**
+- Call `audioContext.resume()` explicitly in the user gesture handler (play button click, seek scrubbar click).
+- Wrap all audio graph operations in a check: `if (audioContext.state === 'suspended') await audioContext.resume()`.
+- Track MediaElementAudioSourceNode instances in a Map keyed by video element. Before creating a new node, check if one already exists for that element.
+- Mute video elements at the HTMLElement level (`video.muted = true`) and manage all volume exclusively through the Web Audio API gain nodes. This avoids dual-control confusion.
+
+**Warning signs:**
+- Video plays but no audio on first load (context suspended).
+- `InvalidStateError: MediaElementAudioSourceNode already created for this element` in console.
+- Switching from "all tracks" to "single track" mode produces no change in audio output.
+- Audio cuts out after navigating away and back to the page (context suspended again on navigation).
+
+**Phase to address:**
+Audio mixing feature within the synced playback phase. Must be implemented with correct AudioContext lifecycle management from the start.
 
 ---
 
@@ -163,108 +300,119 @@ Phase 2 (Audio Extraction). The extraction command parameters are the critical d
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Loading all files into memory simultaneously | Simpler code, no sequencing logic | Memory crashes with 3-4 large files | Never for production; OK for initial prototype with 2 small files |
-| Using `decodeAudioData` instead of FFmpeg-extracted PCM | Fewer dependencies, Web-native | Memory explosion on real files, hard crashes | Never -- use FFmpeg extraction from day 1 |
-| Skipping `-c copy` for video trimming (re-encoding instead) | Works with any seek point, simpler FFmpeg command | 25x slower processing, users abandon the tool | Only when keyframe-accurate trimming is required and codec copy produces visual glitches |
-| Hardcoding sample rate assumptions (e.g., all 48kHz) | Simpler correlation code | Breaks with 44.1kHz sources, produces wrong offsets | Never -- always resample to common rate |
-| Bundling `@ffmpeg/core-mt` without single-thread fallback | Better performance for supported browsers | App is broken in Safari on iOS, older browsers | Never -- always detect and fall back |
-| Using JSZip to zip all output files in memory | Simple API, clean user experience | Memory explosion: zip requires holding all output files in memory simultaneously | Only if total output < 500MB; otherwise offer individual downloads |
+| Canvas 2D drawImage for compositing | Simple API, works immediately | Hard performance ceiling at 4K/8+ cameras; requires rewrite to use WebGL | Only for 1080p playback preview; never for 4K export |
+| No VideoFrame.close() calls in happy path | Less boilerplate | Silent GPU memory leak that grows throughout session; catastrophic during long export | Never |
+| timeupdate for multi-video sync | Event-driven, reactive | Drift accumulates; jitter causes visible desync; misses frames | Never — use rAF/rVFC sync loop |
+| Single VideoEncoder path without FFmpeg fallback | Simpler export code | Export broken in Firefox and Safari; ~30% of browser market | Never for public release |
+| mp4-muxer instead of Mediabunny | Familiar library, pre-existing docs | Unmaintained, no bug fixes, will fall behind browser changes | Only if migrating from an existing mp4-muxer codebase with known-good behavior |
+| preload="auto" for all video elements | Faster initial play | 30–80MB GPU memory per element; 30 cameras = 900MB–2.4GB before compositing | Acceptable for ≤4 cameras; never for large grids |
+| Export audio directly from Web Audio context | Avoids separate audio pipeline | Web Audio context output is difficult to capture as raw PCM for muxing | Avoid — use MediaStreamAudioDestinationNode or encode audio separately via WebCodecs AudioEncoder |
 
 ## Integration Gotchas
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| FFmpeg WASM loading | Bundling the WASM core with your app bundle (bloats initial load to 25MB+) | Load `@ffmpeg/core` from CDN or lazy-load on first use. Self-host the WASM files if COEP blocks CDN loading. The core is ~25MB and should not be in the critical path. |
-| Cloudflare Pages `_headers` | Placing `_headers` in project root instead of build output dir | Place in `public/` (Vite) or equivalent static dir. Verify it exists in `dist/` after build. Test with `curl -I` on deployed URL. |
-| FFmpeg WASM + Vite | Vite's dev server does not set COOP/COEP headers by default | Use `vite-plugin-cross-origin-isolation` or configure `server.headers` in `vite.config.ts`. Headers require full server restart (not HMR) to take effect. |
-| Web Worker + FFmpeg WASM | Trying to share FFmpeg instance between main thread and worker, or creating multiple FFmpeg instances | One FFmpeg instance per worker. One worker for the lifetime of the app. Communicate via `postMessage`. Terminate and re-create only if memory must be freed. |
-| File API + FFmpeg WASM | Using `FileReader.readAsArrayBuffer()` which loads entire file into main thread memory before passing to worker | Use `file.arrayBuffer()` (returns Promise, same memory cost but cleaner). Better: if FFmpeg WASM supports it, pass the File object and let the worker read it. |
+| FFmpeg WASM + WebCodecs | Using FFmpeg WASM for the export encode step (re-encodes the composite) | Use WebGL for compositing + WebCodecs VideoEncoder for GPU-accelerated H.264 encoding. FFmpeg WASM remains for upstream pipeline (extraction, trim) only. |
+| Web Audio API + video elements | Calling `video.volume = 0` expecting silence after connecting to Web Audio graph | Once connected to a MediaElementAudioSourceNode, the element's audio is routed through the graph. Control gain via GainNode only; `volume` has no effect. |
+| WebGL texture from video | Calling `gl.texImage2D` with a video element that is not currently decoded | If the video is paused on the first frame or still loading, texImage2D uploads a black or corrupt frame. Always check `video.readyState >= HAVE_CURRENT_DATA` before texture upload. |
+| WebCodecs encoder + muxer | Passing `EncodedVideoChunk` directly to muxer without checking chunk type | Only `key` chunks can appear at the start of a segment. If the first chunk is a `delta`, the muxer or player will reject it. Force `keyFrame: true` on the first encoded frame. |
+| OffscreenCanvas + React | Creating OffscreenCanvas inside a React component's render/effect cycle | OffscreenCanvas must be created once and transferred exactly once. React's strict mode and HMR can cause double-mount, double-transfer errors. Create outside React lifecycle or protect with a ref guard. |
+| Blob URLs + video elements | Calling `URL.revokeObjectURL(url)` immediately after setting `video.src = url` | The browser has not loaded the resource yet. Revoke only after `video.loadeddata` or `video.canplay` fires. Premature revoke causes a network error loading the video. |
 
 ## Performance Traps
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Naive time-domain cross-correlation O(n^2) | Correlation step takes minutes or hangs for 30+ minute recordings | Use FFT-based cross-correlation. At 16kHz mono, 60 seconds = 960K samples; FFT correlation completes in <1 second. 30 minutes = 28M samples; naive correlation is infeasible. | Audio segments longer than ~60 seconds at 16kHz |
-| Re-encoding video during trim | Trimming 4 videos takes 20-40 minutes | Use `-c copy` with `-ss` before `-i`. Stream copy is 100-1000x faster than re-encoding. | Any file over 30 seconds |
-| Loading WASM core on page load | 25MB download before user can interact, 5+ second load on fast connections | Lazy-load FFmpeg WASM only when user drops files. Show the UI immediately, load FFmpeg in background or on-demand. | Always -- 25MB blocking load is unacceptable |
-| Full-resolution audio for correlation | 48kHz stereo = 384KB/sec = 23MB/min per file. Four 10-min files = 920MB just for audio buffers | Downsample to 8-16kHz mono. 8kHz mono = 16KB/sec = 960KB/min. Four 10-min files = 38MB. | Files longer than 2-3 minutes |
-| Generating zip of all output files | 4x 500MB trimmed videos = 2GB in memory for the zip (compressed video files barely shrink with zip) | Offer individual file downloads. Only zip if total output < 200MB. Use `StreamSaver.js` or `showSaveFilePicker()` for streaming large downloads without memory buffering. | Total output exceeds ~500MB |
+| Canvas 2D drawImage at 4K | Export framerate drops below 30fps; main thread saturated | Use WebGL compositing; measure compositing time per frame during development | Any resolution above 1080p with >4 cameras, or >8 cameras at any resolution |
+| Uploading video texture on every rAF tick | GPU memory bandwidth saturated; frame drops | Upload texture only when `video.currentTime` has changed (check via rVFC metadata or comparison) | Immediately with 8+ cameras at HD resolution |
+| Encoding at display framerate into muxer | Encoder queue grows unbounded; eventual OOM or encoder error | Tick export at fixed output framerate; drop frames when encoder queue is backed up | Any export longer than ~10 seconds |
+| Allocating new ImageBitmap per frame for preview | GC pauses every few seconds (10–30ms pause per large ImageBitmap allocation) | Reuse a fixed-size canvas for preview; avoid ImageBitmap allocation in the hot path | As soon as export or real-time preview is enabled |
+| Holding all video Blob URLs simultaneously | Memory holds all original video files (could be gigabytes) plus decoded GPU buffers | Revoke Blob URLs for videos not currently being played if under memory pressure | >10 cameras with >200MB files each |
 
 ## Security Mistakes
 
+This project runs entirely client-side with no server. The relevant concerns are user-experience trust, not data exfiltration.
+
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Not validating file types before FFmpeg processing | Malicious files could trigger FFmpeg WASM vulnerabilities or cause unexpected behavior | Check file MIME types and extensions before processing. Accept only known video containers (mp4, mov, avi, mkv, webm). Validate with magic bytes, not just extension. |
-| Missing Content-Security-Policy | XSS vulnerabilities, especially if showing user filenames in the UI | Add `Content-Security-Policy` header. At minimum: `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'`. The `wasm-unsafe-eval` directive is required for WASM execution. |
-| Exposing FFmpeg error output to users | FFmpeg error messages can leak file metadata, system paths | Catch FFmpeg errors, log internally, show generic "Processing failed" message to user. |
+| Exporting to a user-specified filename without sanitization | Malformed filename causes a broken download or unexpected browser behavior | Use `encodeURIComponent` on user-supplied filenames. Validate the export filename against a safe character set. |
+| WebGL errors surfaced to users verbatim | GL error codes are confusing and may reveal browser/GPU information | Catch WebGL errors in the compositing loop; surface as "Compositing failed — try a lower resolution." |
+| Allowing export at extremely high resolutions without a cap | Could cause OOM or GPU driver crash | Enforce a maximum export resolution (e.g., 4K = 3840×2160). Reject or downsample beyond that limit. |
 
 ## UX Pitfalls
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| No progress indication during processing | Users think the app is frozen, close the tab, lose all progress | Show step-by-step progress: "Extracting audio (1/4)...", "Analyzing sync...", "Trimming video (3/4)...". Use FFmpeg's progress callback where available; fall back to step-based indicators. |
-| No "do not close tab" warning | Users navigate away during 5-minute processing, lose everything | Add `beforeunload` event listener during processing. Show prominent "Processing in progress -- do not close this tab" banner. |
-| Showing only technical error messages | "RuntimeError: memory access out of bounds" means nothing to a user | Catch WASM/FFmpeg errors and translate: "Your files are too large for browser processing. Try shorter videos or fewer files." |
-| Forcing users to wait for all files before starting | User drops 4 files, waits for all to "upload" (actually just read into memory) before anything happens | Start audio extraction on each file as soon as it is dropped. Pipeline: extract audio from file 1 while user is still dropping files 2-4. |
-| Auto-downloading a zip without asking | Large unexpected download, browser may block it, user has no control | Show results with per-file download buttons. Offer "Download All as ZIP" as an optional action. Let the user choose. |
-| No file size/duration warnings | User drops a 4GB file, processing starts, eventually crashes 10 minutes later | Validate files immediately on drop. Show warnings for large files. Reject files over the practical limit with a clear explanation. |
+| No progress feedback during export | A 30-second 4K export feels like a hang; user closes tab | Show per-frame progress: "Encoding frame 450 of 900 (50%)" with time remaining estimate. |
+| Export button active before videos are buffered | User exports immediately; first N frames are black or corrupted (video not yet decoded) | Disable export until all grid videos report `readyState >= HAVE_ENOUGH_DATA`. Show loading indicator per camera tile. |
+| Grid layout changes during playback without pausing | Removing/adding video elements while the sync loop is running causes race conditions | Pause all playback before changing grid configuration; rebuild sync loop state; then resume. |
+| Audio selection dropdown with no perceptible change | User selects "Camera 3 audio" but still hears all cameras because AudioContext is suspended | Visually confirm audio selection with a VU meter or peak indicator. Resume AudioContext on dropdown interaction. |
+| Export produces a file the user cannot play | WebCodecs may produce H.264 Baseline when user expects Main or High profile | Document the export codec/profile. Consider offering "compatible" (Baseline) vs. "quality" (High) profile options. |
+| No way to abort a running export | User starts a 4K export, waits 2 minutes, realizes they chose wrong settings — no cancel | Implement export cancellation. Track the export worker's state; `postMessage({ type: 'cancel' })` and terminate the encoder cleanly. |
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Audio extraction:** Often missing sample rate normalization -- verify all audio is resampled to the same rate before cross-correlation
-- [ ] **Cross-correlation:** Often missing correlation confidence check -- verify the peak correlation exceeds a minimum threshold and warn user if sync confidence is low
-- [ ] **Video trimming:** Often missing keyframe alignment -- verify that `-c copy` trimming does not produce black frames or glitches at the start (common when trim point is not on a keyframe)
-- [ ] **File download:** Often missing blob URL cleanup -- verify `URL.revokeObjectURL()` is called after download to prevent memory leaks
-- [ ] **FFmpeg cleanup:** Often missing MEMFS cleanup -- verify `ffmpeg.deleteFile()` is called for every input and output file after reading results
-- [ ] **Web Worker cleanup:** Often missing worker termination -- verify the FFmpeg worker is properly terminated when processing is complete to free memory
-- [ ] **Progress reporting:** Often missing error state handling -- verify that processing failures show a clear error, not a stuck progress bar
-- [ ] **Mobile browsers:** Often missing SharedArrayBuffer detection -- verify the app shows a clear "unsupported browser" message rather than silently failing on Safari iOS or older browsers
-- [ ] **COEP header side effects:** Often missing verification that self-hosted assets still load -- verify fonts, images, and scripts load correctly after enabling cross-origin isolation
+- [ ] **Video sync loop:** Often missing drift correction threshold — verify that a 10-minute playback session results in < 1 frame of drift across all cameras (check `Math.max(...videos.map(v => Math.abs(v.currentTime - master.currentTime)))` at 10-min mark).
+- [ ] **requestVideoFrameCallback fallback:** Often missing — verify the sync loop runs correctly in Firefox (where rVFC is absent) using requestAnimationFrame fallback.
+- [ ] **VideoFrame.close() completeness:** Often missing in error paths — verify no GPU memory leak by running export, cancelling partway through, and confirming GPU memory returns to baseline in Chrome Task Manager.
+- [ ] **WebCodecs encoder fallback:** Often missing for Firefox/Safari — verify the app offers working export (FFmpeg WASM) in Firefox and Safari, not a broken or missing export button.
+- [ ] **First frame keyframe enforcement:** Often missing — verify the exported MP4 opens correctly in QuickTime by confirming the first encoded chunk is a `key` chunk.
+- [ ] **MP4 timestamp monotonicity:** Often broken by re-renders — verify the exported MP4 has correct duration (`videoElement.duration === expected`) and plays back at the correct speed.
+- [ ] **AudioContext resume on play:** Often missing — verify audio plays immediately when the play button is clicked (not just after a second click or user interaction).
+- [ ] **MediaElementAudioSourceNode dedup:** Often missing — verify that mounting/unmounting the grid (or resizing it) does not throw `InvalidStateError` about duplicate source nodes.
+- [ ] **Blob URL revocation timing:** Often wrong — verify that `URL.revokeObjectURL()` is called after `loadeddata`, not immediately after `video.src = url`.
+- [ ] **GPU memory ceiling:** Often discovered too late — verify the app runs for 20+ minutes with 8+ cameras without the tab crashing (Chrome Task Manager GPU memory should plateau, not climb).
 
 ## Recovery Strategies
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Memory crash during processing | LOW | User refreshes page and retries with fewer/smaller files. App state is lost but no data corruption. Add guidance to retry with fewer files. |
-| Wrong sync offsets from sample rate mismatch | MEDIUM | Add sample rate detection and resampling. Requires modifying the audio extraction FFmpeg command, re-testing correlation. |
-| COEP headers break third-party resources | LOW | Self-host all resources. Remove external CDN dependencies. Takes 1-2 hours to identify and fix. |
-| Video trim produces corrupted start frames | MEDIUM | Switch from `-c copy` to re-encoding for the first few frames, or adjust seek point to nearest keyframe. Requires understanding container/codec keyframe structure. |
-| Naive O(n^2) correlation is too slow for real files | HIGH | Requires rewriting correlation algorithm to use FFT. Not a simple fix -- need FFT library (e.g., `fft.js`) and understanding of spectral cross-correlation. Design it right from the start. |
-| JSZip OOM on large output | LOW | Replace zip-all with individual downloads. 30-minute change. |
+| Video sync drift (timeupdate-based) | HIGH | Rewrite sync loop to use rAF/rVFC. Cannot be patched incrementally — the sync architecture must change. |
+| VideoFrame.close() memory leak | MEDIUM | Audit every VideoFrame allocation site. Wrap in try/finally. Run Chrome Task Manager during export to confirm memory stabilizes. |
+| Canvas 2D performance ceiling | HIGH | Rewrite compositing layer to use WebGL. This is a significant effort if Canvas 2D is already integrated with export. |
+| WebCodecs unsupported in browser | LOW | Add FFmpeg WASM fallback exporter. The FFmpeg pipeline already exists; wrapping it as an export path is low effort. |
+| MP4 timestamp corruption | MEDIUM | Audit timestamp computation formula. Replace float arithmetic with integer microsecond arithmetic. Re-test with QuickTime. |
+| Encoder queue overflow / frame drops | MEDIUM | Add `encodeQueueSize` check before each `encode()` call. Implement frame drop logic. Adjust render loop rate to match encoder throughput. |
+| AudioContext suspended silently | LOW | Add `audioContext.resume()` call to all user gesture handlers. One-line fix per gesture handler. |
 
 ## Pitfall-to-Phase Mapping
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| MEMFS double-buffering memory explosion | Phase 1: Core Architecture | Test with 4x 200MB files on a machine with 8GB RAM. Measure peak memory in Chrome Task Manager. |
-| COOP/COEP misconfiguration | Phase 1: Foundation | Deploy skeleton to Cloudflare Pages. Verify `crossOriginIsolated === true` in browser console. Check that no resources are blocked. |
-| Audio cross-correlation accuracy | Phase 2: Sync Algorithm | Test with: (1) same-camera audio, (2) different cameras/sample rates, (3) quiet room, (4) 30+ minute recordings. Verify offset within 1 frame of expected. |
-| FFmpeg WASM performance (25x slower) | Phase 2: Video Trimming | Verify `-c copy` is used for trimming. Time the trim operation on a 10-minute file -- should be seconds, not minutes. |
-| decodeAudioData memory explosion | Phase 2: Audio Extraction | Verify audio is extracted via FFmpeg (not Web Audio API). Check extracted WAV file size matches expected (~960KB for 60s at 8kHz mono). |
-| Progress and UX feedback | Phase 3: Polish | User-test with non-technical person. They should understand what the app is doing at every step. No "is it frozen?" moments. |
-| Zip download memory issues | Phase 3: Download/Export | Test downloading 4x 300MB trimmed videos. Verify memory does not spike above baseline + total file size. |
-| Browser compatibility / fallback | Phase 3: Polish | Test in Chrome, Firefox, Edge, Safari. Verify graceful degradation message in browsers without SharedArrayBuffer. |
+| Multi-video sync drift | Synced playback phase | Play 8 cameras for 10 minutes; measure max `currentTime` divergence < 33ms |
+| rVFC unavailability in Firefox | Synced playback phase | Run sync loop in Firefox; confirm no broken behavior; check console for errors |
+| GPU memory from many video elements | Synced playback + grid layout phases | Open Chrome Task Manager; load 10+ cameras; GPU memory should plateau under 1GB |
+| VideoFrame.close() leaks | GPU compositing + export phases | Export 60-second composite; confirm GPU memory returns to baseline after export completes |
+| WebCodecs H.264 unavailable in Firefox/Safari | Export phase | Attempt export in Firefox and Safari; confirm fallback path activates with clear UX |
+| Encoder queue overflow | Export phase | Export 5-minute composite; confirm framerate of output matches target fps with no dropped frames |
+| MP4 timestamp discontinuities | Export phase | Open exported MP4 in QuickTime; confirm correct duration and smooth playback |
+| Canvas 2D performance at 4K | GPU compositing phase | Measure compositing time per frame at 4K with 4 cameras; must be <10ms per frame |
+| OffscreenCanvas transfer semantics | GPU compositing phase | Confirm preview canvas remains interactive while export worker runs |
+| AudioContext autoplay block | Audio mixing feature | Click play on first load; confirm audio starts immediately without second interaction required |
 
 ## Sources
 
-- [FFmpeg WASM GitHub Issues: Memory](https://github.com/ffmpegwasm/ffmpeg.wasm/issues/200) - ERR_OUT_OF_MEMORY with multiple instances (HIGH confidence)
-- [FFmpeg WASM GitHub Issues: Memory Access Out of Bounds](https://github.com/ffmpegwasm/ffmpeg.wasm/issues/704) - Processing many files (HIGH confidence)
-- [FFmpeg WASM Performance Docs](https://ffmpegwasm.netlify.app/docs/performance/) - Official benchmarks showing 12-25x slower than native (HIGH confidence)
-- [FFmpeg WASM GitHub: MEMFS File Size Limits](https://github.com/ffmpegwasm/ffmpeg.wasm/discussions/755) - 2GB limit discussion (HIGH confidence)
-- [FFmpeg WASM GitHub: Large Files](https://github.com/ffmpegwasm/ffmpeg.wasm/issues/8) - Handling large files discussion (HIGH confidence)
-- [Cloudflare Pages Headers Docs](https://developers.cloudflare.com/pages/configuration/headers/) - Official _headers file configuration (HIGH confidence)
-- [MDN: SharedArrayBuffer](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer) - Cross-origin isolation requirements (HIGH confidence)
-- [MDN: decodeAudioData](https://developer.mozilla.org/en-US/docs/Web/API/BaseAudioContext/decodeAudioData) - Full decode into memory behavior (HIGH confidence)
-- [Chromium Bug: decodeAudioData Memory](https://bugs.chromium.org/p/chromium/issues/detail?id=447580) - Memory issues with large files (HIGH confidence)
-- [Mozilla Bug: decodeAudioData OOM Crash](https://bugzilla.mozilla.org/show_bug.cgi?id=1066036) - Hard browser crash on OOM (HIGH confidence)
-- [JSZip Limitations](https://stuk.github.io/jszip/documentation/limitations.html) - Memory and size constraints (HIGH confidence)
-- [FFmpeg WASM Multi-threading Docs](https://deepwiki.com/ffmpegwasm/ffmpeg.wasm/4.4-multi-threading) - SharedArrayBuffer requirement for multi-thread (MEDIUM confidence)
-- [COOP/COEP on Static Hosting](https://blog.tomayac.com/2025/03/08/setting-coop-coep-headers-on-static-hosting-like-github-pages/) - Practical header setup guide (MEDIUM confidence)
-- [FFmpeg WASM Progress Reporting Issue](https://github.com/ffmpegwasm/ffmpeg.wasm/issues/49) - Progress ratio unreliable/NaN (HIGH confidence)
-- [Blackmagic Forum: Multicam Drift](https://forum.blackmagicdesign.com/viewtopic.php?f=21&t=79835) - Clock drift in multi-cam setups (MEDIUM confidence)
-- [DSP Related: FFT Delay Estimation](https://www.dsprelated.com/showarticle/26.php) - FFT-based cross-correlation algorithm (MEDIUM confidence)
-- [ResearchGate: Synchronizing Different Sample Rates](https://www.researchgate.net/post/How_to_synchronise_two_signal_with_different_sampling_frequency) - Must resample before correlation (MEDIUM confidence)
+- [MDN: HTMLVideoElement.requestVideoFrameCallback()](https://developer.mozilla.org/en-US/docs/Web/API/HTMLVideoElement/requestVideoFrameCallback) — best-effort semantics, vsync timing caveat (HIGH confidence)
+- [web.dev: requestVideoFrameCallback](https://web.dev/articles/requestvideoframecallback-rvfc) — use cases and expectedDisplayTime comparison pattern (HIGH confidence)
+- [Bocoup: HTML5 Video Synchronizing Playback of Two Videos](https://www.bocoup.com/blog/html5-video-synchronizing-playback-of-two-videos) — timeupdate unreliability; rAF-based continuous correction (HIGH confidence)
+- [W3C: Frame accurate seeking issue](https://github.com/w3c/media-and-entertainment/issues/4) — currentTime precision limitations (HIGH confidence)
+- [W3C: Media Synchronization on the Web (PDF)](https://www.w3.org/community/webtiming/files/2018/05/arntzen_mediasync_web_author_edition.pdf) — clock drift across media elements (HIGH confidence)
+- [MDN: WebCodecs API](https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API) — flush() semantics, encodeQueueSize, close() requirement (HIGH confidence)
+- [W3C WebCodecs GitHub: Add GOP length to VideoEncoderConfig #444](https://github.com/w3c/webcodecs/issues/444) — keyframe interval limitations (HIGH confidence)
+- [W3C WebCodecs GitHub: encoding h264 issue #394](https://github.com/w3c/webcodecs/issues/394) — H.264 Firefox false-positive isConfigSupported (HIGH confidence)
+- [Mozilla Bugzilla: WebCodecs VideoDecoder fails on H.264 #1918769](https://bugzilla.mozilla.org/show_bug.cgi?id=1918769) — Firefox H.264 encoder/decoder bugs (HIGH confidence)
+- [caniuse: WebCodecs API](https://caniuse.com/webcodecs) — browser support matrix (HIGH confidence)
+- [Chromium Bug: HTML5 video memory leak #969049](https://bugs.chromium.org/p/chromium/issues/detail?id=969049) — GPU memory not freed after video replay (HIGH confidence)
+- [Mozilla Bug: HTML5 video memory too aggressive #1054170](https://bugzilla.mozilla.org/show_bug.cgi?id=1054170) — GPU memory per video element (HIGH confidence)
+- [Three.js GitHub: Texture from video leaks memory #9440](https://github.com/mrdoob/three.js/issues/9440) — WebGL texture + video element double GPU allocation (HIGH confidence)
+- [webrtcHacks: Video Frame Processing on the Web](https://webrtchacks.com/video-frame-processing-on-the-web-webassembly-webgpu-webgl-webcodecs-webnn-and-webtransport/) — GPU copy costs, WebCodecs memory opacity (HIGH confidence)
+- [Remotion: Clearing up WebCodecs misconceptions](https://www.remotion.dev/docs/webcodecs/misconceptions) — WebCodecs vs WebAssembly vs FFmpeg clarifications (HIGH confidence)
+- [Vanilagy/mp4-muxer → Mediabunny migration guide](https://vanilagy.github.io/mp4-muxer/MIGRATION-GUIDE.html) — mp4-muxer deprecation status (HIGH confidence)
+- [MDN: OffscreenCanvas](https://developer.mozilla.org/en-US/docs/Web/API/OffscreenCanvas) — transferControlToOffscreen one-way transfer restriction (HIGH confidence)
+- [Evil Martians: OffscreenCanvas + Web Workers](https://evilmartians.com/chronicles/faster-webgl-three-js-3d-graphics-with-offscreencanvas-and-web-workers) — worker rendering patterns; ImageBitmap transfer memory cost (MEDIUM confidence)
+- [W3C WebCodecs GitHub: VideoFrame from WebGPU #83](https://github.com/w3c/webcodecs/issues/83) — GPU texture integration complexity (MEDIUM confidence)
+- [MDN: HTMLMediaElement preload](https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/preload) — preload=auto memory implications (HIGH confidence)
 
 ---
-*Pitfalls research for: Browser-based multi-cam video sync tool*
-*Researched: 2026-03-01*
+*Pitfalls research for: Browser synced multi-cam playback + GPU composite video export (v2.0)*
+*Researched: 2026-03-02*

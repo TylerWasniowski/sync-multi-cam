@@ -1,185 +1,206 @@
 # Project Research Summary
 
-**Project:** Sync Multi-Cam
-**Domain:** Browser-based multi-camera video synchronization tool
-**Researched:** 2026-03-01
-**Confidence:** HIGH
+**Project:** Sync Multi-Cam — v2.0 (Synced Playback & GPU Composite Export)
+**Domain:** Browser-based synced multi-camera video grid playback and composite export
+**Researched:** 2026-03-02
+**Confidence:** HIGH (playback architecture), HIGH (export approach), MEDIUM (WebCodecs browser coverage)
 
 ## Executive Summary
 
-Sync Multi-Cam is a client-side browser tool that accepts 2-4 video files from a multi-camera shoot, automatically detects their temporal alignment via audio cross-correlation, and outputs trimmed/synchronized video files the user can download and immediately use in any NLE. The expert approach to building this is a sequential processing pipeline (extract audio, cross-correlate, trim video) running entirely in-browser using FFmpeg WASM for media manipulation and an FFT-based or SIMD-optimized cross-correlation library (SynAudio or fft.js) for sync detection. The architecture is a standard React SPA with heavy computation delegated to Web Workers, deployed as a static site on Cloudflare Pages with cross-origin isolation headers to enable SharedArrayBuffer for multi-threaded FFmpeg.
+v2.0 adds two major capabilities on top of the shipped v1.0 sync pipeline: a synchronized multi-camera grid player and a GPU-accelerated composite export. Both features are well-understood in the browser media ecosystem, but each has specific failure modes that must be designed around from day one — not patched in afterward. The recommended architecture keeps these two pipelines clearly separated: native `<video>` elements in a CSS grid for playback (browser compositor handles GPU decode efficiently), and a dedicated FFmpeg WASM `xstack` filtergraph for export (reusing the existing singleton, no new dependencies). The stack requires only one new package — `mediabunny` (the maintained successor to the now-deprecated mp4-muxer) — and leverages Web Audio API, HTMLVideoElement, and browser-native layout APIs already available.
 
-The recommended approach is a Vite 7 + React 19 + TypeScript SPA styled with Tailwind CSS 4, using @ffmpeg/core-mt for media processing and SynAudio (or fft.js) for audio correlation. The key architectural decision is to process files sequentially with aggressive memory cleanup between stages, because browser memory is the binding constraint -- not CPU speed. Audio should be extracted via FFmpeg as 8-16kHz mono WAV (not via Web Audio API's decodeAudioData, which causes memory explosions on long files), and video trimming must use stream copy (`-c copy`) rather than re-encoding to avoid the 12-25x WASM performance penalty. The competitive gap is clear: PluralEyes is discontinued, SyncSink.wasm outputs only JSON offsets (no trimmed video files), and all other competitors require desktop installation and paid licenses.
+The highest-confidence recommendation for v2.0 export is FFmpeg WASM with the `xstack` composite filter rather than a WebCodecs pipeline. WebCodecs VideoEncoder has known H.264 encoder bugs in Firefox 130 and is absent in Safari before v26.0, meaning roughly 30% of browsers require a fallback anyway. FFmpeg WASM already exists in the project as a loaded singleton; adding composite export is a matter of building the filtergraph from the grid layout coordinates and calling `exec()`. This approach trades GPU-accelerated speed for near-universal browser support and dramatically lower integration complexity. WebCodecs-based export is the right long-term upgrade (v3+) once Safari VideoEncoder support is ubiquitous.
 
-The three highest-risk areas are: (1) memory management -- MEMFS double-buffering can easily blow through browser tab memory limits with just 2-3 large files; (2) cross-origin isolation headers -- misconfigured COOP/COEP headers silently break SharedArrayBuffer, and this must be validated on Cloudflare Pages before any real development begins; (3) cross-correlation accuracy -- sample rate mismatches, low SNR audio, and clock drift can all produce wrong offsets if the audio extraction and correlation pipeline is not carefully parameterized. All three must be addressed in the earliest phases.
+The primary architectural risk for the playback feature is sync drift: HTML5 `<video>` elements do not share a clock, and the `timeupdate` event is non-deterministic. The correct mitigation is a shared React state `playheadTime` updated by a single `requestAnimationFrame` / `requestVideoFrameCallback` loop reading the leader video, with follower videos only seeking when drift exceeds ~100ms. This must be the foundational decision — retrofitting the sync architecture after other playback features are built on top of it is a full rewrite. Similarly, the export pipeline's GPU memory management (sequential MEMFS writes, cleanup after exec) must be correct from first implementation because the FFmpeg singleton is shared with the upstream pipeline.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The stack is well-established with high-confidence choices across the board. Vite 7 provides first-class WASM support and native Cloudflare Pages integration. React 19 is the right fit for the component model (drag-drop zone, progress indicators, file list, download actions) without needing SSR or routing. FFmpeg WASM (@ffmpeg/ffmpeg + @ffmpeg/core-mt) is the only viable option for in-browser video manipulation.
+The v2.0 stack adds exactly one npm package to what v1.0 ships: `mediabunny ^1.34.5`. All other new capabilities — Web Audio API, HTMLVideoElement, OffscreenCanvas, WebCodecs, `requestVideoFrameCallback` — are browser-native with no install step. This keeps the dependency footprint minimal while covering all required functionality. `mediabunny` replaces the deprecated `mp4-muxer` library and is needed only if a WebCodecs export path is implemented in a future phase; for v2.0's FFmpeg WASM export path it is optional but should be installed now to avoid a later migration.
+
+The export approach divides cleanly: FFmpeg WASM handles composite encode for v2.0 (universally supported, already loaded), while WebCodecs + mediabunny is reserved for a future performance upgrade. The two pipelines are independent — FFmpeg WASM's `xstack` filter handles compositing and H.264 encode in one command, while a WebCodecs path would require a separate canvas compositor and muxer chain.
 
 **Core technologies:**
-- **Vite 7 + React 19 + TypeScript 5.9:** SPA framework -- fast HMR, WASM support, component model fits the UI needs
-- **Tailwind CSS 4:** Utility-first styling with first-party Vite plugin -- dark theme from day one
-- **@ffmpeg/ffmpeg + @ffmpeg/core-mt:** In-browser video/audio processing via WASM -- multi-threaded for 2x speedup
-- **SynAudio (or fft.js):** Audio cross-correlation engine -- SIMD-optimized WASM (SynAudio) or pure-JS FFT (fft.js) for offset detection
-- **Web Audio API:** Native audio decoding for short segments (fallback only; FFmpeg extraction preferred for long files)
-- **client-zip + file-saver:** Output delivery -- streaming ZIP generation and browser download triggering
-- **Cloudflare Pages:** Static hosting with custom headers for cross-origin isolation
-
-**Critical version requirement:** @ffmpeg/core-mt requires SharedArrayBuffer, which requires COOP/COEP headers on the hosting environment. Single-threaded @ffmpeg/core must be available as a runtime fallback.
+- `HTMLVideoElement` (native): per-camera video playback — controlled via shared `playheadTime` React state, `muted` to suppress native audio, sync-corrected via rAF loop
+- Web Audio API (native): audio routing — one `MediaElementAudioSourceNode` per video, `GainNode` per track for solo/mix, single shared `AudioContext`
+- FFmpeg WASM `@ffmpeg/ffmpeg ^0.12.15` (existing): composite export — `xstack` filtergraph from grid layout coordinates, reuse existing loaded singleton
+- `mediabunny ^1.34.5` (new, one npm install): MP4 muxer for future WebCodecs export path — zero dependencies, pure TypeScript, WebCodecs-native, successor to deprecated mp4-muxer
+- WebCodecs VideoEncoder (native): GPU-accelerated H.264 encode — deferred to v3+; Chrome/Edge ready, Firefox buggy, Safari pre-26 absent
 
 ### Expected Features
 
-**Must have (table stakes):**
-- Drag-and-drop file input with browse fallback (2-4 video files)
-- Audio-based automatic sync with frame-accurate offset detection
-- Trimmed/aligned output files via stream-copy (no re-encode)
-- Per-file download of synced videos
-- Multi-stage processing progress feedback
-- Offset display per video in timecode format
-- Privacy messaging ("files never leave your browser")
-- Dark/professional UI theme
+Research identified a clear MVP boundary for v2.0. All P1 features are achievable within the existing architecture with no new external services.
 
-**Should have (differentiators):**
-- Sync confidence score (correlation coefficient as percentage)
-- Visual waveform display with alignment markers
-- Reference file selection (user picks the anchor video)
-- Batch ZIP download (with size guard)
-- Manual offset adjustment (frame-level nudge controls)
+**Must have (v2.0 launch):**
+- Synchronized video grid player — all cameras play/pause/seek together, offsets from v1.0 pipeline applied
+- Dynamic aspect-ratio-aware grid layout — shelf-packing heuristic for up to 9 tiles, O(N²) max, negligible runtime
+- Two display modes — Letterbox (`object-fit: contain`) and Fill (`object-fit: cover`), same algorithm drives both playback and export canvas
+- Waveform-as-scrubbar — existing WaveformPanel extended with `playheadTime` prop and `onSeek` callback; bidirectional cursor binding
+- Audio mixing — all tracks mixed equally by default; dropdown to solo one camera's audio via Web Audio API `GainNode`
+- GPU composite export — FFmpeg WASM `xstack` filtergraph → H.264 MP4 download
+- Resolution presets — 720p / 1080p / 4K canvas dimensions passed to export command
+- Export progress — frame-level progress from FFmpeg `progress` event
 
-**Defer (v2+):**
-- Re-encode mode for frame-exact trimming (keyframe-accurate stream copy is sufficient for v1)
+**Should have (add after v2.0 validation):**
+- Per-tile camera label overlays — filename drawn on tiles and baked into export canvas
+- Click-to-fullscreen single tile — expand any camera angle to fill available space
+- Keyboard shortcuts — space, arrow keys for transport
+- Export bitrate/quality control — expose CRF slider for advanced users
+
+**Defer (v3+):**
 - NLE project file export (FCP XML / Premiere XML)
-- Audio drift detection/compensation (only matters for 30+ minute recordings)
-- Keyboard shortcuts, drag-to-reorder files
-
-**Key competitive insight:** SyncSink.wasm is the closest prior art but outputs only JSON offsets, not trimmed video files. This tool closes that gap. PluralEyes is discontinued. Syncaila costs $49-$199. The "free, zero-install, browser-based" positioning is the primary differentiator.
+- Per-tile color grading (exposure, white balance per camera)
+- Loop region with in/out markers on waveform
+- WebCodecs-based compositing pipeline (GPU-accelerated performance when Safari VideoEncoder coverage is solid)
 
 ### Architecture Approach
 
-The architecture is a sequential three-stage pipeline (extract audio, cross-correlate, trim video) orchestrated by a state machine on the main thread, with all heavy computation delegated to Web Workers. Files are processed one at a time through each stage with eager memory cleanup to stay within browser memory limits. The FFmpeg WASM instance lives exclusively inside a Web Worker and communicates via typed postMessage envelopes with Transferable ArrayBuffer transfers for zero-copy performance.
+v2.0 integrates additively after `stage === 'complete'`. The existing pipeline outputs `DownloadableResult[]` (trimmedData, offsetSeconds, originalFile per camera) and pre-computed waveform peaks — v2.0 consumes these without modifying the pipeline. Four existing components are modified (App.tsx adds playback state, WaveformPanel/WaveformTrack/WaveformCanvas add playhead rendering and seek events), four new components are created (VideoGridPlayer, VideoTile, PlaybackControls, ExportPanel), and two new lib modules are added (`lib/gridPacking.ts`, `lib/exportCompositor.ts`). The build order has a strict dependency chain with the export path parallelizable after grid layout is stable.
 
 **Major components:**
-1. **File Drop Zone** -- accepts 2-4 video files, validates count and type, creates File object references (lazy, no memory until read)
-2. **Pipeline Orchestrator** -- state machine (idle -> extracting -> correlating -> trimming -> complete) that sequences the processing stages and aggregates progress
-3. **FFmpeg Worker** -- owns the FFmpeg WASM instance, handles audio extraction and video trimming via postMessage commands
-4. **Audio Correlation Engine** -- SynAudio (or fft.js) cross-correlation against a reference file, produces sample-level offsets and confidence scores
-5. **Output/Download Manager** -- creates Blob URLs for per-file downloads, generates optional ZIP bundle via client-zip
-
-**Key pattern:** Reference-based correlation (N-1 pairwise comparisons instead of N*(N-1)/2 all-pairs). First file is default reference; user can override.
+1. `VideoGridPlayer` — container managing N VideoTile refs, hosts the `usePlaybackSync` rAF/rVFC loop, drives shared `playheadTime` from leader video
+2. `VideoTile` — controlled component: one `<video>` element, seeks only when `|video.currentTime - playheadTime| > 0.1s`, always muted (Web Audio API handles audio), reports aspect ratio and ready state
+3. `PlaybackControls` — play/pause/scrub bar + audio track selector; all callbacks bubble to App.tsx
+4. `lib/gridPacking.ts` — aspect-ratio-aware shelf-packing; same function drives CSS layout (pixels) and export canvas layout (export dimensions)
+5. `lib/exportCompositor.ts` — FFmpeg xstack filtergraph builder; sequential MEMFS writes; reuses `getFFmpeg()` singleton
+6. `WaveformPanel` (modified) — adds `playheadTime` prop for animated cursor line + `onSeek` callback for click-to-seek; bidirectional with playback state
 
 ### Critical Pitfalls
 
-1. **MEMFS double-buffering memory explosion** -- FFmpeg WASM creates copies of files in its virtual filesystem. A 500MB video consumes 1.5-2GB in practice (JS ArrayBuffer + MEMFS copy + working memory + output). Process files sequentially, delete from MEMFS immediately after reading results, never hold input + output simultaneously.
+1. **Multi-video sync drift via `timeupdate`** — Never use `timeupdate` for cross-element sync. Use a single rAF/rVFC loop reading the leader video's `currentTime` and writing to shared `playheadTime` React state. Follower videos only seek when drift > 100ms. This architectural decision must be made first.
 
-2. **COOP/COEP header misconfiguration** -- SharedArrayBuffer requires cross-origin isolation headers. Works on localhost but silently breaks in production if `_headers` file is missing or misconfigured. Validate on Cloudflare Pages on day one with a skeleton deploy.
+2. **`requestVideoFrameCallback` unavailable in Firefox** — Feature-detect before use (`'requestVideoFrameCallback' in HTMLVideoElement.prototype`). Fall back to `requestAnimationFrame`. The sync loop must be correct in Firefox from the initial implementation, not added as a later compatibility patch.
 
-3. **Audio cross-correlation accuracy** -- Sample rate mismatches between cameras produce garbage offsets. Always resample to a common rate (8-16kHz mono) via FFmpeg before correlation. Validate correlation peak exceeds a minimum threshold; warn users on low confidence.
+3. **WebCodecs H.264 encoder broken in Firefox / absent in Safari pre-26** — `isConfigSupported()` returns false-positive in Firefox 130; Safari VideoEncoder absent until v26.0. Any WebCodecs export path needs a working FFmpeg WASM fallback. For v2.0, use FFmpeg WASM as primary and validate it works correctly in Firefox and Safari before shipping.
 
-4. **FFmpeg WASM is 12-25x slower than native** -- Re-encoding video is prohibitively slow. Use `-c copy` (stream copy) for trimming, which runs at near-native speed. Place `-ss` before `-i` for fast seeking. Accept keyframe-aligned trim points.
+4. **GPU memory exhaustion with many video elements** — `preload="auto"` on all elements consumes 30–80MB GPU memory each; 10+ cameras can hit 800MB+. Start with `preload="metadata"`, switch per-tile only. Explicitly call `video.src = ''` + `video.load()` when removing tiles. Monitor GPU memory in Chrome Task Manager during development.
 
-5. **decodeAudioData memory explosion** -- Web Audio API's decodeAudioData decodes entire files into uncompressed PCM in memory (a 60-min stereo file = 1.2GB). Use FFmpeg to extract 8kHz mono WAV limited to 60 seconds instead. Parse WAV headers manually to get Float32Array.
+5. **FFmpeg WASM memory doubling during export** — `syncResults[i].trimmedData` Uint8Arrays are already in JS heap. Writing all to MEMFS simultaneously doubles memory. Write files to MEMFS sequentially, run export command, delete each MEMFS file after. Never initialize a second FFmpeg instance — `getFFmpeg()` returns the singleton.
+
+6. **AudioContext autoplay policy** — `AudioContext` starts suspended. Call `audioContext.resume()` explicitly in every user gesture handler (play button click, seek click on waveform). Track `MediaElementAudioSourceNode` instances in a Map keyed by video element to prevent `InvalidStateError` on component remount.
+
+7. **`VideoFrame.close()` omission in future WebCodecs path** — Any future WebCodecs export path must call `frame.close()` immediately after each `encode()` call, always in a `try/finally`. Omitting this causes non-GC-able GPU memory leaks that compound throughout the export session.
 
 ## Implications for Roadmap
 
-Based on research, the build order is strictly constrained by dependencies: FFmpeg must load before audio can be extracted, audio must be extracted before correlation, correlation must complete before trimming, and trimming must complete before download. The suggested phase structure follows this dependency chain.
+Research reveals a clear dependency chain and two parallelizable workstreams after the foundation is laid. The build order is: object URLs → VideoTile → grid layout → VideoGridPlayer → sync loop → audio + waveform mods (can run in parallel) → export.
 
-### Phase 1: Foundation and Infrastructure
+### Phase 1: Video Grid Foundation
 
-**Rationale:** Cross-origin isolation headers and FFmpeg WASM loading are hard prerequisites for everything else. Getting these wrong wastes days of debugging. The ARCHITECTURE and PITFALLS research both identify this as the "validate first" step.
-**Delivers:** Deployable skeleton on Cloudflare Pages with verified COOP/COEP headers, FFmpeg WASM loading in a Web Worker, basic React app shell with dark theme, file drop zone accepting 2-4 videos.
-**Addresses:** No-installation-required (table stakes), privacy messaging, dark theme UI, drag-and-drop file input.
-**Avoids:** Pitfall 2 (COOP/COEP misconfiguration) -- validate SharedArrayBuffer availability on production deploy before writing any processing code. Pitfall 1 (memory) -- establish sequential processing pattern and MEMFS cleanup discipline from the start.
+**Rationale:** Object URL creation from trimmed data is the prerequisite for everything in v2.0. VideoTile and the grid layout algorithm must exist before any playback or export work is meaningful. No sync loop yet — just rendering videos in a grid with correct aspect ratios and responsive layout.
+**Delivers:** N video tiles rendered in an aspect-ratio-aware CSS grid, responsive to container resize via ResizeObserver, display mode toggle (letterbox/fill). Play/pause state wired to all videos simultaneously.
+**Addresses:** Synced grid player (layout half), dynamic grid layout (P1), two display modes (P1).
+**Avoids:** Anti-pattern of computing layout on every render — memoize on `[containerDimensions, aspectRatios, displayMode]`, not `playheadTime` which updates at 60fps.
 
-### Phase 2: Audio Extraction and Sync Algorithm
+### Phase 2: Synchronized Playback + Transport
 
-**Rationale:** This is the algorithmic core and highest-risk phase. The cross-correlation engine is the product's reason to exist. It depends on Phase 1's FFmpeg Worker being operational. Audio extraction parameters (sample rate, mono, duration limit) directly determine whether correlation works or fails.
-**Delivers:** Working audio extraction pipeline (FFmpeg Worker extracts 8-16kHz mono WAV), cross-correlation engine producing sample-level offsets and confidence scores, offset display in the UI.
-**Uses:** @ffmpeg/ffmpeg, @ffmpeg/core-mt, SynAudio or fft.js, Web Audio API (for short-segment fallback only).
-**Implements:** FFmpeg Audio Extractor, Audio Correlation Engine, Pipeline Orchestrator (extract + correlate stages).
-**Avoids:** Pitfall 3 (correlation accuracy) -- resample all audio to common rate, validate correlation peaks, test with real multi-cam footage. Pitfall 5 (decodeAudioData memory) -- use FFmpeg extraction, not Web Audio API, for long files.
+**Rationale:** Sync architecture must be decided and built correctly before any other playback features are layered on top. Building drift correction after the fact is a rewrite, not a patch.
+**Delivers:** Play/pause/seek transport controlling all cameras simultaneously; rAF/rVFC sync loop with leader-follower pattern; follower videos seeking when drift > 100ms; feature detection for rVFC with rAF fallback.
+**Addresses:** Synchronized playback (table stakes), shared transport (table stakes), play/pause/seek (table stakes).
+**Avoids:** `timeupdate`-based sync (Pitfall 1), missing rVFC fallback for Firefox (Pitfall 2), sync loop doing layout reads or heavy computation (keep callback < 2ms).
+**Needs research-phase:** No — the rAF/rVFC pattern with shared `playheadTime` state is fully documented and ARCHITECTURE.md contains implementation-ready code.
 
-### Phase 3: Video Trimming and Download
+### Phase 3: Audio Mixing
 
-**Rationale:** Depends on Phase 2 producing correct offsets. Trimming reuses the FFmpeg Worker pattern from Phase 2 (same infrastructure, different commands). Download is the "last mile" that makes the product useful -- without downloadable trimmed files, the tool is just SyncSink.wasm with a nicer UI.
-**Delivers:** Stream-copy video trimming based on computed offsets, per-file download buttons, processing progress feedback across all stages, beforeunload warning during processing.
-**Uses:** @ffmpeg/ffmpeg (stream copy trim), file-saver, Blob URLs.
-**Implements:** FFmpeg Video Trimmer, Output/Download Manager, Progress Dashboard, complete Pipeline Orchestrator (all stages).
-**Avoids:** Pitfall 4 (FFmpeg performance) -- use `-c copy` with `-ss` before `-i`, never re-encode. Pitfall 1 (memory) -- re-read files from File API for trimming stage (do not hold in memory from extraction stage).
+**Rationale:** Audio is independent of video layout but depends on video elements existing (Phase 1). Build after basic playback works (Phase 2) so audio selection can be validated against a working player.
+**Delivers:** Web Audio API graph with per-camera GainNode; "all mix" default; dropdown to solo one camera; correct AudioContext lifecycle management.
+**Addresses:** Audio track selection (P1 differentiator), audio heard during playback (table stakes).
+**Avoids:** AudioContext autoplay suspension (Pitfall 6), MediaElementAudioSourceNode deduplication errors on component remount, `video.volume` misuse after connecting to Web Audio graph (control gain via GainNode only).
 
-### Phase 4: Polish and Differentiators
+### Phase 4: Waveform Scrubbar Integration
 
-**Rationale:** Core functionality is complete after Phase 3. This phase adds the features that differentiate from competitors and improve confidence in results. These features are independently valuable and can be shipped incrementally.
-**Delivers:** Sync confidence score display, visual waveform overlay, reference file selection, batch ZIP download, manual offset adjustment, file size/duration validation and warnings, user-friendly error messages.
-**Uses:** Canvas API (waveforms), client-zip (ZIP bundle).
-**Implements:** Results Display enhancements, validation and error handling, UX polish.
-**Avoids:** UX pitfalls (no progress indication, no size warnings, technical error messages). ZIP memory issues (offer only when total output < 500MB).
+**Rationale:** WaveformPanel modifications are isolated to prop additions and a canvas draw extension. Depends on Phase 2 (playheadTime state exists) and Phase 1 (waveform component already built). Bidirectional binding (cursor follows playhead; click drives seek) needs care to avoid feedback loops.
+**Delivers:** Animated playhead line on all waveform tracks during playback; click-to-seek from any waveform position; scrub-on-pointer-up (not continuous drag seek, too expensive for multiple video elements).
+**Addresses:** Waveform-as-scrubbar (P1 differentiator), click-to-seek, playhead cursor tracking during playback.
+**Avoids:** Feedback loop between playheadTime writes and rAF reads; triggering full waveform redraws on every rAF tick (use a separate lightweight canvas overlay for the playhead line, not the full waveform redraw).
+**Needs research-phase:** No — existing coordinate math in WaveformCanvas is already documented and required prop changes are specified in ARCHITECTURE.md.
+
+### Phase 5: Composite Export
+
+**Rationale:** Export shares the grid layout algorithm with Phase 1 but is otherwise independent of the playback stack. Build after grid layout is stable so TileLayout coordinates can drive the xstack filtergraph without moving targets. FFmpeg WASM path is primary for v2.0.
+**Delivers:** ExportPanel UI with resolution picker (720p/1080p/4K); FFmpeg xstack composite → H.264 MP4; frame-level progress display; download trigger; export blocked until all video tiles report `readyState >= HAVE_ENOUGH_DATA`.
+**Addresses:** GPU composite export (P1), resolution presets (P1), export progress (P1), export as MP4 (table stakes).
+**Avoids:** Creating a new FFmpeg instance (use `getFFmpeg()` singleton), memory doubling via simultaneous MEMFS writes (sequential write → exec → cleanup pattern), triggering export while sync pipeline is active (check existing `isSyncing` flag).
+**Needs research-phase:** YES — FFmpeg `xstack` filter string generation from arbitrary `TileLayout[]` coordinates (variable x, y, w, h per tile) needs a working spike before full implementation. The architecture file shows the pattern for an equal 2x2 grid but the general case using `x_w` and `y_h` expressions requires validation. Also decide: for "all mix" audio selection at export time, use `amix` filter or pick reference camera track only.
+
+### Phase 6: Polish and P2 Features
+
+**Rationale:** Camera labels, fullscreen tile, and keyboard shortcuts are low-complexity additions that meaningfully improve the experience but do not unblock any core functionality. Add after v2.0 core is validated.
+**Delivers:** Per-tile camera label overlays (DOM overlay + baked into export canvas); click-to-fullscreen single tile; space/arrow keyboard shortcuts.
+**Addresses:** Camera labels (P2), fullscreen tile (P2), keyboard shortcuts (P2).
+**Avoids:** Grid layout thrash during fullscreen toggle — pause all playback before changing grid configuration, rebuild sync loop state, then resume.
 
 ### Phase Ordering Rationale
 
-- **Phases 1-3 are strictly sequential** due to hard technical dependencies: COOP/COEP headers -> FFmpeg Worker -> audio extraction -> correlation -> trimming -> download. There is no way to parallelize these phases.
-- **Phase 1 before Phase 2** because COOP/COEP validation on Cloudflare Pages must happen before any FFmpeg code is written. This is a 30-minute spike that prevents days of debugging.
-- **Phase 2 before Phase 3** because the correlation algorithm is the highest-risk component. If cross-correlation does not produce accurate offsets, the trimming and download phases are worthless. Validate the algorithm with real multi-cam test footage before building the output pipeline.
-- **Phase 4 is independent** and can be worked on incrementally. Each differentiator feature (confidence score, waveforms, ZIP download) is self-contained and can ship separately.
-- **Memory management patterns must be established in Phase 1** and maintained throughout. The sequential-processing-with-cleanup pattern from ARCHITECTURE.md is not optional -- it is a structural requirement.
+- **Foundation before sync:** VideoTile and layout must exist for sync testing to be meaningful. A sync loop tested against placeholder tiles produces false confidence about real video behavior.
+- **Sync before audio:** Audio isolation (solo one camera) only makes sense once playback is working. AudioContext lifecycle (suspend/resume) is easier to validate against a working transport.
+- **Audio before waveform scrubbar:** The full scrubbar integration test requires clicking the waveform, seeing all videos seek, and hearing the correct audio. Audio should be complete before this test is meaningful.
+- **Export after layout is stable:** The xstack filtergraph is generated from `TileLayout[]` coordinates. If the layout algorithm changes after export is built, the filtergraph generator changes too. Stabilize layout in Phase 1, build export in Phase 5.
+- **Polish last:** Labels and keyboard shortcuts have no dependencies on each other or on later phases. They are appropriate for a final validation pass.
 
 ### Research Flags
 
-Phases likely needing deeper research during planning:
-- **Phase 2 (Audio Extraction + Sync Algorithm):** This is the highest-risk phase. The cross-correlation algorithm choice (SynAudio vs fft.js vs custom), audio extraction parameters (sample rate, duration limit), and correlation validation thresholds all need careful evaluation with real test data. The ARCHITECTURE.md references SynAudio (Pearson correlation with WASM SIMD) while STACK.md recommends fft.js -- this discrepancy needs resolution. SynAudio appears to be the better choice (purpose-built for audio sync, handles its own worker pool) but needs validation.
-- **Phase 3 (Video Trimming):** Stream-copy trimming has a known caveat -- trim points snap to the nearest keyframe, which can be up to 0.5s off for some codecs. Need to research keyframe detection and whether a hybrid approach (stream copy with re-encode of first GOP) is feasible.
+Phases needing deeper research during planning:
+- **Phase 5 (Export):** FFmpeg xstack filter string generation from arbitrary TileLayout coordinates needs a working prototype. The filter supports `x_w` and `y_h` position expressions — generating these correctly for non-uniform tile sizes requires validation. Recommend a spike against real footage before full implementation. Also: decide the audio strategy (reference track only vs. `amix` of all tracks) and validate the xstack command produces correctly synchronized A/V output.
 
-Phases with standard patterns (skip research-phase):
-- **Phase 1 (Foundation):** Vite + React + Tailwind + Cloudflare Pages is thoroughly documented. COOP/COEP header configuration is well-documented. FFmpeg WASM loading follows official examples.
-- **Phase 4 (Polish):** Waveform rendering, ZIP generation, and UI enhancements follow standard web development patterns.
+Phases with well-documented patterns (skip research-phase):
+- **Phase 1 (Grid Foundation):** CSS layout from computed pixel coordinates + Blob URL creation are standard browser patterns. Grid packing algorithm is custom but well-specified in ARCHITECTURE.md.
+- **Phase 2 (Playback Sync):** rAF-based sync loop with shared state is fully documented. ARCHITECTURE.md contains implementation-ready TypeScript.
+- **Phase 3 (Audio Mixing):** Web Audio API `MediaElementAudioSourceNode` + `GainNode` pattern is well-documented on MDN with no surprises.
+- **Phase 4 (Waveform Scrubbar):** Isolated prop additions to existing components; coordinate math for pixel → time conversion already in place.
+- **Phase 6 (Polish):** Labels, fullscreen, keyboard shortcuts are straightforward DOM work with no novel research needed.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All technologies verified against official sources with current version numbers. Vite 7, React 19, FFmpeg WASM 0.12.x are mature and well-documented. |
-| Features | HIGH | Feature landscape validated against 5+ competitors (PluralEyes, Syncaila, Tentacle Sync Studio, SyncSink.wasm, DaVinci Resolve). Clear MVP definition with justified prioritization. |
-| Architecture | HIGH | Pipeline pattern is standard for media processing tools. Architecture verified against ffmpeg.wasm official docs, SyncSink reference implementation, and multiple community sources. |
-| Pitfalls | HIGH | Every pitfall sourced from official GitHub issues, MDN documentation, or verified browser bug reports. Memory limits, COOP/COEP requirements, and performance benchmarks are well-documented. |
+| Stack | HIGH | One new package (mediabunny), all others native or existing. Package choices verified against official sources and npm. mediabunny v1.34.5 confirmed as active, zero-dependency, mp4-muxer successor. |
+| Features | HIGH (table stakes), MEDIUM (UX patterns) | Table stakes are clear and match user expectations from comparable tools (Zoom, Meet, DaVinci Resolve). Exact UX behaviors for browser-based multi-cam playback have limited direct prior art; patterns inferred from video conferencing tools. |
+| Architecture | HIGH (playback), MEDIUM (export filtergraph) | Playback architecture fully specified with implementation-ready code. FFmpeg WASM `xstack` approach is architecturally correct; specific filter string generation for variable tile layouts needs prototyping. |
+| Pitfalls | HIGH | All pitfalls sourced from official specs, Chromium/Firefox bug trackers, W3C GitHub issues, and MDN. No speculation — every pitfall has a documented failure mode and a verified mitigation. |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **SynAudio vs fft.js decision:** ARCHITECTURE.md recommends SynAudio (WASM SIMD, handles its own workers), while STACK.md recommends fft.js (pure JS, simpler). SynAudio appears more capable but is a niche library with less community validation. Resolve during Phase 2 planning by testing both with real multi-cam audio.
-- **Keyframe alignment precision:** Stream-copy trimming snaps to keyframes. The gap between the ideal trim point and the nearest keyframe varies by codec and GOP size (0.03s to 0.5s). Need to determine if this is acceptable for the target use case or if a hybrid approach is needed.
-- **Maximum practical file size:** The 2GB MEMFS limit and ~4GB browser tab limit are documented, but the practical ceiling for "4 files processed sequentially with cleanup" needs empirical validation. Set conservative UI limits (200MB warning, 500MB reject) and adjust based on testing.
-- **Clock drift severity:** Research acknowledges drift is a real issue for recordings over 30 minutes but defers it to v2+. If the target audience routinely records 30-60 minute sessions (common for podcasts), this gap may need earlier attention.
-- **FFmpeg progress callback reliability:** The FFmpeg WASM progress event is documented as unreliable (can return NaN). Need a fallback progress estimation strategy (timer-based or step-based) for Phase 3.
+- **FFmpeg xstack filter for variable tile layouts:** Architecture doc shows the xstack pattern for a uniform 2x2 grid, but the general case (arbitrary x/y/w/h from TileLayout[]) requires generating correct position expressions. Needs a prototyping spike before Phase 5 implementation begins.
+- **Audio strategy for export:** When the active audio track is "all" at export time, the architecture recommends including audio from the active track selection only, but does not fully specify how to handle the "all mix" case. Options: pick reference camera track only (simpler), or use FFmpeg `amix` filter (more faithful to playback behavior). Decide during Phase 5 planning.
+- **WebCodecs export path timing:** Research recommends deferring WebCodecs-based export to v3+. If Safari 26+ adoption accelerates (it shipped late 2025), revisit before v3 planning based on real-world browser share data.
+- **Sync correction threshold validation:** The 100ms seek threshold for follower video drift correction is a documented starting point. Actual thresholds may need calibration against real footage, especially for mixed-framerate sessions (24fps + 30fps cameras). The "10-minute drift test" checklist item in PITFALLS.md should be a required verification gate before Phase 2 is marked complete.
+- **Export camera count ceiling:** Architecture recommends capping composite export at 8 cameras (memory limit). This cap must be enforced in the ExportPanel UI with a clear explanation, distinct from the existing 30-file upload limit which applies only to the sync pipeline.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- [ffmpeg.wasm GitHub Repository](https://github.com/ffmpegwasm/ffmpeg.wasm) -- API, architecture, memory constraints
-- [ffmpeg.wasm Official Documentation](https://ffmpegwasm.netlify.app/) -- installation, usage patterns, performance benchmarks
-- [@ffmpeg/core-mt npm](https://www.npmjs.com/package/@ffmpeg/core-mt) -- v0.12.10, multi-threading requirements
-- [MDN SharedArrayBuffer](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer) -- COOP/COEP requirements
-- [MDN decodeAudioData](https://developer.mozilla.org/en-US/docs/Web/API/BaseAudioContext/decodeAudioData) -- memory behavior, limitations
-- [Cloudflare Pages Headers](https://developers.cloudflare.com/pages/configuration/headers/) -- _headers file configuration
-- [Vite Getting Started](https://vite.dev/guide/) -- v7.3.1, configuration
-- [React v19](https://react.dev/blog/2024/12/05/react-19) -- current stable
-- [Tailwind CSS v4](https://tailwindcss.com/blog/tailwindcss-v4) -- Vite plugin, configuration
-- [FFmpeg WASM GitHub Issues: Memory](https://github.com/ffmpegwasm/ffmpeg.wasm/issues/200) -- OOM patterns
-- [FFmpeg WASM Performance Docs](https://ffmpegwasm.netlify.app/docs/performance/) -- 12-25x slower benchmarks
+- [MDN WebCodecs API](https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API) — VideoEncoder API, flush semantics, encodeQueueSize, VideoFrame.close() requirement
+- [MDN HTMLVideoElement.requestVideoFrameCallback](https://developer.mozilla.org/en-US/docs/Web/API/HTMLVideoElement/requestVideoFrameCallback) — best-effort semantics, expectedDisplayTime, browser support
+- [MDN MediaElementAudioSourceNode](https://developer.mozilla.org/en-US/docs/Web/API/MediaElementAudioSourceNode) — Web Audio routing from video elements
+- [MDN OffscreenCanvas](https://developer.mozilla.org/en-US/docs/Web/API/OffscreenCanvas) — transferControlToOffscreen one-way restriction
+- [Can I use: WebCodecs](https://caniuse.com/webcodecs) — 94% global coverage, Safari 26.0 full VideoEncoder support
+- [Can I use: requestVideoFrameCallback](https://caniuse.com/mdn-api_htmlvideoelement_requestvideoframecallback) — Chrome 83+, Safari 15.4+, Firefox 132+
+- [Chrome Developers: Video processing with WebCodecs](https://developer.chrome.com/docs/web-platform/best-practices/webcodecs) — VideoFrame + Canvas, export pipeline patterns
+- [FFmpeg xstack filter docs](https://ffmpeg.org/ffmpeg-filters.html) — xstack layout syntax
+- [mediabunny npm](https://www.npmjs.com/package/mediabunny) — v1.34.5, zero dependencies, WebCodecs-native
+- [mediabunny: Supported formats & codecs](https://mediabunny.dev/guide/supported-formats-and-codecs) — H.264/AVC + MP4 write confirmed
+- [W3C WebCodecs GitHub: encoding h264 issue #394](https://github.com/w3c/webcodecs/issues/394) — Firefox false-positive isConfigSupported for H.264
+- [Mozilla Bugzilla #1918769](https://bugzilla.mozilla.org/show_bug.cgi?id=1918769) — Firefox H.264 VideoEncoder/Decoder bug confirmed
+- [W3C: Media Synchronization on the Web](https://www.w3.org/community/webtiming/files/2018/05/arntzen_mediasync_web_author_edition.pdf) — clock drift across media elements
+- [Chromium Bug #969049](https://bugs.chromium.org/p/chromium/issues/detail?id=969049) — GPU memory not freed after video element replay
+- [Mozilla Bug #1054170](https://bugzilla.mozilla.org/show_bug.cgi?id=1054170) — GPU memory per video element
 
 ### Secondary (MEDIUM confidence)
-- [SynAudio Library](https://github.com/eshaz/synaudio) -- WASM SIMD correlation engine
-- [fft.js GitHub](https://github.com/indutny/fft.js/) -- pure-JS FFT, benchmarks
-- [client-zip GitHub](https://github.com/Touffy/client-zip) -- streaming ZIP generation, performance claims
-- [SyncSink.wasm](https://github.com/JorenSix/SyncSink.wasm) -- browser-based sync prior art
-- [ffmpeg.wasm DeepWiki](https://deepwiki.com/ffmpegwasm/ffmpeg.wasm) -- architecture synthesis
-- [Audio cross-correlation research](https://www.researchgate.net/publication/263925127_Fast_second_screen_TV_synchronization_combining_audio_fingerprint_technique_and_generalized_cross_correlation) -- algorithm approach
+- [devtails: Canvas to MP4 via WebCodecs](https://devtails.xyz/adam/how-to-save-html-canvas-to-mp4-using-web-codecs-api) — export pipeline pattern, 10x realtime performance observed
+- [Bocoup: Synchronizing HTML5 Video](https://www.bocoup.com/blog/html5-video-synchronizing-playback-of-two-videos) — timeupdate unreliability; rAF-based drift correction (dated but foundational)
+- [web.dev requestVideoFrameCallback article](https://web.dev/articles/requestvideoframecallback-rvfc) — canvas compositing patterns, expectedDisplayTime usage
+- [Evil Martians: OffscreenCanvas + Web Workers](https://evilmartians.com/chronicles/faster-webgl-three-js-3d-graphics-with-offscreencanvas-and-web-workers) — worker rendering patterns, ImageBitmap transfer memory cost
+- [RectanglePacker — github.com/aslamhus/RectanglePacker](https://github.com/aslamhus/RectanglePacker) — grid packing reference (custom shelf-packing implementation recommended for mixed ARs)
+- [MasterSelects WebGPU compositor — HN](https://news.ycombinator.com/item?id=46959456) — prior art confirming feasibility of GPU video compositor in browser
 
-### Tertiary (LOW confidence)
-- [AudioAlign Synchronization Tool](https://github.com/protyposis/AudioAlign) -- Windows desktop reference, different domain but similar algorithm
+### Tertiary (referenced for deprecation status)
+- [mp4-muxer GitHub](https://github.com/Vanilagy/mp4-muxer) — deprecated July 2025; mediabunny confirmed as replacement
+- [Remotion: Clearing up WebCodecs misconceptions](https://www.remotion.dev/docs/webcodecs/misconceptions) — WebCodecs vs FFmpeg WASM tradeoff analysis
 
 ---
-*Research completed: 2026-03-01*
+*Research completed: 2026-03-02*
 *Ready for roadmap: yes*

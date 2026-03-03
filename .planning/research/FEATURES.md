@@ -1,197 +1,241 @@
 # Feature Research
 
-**Domain:** Browser-based multi-camera video synchronization tool
-**Researched:** 2026-03-01
-**Confidence:** HIGH
+**Domain:** Browser-based synced multi-cam video grid playback and GPU-accelerated composite export
+**Researched:** 2026-03-02
+**Confidence:** HIGH (stack), MEDIUM (UX patterns — limited browser-based multi-cam player prior art)
+
+---
+
+## Context: v2.0 Adds On Top of v1.0
+
+v1.0 is shipped and complete. This research covers ONLY the new v2.0 milestone:
+synced video grid playback with dynamic packing, waveform-as-scrubbar integration,
+audio mixing, and GPU-accelerated composite MP4 export. All v1.0 features (upload,
+sync pipeline, trimmed file downloads, waveform visualization) remain in place.
+
+---
 
 ## Feature Landscape
 
 ### Table Stakes (Users Expect These)
 
-Features users assume exist. Missing these = product feels incomplete.
+Features a multi-cam playback and export tool must have. Missing any of these makes
+the feature feel broken or incomplete.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Drag-and-drop file input | Every modern web tool supports this; browse fallback also expected | LOW | Must accept common video formats (MP4, MOV, MKV, WebM). Show clear drop zone with visual feedback on hover/drop. |
-| Audio-based automatic sync | This is the entire product premise. PluralEyes, Syncaila, DaVinci Resolve, Premiere Pro all do this. Users will not manually align clips. | HIGH | Core algorithm: audio fingerprinting for coarse alignment + cross-correlation (GCC-PHAT) for sample-accurate refinement. SyncSink.wasm proves this is feasible in-browser. |
-| Frame-accurate offset detection | Professional tools achieve sub-frame (sample-level) accuracy. Anything worse than 1-frame precision is unacceptable. | HIGH | Cross-correlation naturally provides sample-level precision. Display offsets in timecode format (HH:MM:SS:FF) not just seconds. |
-| Trimmed/aligned output files | Users expect to get back video files they can immediately use. The output must be downloadable, trimmed video files aligned to a common start point. | MEDIUM | Use FFmpeg WASM to trim without re-encoding (stream copy) where possible. Re-encoding is slow and lossy. |
-| Per-file download | Users want to download individual synced files, not be forced into a zip. Essential for large files where zip creation may fail due to memory. | LOW | Simple download links per output file. |
-| Processing progress feedback | Video processing takes significant time (minutes for large files). Users need to know it's working and roughly how long. | MEDIUM | Multi-stage progress: (1) loading files, (2) extracting audio, (3) analyzing/correlating, (4) trimming. Show current stage + progress within stage. |
-| Offset display per video | Users need to see what offset was detected for each video relative to the reference. PluralEyes and Syncaila both show this. | LOW | Display offset in both timecode and seconds. Show which file is the reference (0 offset). |
-| Support for 2-4 videos simultaneously | The product scope. Podcast/interview setups commonly use 2-3 cameras. | MEDIUM | Memory management is the real challenge. Must handle 2-4 moderate-length videos without crashing the browser tab. |
-| No installation required | This is the core differentiator of being browser-based. If users have to install anything, they'd use PluralEyes or their NLE. | LOW | Static site, no plugins, no extensions. SharedArrayBuffer requirement may need COOP/COEP headers. |
-| Privacy / client-side processing | Users handling pre-release or client footage expect their files never leave their machine. | LOW | Prominently communicate "your files never leave your browser." This is a trust feature. |
+| Synchronized playback (all cameras play together) | The entire point of a multi-cam player. If cameras drift during playback, the feature is worthless. | HIGH | `requestVideoFrameCallback()` is the modern approach (available Chrome/Edge/Firefox since 2024, Safari 2025+). Use rAF drift correction loop: every ~500ms check `video.currentTime` against master clock and seek if delta > 1 frame. Not frame-accurate but visually acceptable for review. |
+| Play / pause / seek controls | Universal media player expectation. Users need a single shared transport that controls all cameras simultaneously. | MEDIUM | Single transport bar controlling all `<video>` elements together. Clicking seek sets all `video.currentTime` to the new offset. Must account for per-camera sync offsets from v1.0 pipeline (`SyncResult.offsetSeconds`). |
+| Video grid layout (all cameras visible) | Users want to see all angles simultaneously, not tab through them. | MEDIUM | CSS Grid baseline is fine for equal-sized grid. Dynamic packing for mixed aspect ratios requires a packing algorithm. Start with simple N-up grid, upgrade to packing algorithm. |
+| Show camera labels / filenames | Users need to know which angle they are watching, especially with 4+ cameras. | LOW | Overlay filename or user-defined label on each video tile. Subtle but required for production review work. |
+| Fullscreen single-camera mode | Users need to focus on one angle at a time. Click-to-expand a single tile is universally expected in multi-view players. | MEDIUM | Click any tile to expand it to fullscreen or replace the grid with a single large view. Clicking again returns to grid. |
+| Keyboard shortcuts (space = play/pause) | Space bar for play/pause is muscle memory for video workers. Any media player without it feels broken. | LOW | Space = play/pause. Left/right arrows = seek ±5s. These three are non-negotiable minimum. |
+| Export progress feedback | Video export is the heaviest operation in the app (potentially minutes). A spinner with no progress = users think it crashed. | MEDIUM | Show frame-level progress (e.g., "Encoding frame 450 / 2400"). Ideally show estimated time remaining. WebCodecs encoding is synchronous per-frame in the render loop so progress is trackable. |
+| Export downloads as MP4 | Users expect H.264 MP4 as the output format. It's the universal playback format. | MEDIUM | WebCodecs `VideoEncoder` + Mediabunny muxer → H.264 MP4. Browser codec string: `avc1.4d0034` for high profile. Must include audio track. |
 
 ### Differentiators (Competitive Advantage)
 
-Features that set the product apart. Not required, but valuable.
+Features that are not universally expected but add meaningful value.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Zero-install browser-based workflow | PluralEyes is discontinued/maintenance mode. Syncaila and Tentacle Sync Studio are paid desktop apps ($49-$199). NLE sync requires owning expensive software. This tool is free, instant, no signup. | LOW (arch decision, not feature work) | The "just works in a browser" factor is the primary differentiator. Every competitor requires download + install + license. |
-| Sync confidence score | Show users how confident the algorithm is in the detected alignment (e.g., correlation coefficient as a percentage). Synchron shows reliability scores; most desktop tools do not surface this. | LOW | The cross-correlation peak value naturally provides this. Normalize to 0-100% and display per pair. Flag low-confidence results (< 70%) with a warning. |
-| Visual waveform display | Show audio waveforms for each file with alignment markers overlaid. Helps users visually verify sync is correct before downloading. | MEDIUM | Render downsampled waveforms on canvas. Draw vertical lines showing detected sync points. Interactive but not editable. |
-| Stream-copy (no re-encode) trimming | Output files trimmed without re-encoding = fast processing, no quality loss. Most browser tools re-encode everything because it's simpler. | MEDIUM | FFmpeg `-c copy -ss [offset]` for stream copy. Caveat: keyframe alignment means the trim point may not be frame-exact. Offer re-encode fallback for precise trimming. |
-| Batch zip download | One-click download of all synced files as a zip. Convenient but optional (per-file is table stakes). | MEDIUM | Use JSZip or similar. Memory-intensive for large files -- only offer when total output < ~500MB. Show file size estimate before download. |
-| Reference file selection | Let user choose which video is the "anchor" (offset = 0). Default: longest file or first file. | LOW | Simple dropdown or click-to-select in the file list. Re-runs offset calculation relative to new reference. |
-| Dark/professional UI theme | Video professionals expect dark interfaces (every NLE is dark). Matches the "pro tool" aesthetic established in PROJECT.md. | LOW | Dark color scheme from the start. Not a toggle -- just be dark by default. |
-| Manual offset adjustment | After auto-sync, let users nudge offsets by frames if the auto-detection was slightly off. | MEDIUM | Frame-accurate +/- buttons or numeric input per file. Requires re-trimming on adjustment. Useful for edge cases where audio correlation is imperfect. |
+| Dynamic aspect-ratio-aware grid packing | Most multi-cam players use a rigid NxM grid that wastes space when cameras have mixed aspect ratios (16:9 + 9:16 + 1:1). Packing algorithm maximizes canvas utilization. | HIGH | Pure JavaScript rectangle packing. RectanglePacker (aslamhus/RectanglePacker on GitHub) handles same-AR tiles. For mixed ARs, custom shelf-packing: sort tiles by height descending, place on next shelf when row overflows. Target: < 10% wasted space. Runs in < 5ms for ≤ 30 tiles. |
+| Two display modes: Letterbox (preserve AR) vs Fill (crop) | Professional video workers need letterbox for accurate framing review. Fill mode is better for presentation or social exports. A toggle is a meaningful power user feature. | MEDIUM | Letterbox: `object-fit: contain` on `<video>` elements, padding fills with black. Fill: `object-fit: cover`, clips to tile boundaries. For export: letterbox = black bars composited on canvas; fill = CSS transform equivalent computed for canvas `drawImage()`. |
+| Waveform as scrubbar / click-to-seek | The waveform panel is already built. Reusing it as a timeline scrubbar means users can click audio events (claps, speech) to jump precisely to sync points. Eliminates need for a separate timeline widget. | MEDIUM | Add `onClick` handler to existing `WaveformPanel` that converts click position to time and calls `seek(time)` on all video elements. The existing `ViewState.cursorTime` is already tracked — wire it to video playback position during play. |
+| Audio track selection (all mixed / per-camera solo) | During review, users often want to listen to one camera's audio in isolation (e.g., lavalier on camera 2 vs room mic on camera 1). | MEDIUM | Web Audio API: one `MediaElementAudioSourceNode` per `<video>` element, each fed through a `GainNode`, all merged into `AudioContext.destination`. UI dropdown/button set to solo one gain (set others to 0) or mix all equally. Pitfall: only one `AudioContext` per tab; each `<video>` can only be connected to one `MediaElementSourceNode` per context. |
+| GPU-accelerated canvas composite export | Off-loads frame rendering to GPU via `OffscreenCanvas` + WebCodecs `VideoEncoder`. 5-10x faster than FFmpeg WASM re-encode approach. Runs in a Web Worker so main thread stays responsive during export. | HIGH | Architecture: Web Worker owns `OffscreenCanvas`, draws each camera's `VideoFrame` at computed positions, calls `VideoEncoder.encode()`, Mediabunny muxes chunks to ArrayBuffer. Main thread sends per-frame seek commands and transfers `ImageBitmap` data to worker. Export pipeline must be separate from playback pipeline. |
+| Resolution presets (4K / 1080p / 720p) | Users expect to choose output quality. 4K for archival, 1080p as default, 720p for quick review sharing. | LOW | Parameter passed to `VideoEncoder` config: width/height determine canvas size. Grid layout algorithm runs once per export with the chosen canvas dimensions. Bitrate scales proportionally (4K: ~20 Mbps, 1080p: ~8 Mbps, 720p: ~4 Mbps for H.264). |
+| Progressive loading: waveforms interactive before video loads | The waveform panel is already populated during v1.0 sync pipeline. Video file buffering should not block scrubbar interaction. | MEDIUM | `<video>` elements use `preload="metadata"` initially. Full video data loads in the background (`preload="auto"` after waveforms are ready). Playback becomes available when `video.readyState >= HAVE_ENOUGH_DATA`. Show a loading indicator per tile until ready. |
 
 ### Anti-Features (Commonly Requested, Often Problematic)
 
-Features that seem good but create problems.
-
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| Real-time synced playback/preview | Users want to verify sync by watching all angles simultaneously before downloading | Requires decoding multiple video streams in real-time in the browser. Massive memory/CPU usage. Complex to build (synchronized `<video>` elements with sub-frame accuracy). Far exceeds MVP scope. | Show waveform alignment visualization + confidence score instead. Users can verify by downloading and checking in their NLE. |
-| Video editing (cut, merge, transitions) | Natural extension of "I have synced videos" | Scope creep into NLE territory. Impossible to compete with Premiere/Resolve. Massively increases complexity. | Stay focused: sync and trim only. Users take aligned files into their preferred editor. |
-| Multi-camera angle switching editor | PluralEyes feeds into NLE multicam editing. Users might expect a similar workflow. | Building a multicam editor is a separate product entirely. Months of work for questionable value when the output files work in any NLE. | Export aligned files. Optionally export an XML/EDL project file users can import into their NLE with angles pre-configured. |
-| Server-side processing fallback | Browser memory limits cap practical file sizes at ~2GB per file. Users with larger files will hit this. | Requires backend infrastructure, hosting costs, privacy concerns, upload bandwidth. Contradicts the "runs entirely client-side" premise. | Communicate file size limits clearly upfront. Suggest desktop alternatives for very large files. Target the 80% use case (podcast/interview clips under 1GB each). |
-| Mobile support | Some users shoot on phones and want to sync on phones | FFmpeg WASM is memory-intensive. Mobile browsers have tighter memory limits. Touch-based drag-and-drop is awkward. Small screens make waveform visualization useless. | Desktop-only. State this clearly. Mobile users can use the tool on a desktop/laptop browser. |
-| Account system / cloud storage | Saving sync projects, history, sharing results | Requires backend, auth, storage infrastructure. Privacy implications. Users just want to sync and download -- not create an account. | Stateless tool. No accounts, no storage, no tracking. |
-| Support for >4 videos | Some productions use 5-10+ cameras | Memory usage scales linearly with file count. Cross-correlation complexity scales quadratically with file count (each pair must be compared). Browser will crash with 6+ large video files. | Hard limit at 4 with clear messaging. Users with more cameras need desktop tools. |
-| Automatic audio drift compensation | PluralEyes handles drift (cameras running at slightly different speeds over long recordings) | Drift detection and correction is extremely complex. Requires resampling audio, which means re-encoding video. Only matters for very long recordings (30+ min). | V1: ignore drift. Document that the tool works best for recordings under 30 minutes. V2+: consider drift detection if user feedback demands it. |
+| Real-time multi-stream canvas composite during playback | Users want to see the composited grid "as it will export" | Rendering N video streams to a canvas in real-time at 30fps each stresses the GPU and causes playback drift. HTML `<video>` elements use the browser's GPU-accelerated compositor — fighting it with canvas overlays during live playback degrades quality. | Use native `<video>` elements in a CSS grid for playback (browser compositor handles it efficiently). Canvas composite is only for export, run faster-than-realtime by seeking frame-by-frame in the worker. |
+| Frame-accurate multi-stream sync during browser playback | Video editors expect frame-perfect sync | HTML `<video>` `currentTime` is not frame-accurate; `timeupdate` fires every 15-250ms; drift between streams is guaranteed at some level. No browser API provides frame-locked multi-stream playback without WebCodecs decode-to-canvas, which is prohibitively complex for a playback UI. | `requestVideoFrameCallback()` + periodic drift correction keeps visual sync within ~1 frame for review purposes. Document that for frame-accurate verification, users should import the aligned files into their NLE. |
+| Trimming/cutting within the playback UI | Natural extension: "I can see all angles, let me pick the best moment" | Clip editing is a separate product domain. Adds enormous complexity (in/out points, multicam cut editing, timeline). Competes with DaVinci Resolve. | Export aligned files → user edits in their NLE. That is the intended workflow. |
+| Streaming export (show preview while exporting) | Users want to watch the composite as it encodes | Export runs faster-than-realtime (seeking frame-by-frame). You cannot "watch" a faster-than-realtime render. Attempting to stream causes frame timing issues in the export. | Show frame count progress. Allow cancellation. |
+| Support for more than 30 videos in the grid | Power users push limits | 30 videos × even 720p decode buffers = multi-GB GPU memory. Browser tabs have strict memory ceilings. Grid layout becomes unusable past ~9 tiles at standard monitor resolutions. | Keep MAX_FILES = 30 (already enforced). For export, warn if tile count > 9 that individual tiles will be very small in the output frame. |
+| WebGPU-based compositing pipeline | Maximum GPU performance for complex effects | WebGPU is unsupported in Firefox stable (2026-03-02). Adds WGSL shader complexity. Canvas 2D `drawImage()` from `VideoFrame` is sufficient for grid compositing without effects. | OffscreenCanvas + Canvas 2D API for compositing. WebGPU is relevant only if per-tile effects (color grading, overlays) are added in a future milestone. |
+| Audio export via WebAudio capture (MediaStreamDestination) | Capture mixed audio as a stream | `MediaStreamDestination` → `MediaRecorder` cannot be synchronized with frame-by-frame video export. Audio and video end up out of sync in the resulting file. | Extract audio from the original trimmed files using FFmpeg WASM (already in-project), mix using FFmpeg's `amix` filter, attach as audio track during mux. This keeps audio/video sync guaranteed. |
+
+---
 
 ## Feature Dependencies
 
 ```
-[Drag-and-drop file input]
+[v1.0 sync pipeline: SyncResult with offsetSeconds per file]
     |
-    v
-[Audio extraction via FFmpeg WASM]
+    +--requires--> [Synced video grid player]
+    |                   |
+    |                   +--requires--> [<video> elements loaded with trimmed file URLs or original files]
+    |                   |
+    |                   +--requires--> [Shared transport (play/pause/seek)]
+    |                   |
+    |                   +--enhances--> [Waveform panel as scrubbar]
+    |                                       (cursor time drives video seek)
     |
-    v
-[Audio cross-correlation / offset detection]
-    |
-    +---> [Offset display per video]
-    |
-    +---> [Sync confidence score]
-    |
-    +---> [Visual waveform display]
-    |
-    v
-[Video trimming via FFmpeg WASM]
-    |
-    +---> [Per-file download]
-    |
-    +---> [Batch zip download]
+    +--requires--> [GPU composite export]
+                        |
+                        +--requires--> [Grid layout algorithm] (computes tile positions)
+                        |
+                        +--requires--> [OffscreenCanvas + WebCodecs VideoEncoder]
+                        |
+                        +--requires--> [Mediabunny muxer] (wraps encoded chunks into MP4)
+                        |
+                        +--requires--> [Audio mix from trimmed files] (FFmpeg WASM amix)
+                        |
+                        +--enhances--> [Resolution presets] (canvas dimensions + bitrate)
 
-[Reference file selection] --modifies--> [Audio cross-correlation]
+[Web Audio API audio mixer]
+    +--enhances--> [Synced video grid player] (per-camera solo / all-mix)
+    +--conflicts--> [Audio export via MediaStreamDestination] (sync problems)
 
-[Manual offset adjustment] --modifies--> [Video trimming]
+[Dynamic grid packing algorithm]
+    +--enhances--> [Synced video grid player] (tile layout)
+    +--enhances--> [GPU composite export] (same algorithm reused for canvas layout)
 
-[Stream-copy trimming] --conflicts--> [Frame-exact trim precision]
-    (stream copy aligns to nearest keyframe; re-encode needed for frame-exact)
+[Display mode: Letterbox vs Fill]
+    +--enhances--> [Synced video grid player] (CSS object-fit)
+    +--enhances--> [GPU composite export] (drawImage crop/letterbox math)
 ```
 
 ### Dependency Notes
 
-- **Audio extraction requires FFmpeg WASM loaded:** FFmpeg WASM is ~25MB and takes several seconds to load. Must be initialized before any processing begins. Load eagerly on page load, not on first file drop.
-- **Cross-correlation requires extracted audio:** Audio must be extracted, downmixed to mono, and resampled to a common sample rate (8kHz is sufficient for sync detection and dramatically reduces computation).
-- **Trimming requires detected offsets:** Can only trim after offsets are calculated. The trim operation itself is a separate FFmpeg call per file.
-- **Stream-copy vs re-encode is a key tradeoff:** Stream copy is fast (seconds) but aligns to the nearest keyframe (could be off by up to ~0.5s for some codecs). Re-encoding is slow (minutes) but frame-exact. Default to stream copy with a "precise mode" toggle for re-encode.
-- **Zip download depends on per-file outputs existing:** Zip is assembled from already-trimmed files. Memory doubles during zip creation (trimmed files + zip buffer).
-- **Waveform display is independent of trimming:** Can show waveforms as soon as audio is extracted, before trimming starts. Good for early visual feedback.
+- **Video player requires sync offsets from v1.0 pipeline:** The `SyncResult.offsetSeconds` values produced by the audio cross-correlation pipeline are used to set `video.currentTime` correctly so all cameras play from the equivalent real-world moment.
+- **Export pipeline is separate from playback pipeline:** Playback uses native `<video>` elements. Export uses `VideoFrame` objects decoded by seeking `<video>` elements frame-by-frame and drawing to `OffscreenCanvas`. These two pipelines share the grid layout algorithm but should not share state.
+- **Audio export depends on existing FFmpeg WASM:** The cleanest path for mixed audio in the exported composite is to run `ffmpeg -i cam1.mp4 -i cam2.mp4 ... -filter_complex amix=inputs=N` via the existing FFmpeg WASM instance. This produces a mixed audio blob that Mediabunny can attach alongside the video.
+- **Mediabunny replaces mp4-muxer/webm-muxer:** Both predecessor libraries are deprecated (2025). Mediabunny (github.com/Vanilagy/mediabunny) is the current recommendation — zero dependencies, pure TypeScript, WebCodecs-native, H.264 + AAC output. The CanvasSource API directly accepts canvas frames.
+- **Grid layout algorithm is shared infrastructure:** The same function that computes tile positions for the CSS grid is called again at export time with canvas pixel dimensions. It must accept both CSS pixel inputs (for display) and export pixel dimensions (for rendering).
+- **Waveform scrubbar requires bidirectional binding:** Currently `ViewState.cursorTime` is hover-only. For scrubbar integration, clicking the waveform must drive `video.currentTime`, and `video.currentTime` during playback must update `cursorTime` (so the cursor moves during play). This is a bidirectional sync that needs care to avoid feedback loops.
+
+---
 
 ## MVP Definition
 
-### Launch With (v1)
+### Launch With (v2.0)
 
-Minimum viable product -- what's needed to validate the concept.
+Minimum viable feature set for the v2.0 milestone.
 
-- [ ] **Drag-and-drop file input** -- core UX entry point; support browse fallback
-- [ ] **Audio extraction via FFmpeg WASM** -- extract mono audio at 8kHz for analysis
-- [ ] **Audio cross-correlation for offset detection** -- fingerprint coarse pass + cross-correlation refinement
-- [ ] **Offset display per video** -- show detected offsets in timecode format
-- [ ] **Video trimming (stream copy)** -- fast trim without re-encoding
-- [ ] **Per-file download** -- individual download buttons per synced file
-- [ ] **Processing progress feedback** -- multi-stage progress indicator
-- [ ] **Privacy messaging** -- "files never leave your browser" prominently displayed
-- [ ] **Dark theme UI** -- professional aesthetic from day one
+- [ ] **Synced video grid player** — all trimmed videos play/pause/seek together, offsets applied per-camera
+- [ ] **Dynamic grid layout** — aspect-ratio-aware packing for up to 9 tiles (simple shelf packing is acceptable)
+- [ ] **Two display modes** — Letterbox (preserve AR) / Fill (crop to tile)
+- [ ] **Waveform-as-scrubbar** — click waveform to seek all videos; cursor tracks playhead during playback
+- [ ] **Audio mixing** — all tracks mixed by default; dropdown to solo one camera's audio
+- [ ] **GPU export pipeline** — WebCodecs VideoEncoder + OffscreenCanvas composite + Mediabunny mux → H.264 MP4
+- [ ] **Resolution presets** — 720p / 1080p / 4K canvas size options at export
+- [ ] **Export progress** — frame-level progress bar during encoding
 
-### Add After Validation (v1.x)
+### Add After v2.0 Validation
 
-Features to add once core is working.
+- [ ] **Per-tile camera label overlay** — drawn onto canvas at playback and baked into export
+- [ ] **Click-to-fullscreen single tile** — expand any camera to fill available space
+- [ ] **Export bitrate control** — expose CRF/bitrate slider for advanced users
+- [ ] **Keyboard shortcuts** — space, arrow keys wired to transport
 
-- [ ] **Sync confidence score** -- display correlation strength as percentage; warn on low confidence
-- [ ] **Visual waveform display** -- canvas-rendered waveforms with sync point markers
-- [ ] **Reference file selection** -- let user choose the anchor video
-- [ ] **Batch zip download** -- one-click zip of all output files (with size guard)
-- [ ] **Manual offset adjustment** -- frame-level nudge controls for fine-tuning
+### Future Consideration (v3+)
 
-### Future Consideration (v2+)
+- [ ] **NLE project export** — FCP XML / Premiere XML with grid layout as multicam sequence
+- [ ] **Per-tile color grading** — exposure/white balance per camera angle before export
+- [ ] **Loop region** — set in/out markers on waveform for looping a clip segment
+- [ ] **WebGPU compositing** — if per-tile GPU effects are needed (milestone adds real complexity)
 
-Features to defer until product-market fit is established.
-
-- [ ] **Re-encode mode for frame-exact trimming** -- toggle for precision over speed
-- [ ] **NLE project file export** -- generate FCP XML or Premiere XML with pre-aligned clips so users can import directly into their editor
-- [ ] **Audio drift detection/warning** -- detect clock drift between cameras in long recordings
-- [ ] **Keyboard shortcuts** -- power user workflow acceleration
-- [ ] **Drag-to-reorder files** -- cosmetic but useful for organizing angles
+---
 
 ## Feature Prioritization Matrix
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| Drag-and-drop file input | HIGH | LOW | P1 |
-| Audio extraction (FFmpeg WASM) | HIGH | MEDIUM | P1 |
-| Audio cross-correlation sync | HIGH | HIGH | P1 |
-| Offset display per video | HIGH | LOW | P1 |
-| Video trimming (stream copy) | HIGH | MEDIUM | P1 |
-| Per-file download | HIGH | LOW | P1 |
-| Progress feedback | HIGH | MEDIUM | P1 |
-| Privacy messaging | MEDIUM | LOW | P1 |
-| Dark theme | MEDIUM | LOW | P1 |
-| Sync confidence score | MEDIUM | LOW | P2 |
-| Visual waveform display | MEDIUM | MEDIUM | P2 |
-| Reference file selection | MEDIUM | LOW | P2 |
-| Batch zip download | MEDIUM | MEDIUM | P2 |
-| Manual offset adjustment | MEDIUM | MEDIUM | P2 |
-| Re-encode precise trimming | LOW | MEDIUM | P3 |
-| NLE project file export | MEDIUM | MEDIUM | P3 |
-| Audio drift detection | LOW | HIGH | P3 |
+| Synced grid playback with shared transport | HIGH | HIGH | P1 |
+| Waveform-as-scrubbar (click-to-seek) | HIGH | MEDIUM | P1 |
+| Dynamic grid layout algorithm | HIGH | MEDIUM | P1 |
+| Two display modes (letterbox / fill) | MEDIUM | LOW | P1 |
+| Audio mixing (all / solo) | MEDIUM | MEDIUM | P1 |
+| GPU export (WebCodecs + Mediabunny) | HIGH | HIGH | P1 |
+| Resolution presets (720p/1080p/4K) | HIGH | LOW | P1 |
+| Export progress indicator | HIGH | LOW | P1 |
+| Per-tile camera labels | MEDIUM | LOW | P2 |
+| Click-to-fullscreen tile | MEDIUM | MEDIUM | P2 |
+| Keyboard shortcuts | MEDIUM | LOW | P2 |
+| Export bitrate/quality control | LOW | LOW | P3 |
+| NLE project file export | MEDIUM | HIGH | P3 |
 
 **Priority key:**
-- P1: Must have for launch
-- P2: Should have, add when possible
-- P3: Nice to have, future consideration
+- P1: Must have for v2.0 launch
+- P2: Add when core is solid
+- P3: Defer — high effort or unclear demand
 
-## Competitor Feature Analysis
+---
 
-| Feature | PluralEyes 4 | Syncaila | Tentacle Sync Studio | SyncSink.wasm | DaVinci Resolve (built-in) | Our Approach |
-|---------|---------------|----------|----------------------|---------------|---------------------------|--------------|
-| Audio waveform sync | Yes (core feature) | Yes (core feature) | Yes + timecode | Yes (fingerprint + cross-correlation) | Yes | Audio fingerprint + cross-correlation, same as SyncSink.wasm |
-| Sync accuracy | Frame-accurate with drift compensation | Frame-accurate | Sample-accurate (timecode) | Sample-accurate | Frame-accurate | Sample-accurate via cross-correlation |
-| Confidence/quality indicator | No | No | No | No (shows correlation plot) | No | Yes -- display correlation coefficient as % score |
-| Waveform visualization | No | No | No | Yes (timebox plot) | Yes (in timeline) | Yes -- canvas-rendered waveforms with sync markers |
-| Output format | Synced timeline in NLE | XML for NLE import | XML/AAF/ProRes | JSON offsets only (no video output) | Multicam clip in timeline | Trimmed video files (download) |
-| Trimming/re-encoding | Via NLE | Via NLE | Transcode on export | None (offsets only) | Via NLE | In-browser via FFmpeg WASM |
-| Runs in browser | No (desktop app) | No (desktop app) | No (macOS only) | Yes | No (desktop app) | Yes |
-| Cost | $299 (discontinued) | $49-$199 | $99 | Free (AGPL) | Free (with Resolve) | Free |
-| Installation required | Yes | Yes | Yes (macOS only) | No | Yes | No |
-| Max cameras | Unlimited | License-tier based (2-track free) | Unlimited | Unlimited (but offsets only) | Unlimited | 2-4 |
-| Drift compensation | Yes | No | Via timecode | No | No | No (v1), maybe v2 |
+## UX Behavior Expectations
 
-### Key Competitive Insight
+Reference patterns from tools users already know.
 
-SyncSink.wasm is the closest prior art but it only outputs JSON offset data -- it does NOT trim or produce aligned video files. Our tool closes that gap: same browser-based convenience, but with actual downloadable aligned videos. This is the core value proposition that no existing browser tool provides.
+### Playback Behavior
 
-PluralEyes is discontinued. Syncaila is the active desktop competitor but costs money and requires installation. DaVinci Resolve has built-in sync but requires learning a full NLE. Our tool serves the user who wants to drop files in, get aligned files out, and move on.
+| Behavior | Expected | Rationale |
+|----------|----------|-----------|
+| All cameras start at time 0 (sync-adjusted) | Yes | Time 0 = common start point from v1.0 pipeline |
+| Clicking play starts all cameras simultaneously | Yes | Single transport, no per-tile controls |
+| Clicking pause freezes all cameras simultaneously | Yes | Unified transport |
+| Seeking via waveform click updates all cameras | Yes | Waveform is the timeline |
+| Camera audio is heard during playback | Yes | Default: all mixed equally |
+| Scrubbing (drag on waveform) updates all videos | Partial | Update on pointer up only — continuous seek during drag is too expensive for multiple video elements |
+| Drift correction during long playback | Yes (silent) | Check every ~500ms and re-sync any camera that has drifted > 1 frame |
+
+### Grid Layout Behavior
+
+| Behavior | Expected | Rationale |
+|----------|----------|-----------|
+| All cameras visible simultaneously | Yes | Core value of a grid player |
+| Grid reflows when window resizes | Yes | Responsive layout standard |
+| Tile size maximized within available space | Yes | Packing algorithm goal |
+| Black background behind letterboxed videos | Yes | Professional video review standard |
+| Camera labels visible on tiles | Yes (v2.0 P2) | Distinguish angles at a glance |
+
+### Export Behavior
+
+| Behavior | Expected | Rationale |
+|----------|----------|-----------|
+| Output is a single composite MP4 | Yes | Main deliverable — all angles in one file |
+| Same grid layout as playback view | Yes | WYSIWYG — export matches what user saw |
+| H.264 codec, AAC audio | Yes | Universal playback compatibility |
+| Export does not block playback UI | Yes | User should be able to navigate away or cancel |
+| Download triggered automatically when complete | Yes | File lands in browser downloads folder |
+| Export faster than realtime | Yes (silent expectation) | WebCodecs enables 5-10x faster than realtime; 1080p grid of 4 cameras at 30fps should export in < 2 min for 10-min footage |
+
+---
+
+## Complexity Flags for Roadmap Phases
+
+| Feature Area | Complexity Driver | Mitigation |
+|--------------|-------------------|------------|
+| Synchronized playback | Browser `<video>` currentTime imprecision; drift over time | `requestVideoFrameCallback()` per video; periodic drift correction loop |
+| Grid packing algorithm | Mixed aspect ratios with 2-30 tiles | Shelf-packing heuristic sufficient; no NP-hard exact solver needed |
+| Web Audio graph teardown | AudioContext nodes leak if not disconnected on reset | Explicit `disconnect()` calls in cleanup; single shared AudioContext lifecycle |
+| WebCodecs export pipeline | `VideoEncoder` queue backpressure; memory pressure from simultaneous decode+encode | `encodeQueueSize` guard; process one frame at a time in worker; `VideoFrame.close()` immediately after encode |
+| Mediabunny (new library) | v1.0 used mp4box.js; Mediabunny is different API; needs evaluation | Read Mediabunny docs carefully before implementation; check `canEncodeVideo()` for H.264 on target browsers |
+| Audio export sync | Mixed audio must be sample-accurate with video | FFmpeg WASM `amix` filter on pre-trimmed files; offset the audio by the same `offsetSeconds` values used for video |
+| OffscreenCanvas transfer | Cannot use DOM video elements in a worker | Use `video.captureStream()` + `MediaStreamTrackProcessor` in main thread, transfer `VideoFrame` to worker via `postMessage` with transfer list |
+| 4K export memory pressure | 4096x2160 canvas framebuffer is 36 MB per frame | Process and immediately encode one frame at a time; never buffer more than 2 frames in memory |
+
+---
 
 ## Sources
 
-- [SyncSink.wasm - Browser-based media sync via audio alignment](https://github.com/JorenSix/SyncSink.wasm) -- direct prior art, AGPL licensed
-- [ffmpeg.wasm - FFmpeg for browser](https://github.com/ffmpegwasm/ffmpeg.wasm) -- core processing engine
-- [ffmpeg.wasm large file discussion](https://github.com/ffmpegwasm/ffmpeg.wasm/discussions/516) -- memory limits documentation
-- [Syncaila - Multi-camera sync software](https://syncaila.com/) -- desktop competitor
-- [PluralEyes vs Syncaila shootout](https://www.provideocoalition.com/sync-shootout-pluraleyes-vs-syncaila/) -- competitor comparison
-- [PluralEyes discontinued](https://www.provideocoalition.com/fare-thee-well-pluraleyes-you-were-truly-revolutionary/) -- market gap
-- [Tentacle Sync Studio](https://tentaclesync.com/sync-studio) -- timecode-based competitor
-- [Premiere Pro multicam documentation](https://helpx.adobe.com/premiere-pro/using/create-multi-camera-source-sequence.html) -- NLE built-in sync reference
-- [Audio cross-correlation research](https://www.researchgate.net/publication/263925127_Fast_second_screen_TV_synchronization_combining_audio_fingerprint_technique_and_generalized_cross_correlation) -- algorithm approach
-- [Synchron - sync with reliability scores](https://www.synchronvideo.com/) -- confidence score prior art
+- [WebCodecs API — MDN](https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API) — HIGH confidence (official)
+- [Video processing with WebCodecs — Chrome for Developers](https://developer.chrome.com/docs/web-platform/best-practices/webcodecs) — HIGH confidence (official)
+- [Mediabunny — github.com/Vanilagy/mediabunny](https://github.com/Vanilagy/mediabunny) — HIGH confidence (current recommended muxer, successor to mp4-muxer and webm-muxer)
+- [Mediabunny Introduction](https://mediabunny.dev/guide/introduction) — HIGH confidence (official docs)
+- [mp4-muxer deprecated notice](https://github.com/Vanilagy/mp4-muxer) — HIGH confidence (deprecation confirmed in README)
+- [How to save HTML canvas to MP4 using WebCodecs — devtails.xyz](https://devtails.xyz/adam/how-to-save-html-canvas-to-mp4-using-web-codecs-api) — MEDIUM confidence (tutorial, verified against official APIs)
+- [RectanglePacker — github.com/aslamhus/RectanglePacker](https://github.com/aslamhus/RectanglePacker) — MEDIUM confidence (library, same-AR tiles; custom logic needed for mixed ARs)
+- [requestVideoFrameCallback — MDN](https://developer.mozilla.org/en-US/docs/Web/API/HTMLVideoElement/requestVideoFrameCallback) — HIGH confidence (official)
+- [WebCodecs browser support — caniuse.com](https://caniuse.com/webcodecs) — HIGH confidence (Chrome/Edge/Firefox full, Safari 2025+)
+- [HTML5 Video: Synchronizing Playback of Two Videos — Bocoup](https://www.bocoup.com/blog/html5-video-synchronizing-playback-of-two-videos) — MEDIUM confidence (dated but foundational; patterns still apply)
+- [MasterSelects WebGPU compositor — Hacker News](https://news.ycombinator.com/item?id=46959456) — MEDIUM confidence (prior art for GPU video compositor in browser; confirms feasibility)
+- [WebAudio API — MDN](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API) — HIGH confidence (official)
 
 ---
-*Feature research for: Browser-based multi-camera video synchronization*
-*Researched: 2026-03-01*
+*Feature research for: Synced multi-cam video grid playback and GPU-accelerated composite export (v2.0 milestone)*
+*Researched: 2026-03-02*
