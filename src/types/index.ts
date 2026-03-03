@@ -77,3 +77,6 @@ export type DisplayMode = 'fill' | 'letterbox';
 
 /** Set of track indices that are currently muted */
 export type MutedTracks = Set<number>;
+
+/** Export pipeline state machine */
+export type ExportState = 'idle' | 'preparing' | 'encoding' | 'complete' | 'error';
