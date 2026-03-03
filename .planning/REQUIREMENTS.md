@@ -9,7 +9,7 @@ Requirements for synced playback and composite export. Each maps to roadmap phas
 
 ### Grid Layout
 
-- [ ] **GRID-01**: User sees all synced videos in a dynamic grid that packs tiles to minimize blank space based on video count and aspect ratios
+- [x] **GRID-01**: User sees all synced videos in a dynamic grid that packs tiles to minimize blank space based on video count and aspect ratios
 - [ ] **GRID-02**: User can toggle between "preserve aspect ratio" (letterbox) and "fill tiles" (crop) display modes
 - [ ] **GRID-03**: Grid layout responds to container resize without requiring manual refresh
 
@@ -81,7 +81,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GRID-01 | Phase 5 | Pending |
+| GRID-01 | Phase 5 | Complete |
 | GRID-02 | Phase 5 | Pending |
 | GRID-03 | Phase 5 | Pending |
 | PLAY-01 | Phase 5 | Pending |
