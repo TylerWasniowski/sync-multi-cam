@@ -1,7 +1,7 @@
 /**
- * Leader-follower video sync engine using requestVideoFrameCallback (rVFC)
- * with requestAnimationFrame fallback. Keeps follower videos aligned with
- * a leader via two-threshold drift correction.
+ * Standalone timeline clock that keeps all videos synced to a shared timeline.
+ * No video is privileged — the clock drives time via rAF + performance.now()
+ * and drift-corrects every video equally.
  */
 
 const DRIFT_THRESHOLD_NUDGE = 0.05; // 50ms -- nudge playbackRate
@@ -18,98 +18,92 @@ export interface SyncEngine {
 }
 
 /**
- * Creates a sync engine that keeps follower videos aligned with a leader.
- * Uses rVFC when available, falls back to rAF.
+ * Creates a timeline clock that keeps all videos aligned to a shared timeline.
  *
- * @param leader - The leader video element that drives timing
- * @param followers - Array of follower video elements to keep in sync
- * @param offsets - Per-follower offset in seconds relative to the leader
- * @param onFrame - Optional callback fired on each sync frame with the leader's media time
+ * @param videos - All video elements to keep in sync
+ * @param offsets - Per-video offset in seconds on the shared timeline (positive)
+ * @param onFrame - Callback fired each frame with the current timeline time
+ * @param options - totalDuration and onComplete callback
  */
-export function createSyncEngine(
-  leader: HTMLVideoElement,
-  followers: HTMLVideoElement[],
+export function createTimelineClock(
+  videos: HTMLVideoElement[],
   offsets: number[],
   onFrame?: (time: number) => void,
+  options?: { totalDuration?: number; onComplete?: () => void },
 ): SyncEngine {
   let active = false;
   let rafId = 0;
+  let clockStartWall = 0; // performance.now() when start() was called
+  let clockStartTime = 0; // timeline time when start() was called
+  let currentTime = 0; // authoritative timeline position
 
-  const hasRVFC = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
+  const totalDuration = options?.totalDuration ?? Infinity;
+  const onComplete = options?.onComplete;
 
-  function syncFollowers(leaderTime: number): void {
-    for (let i = 0; i < followers.length; i++) {
-      const follower = followers[i];
-      const expectedTime = leaderTime + offsets[i];
+  function syncAllVideos(time: number): void {
+    for (let i = 0; i < videos.length; i++) {
+      const video = videos[i];
+      const expectedLocal = time - offsets[i];
 
-      // Not yet active — keep paused at time 0
-      if (expectedTime < 0) {
-        if (!follower.paused) follower.pause();
-        follower.playbackRate = PLAYBACK_RATE_NORMAL;
+      // Before this track's start
+      if (expectedLocal < 0) {
+        if (!video.paused) video.pause();
+        video.playbackRate = PLAYBACK_RATE_NORMAL;
         continue;
       }
 
-      // Past end — keep paused at last frame
-      const dur = follower.duration || Infinity;
-      if (expectedTime >= dur) {
-        if (!follower.paused) follower.pause();
-        follower.playbackRate = PLAYBACK_RATE_NORMAL;
+      // Past this track's end
+      const dur = video.duration || Infinity;
+      if (expectedLocal >= dur) {
+        if (!video.paused) video.pause();
+        video.playbackRate = PLAYBACK_RATE_NORMAL;
         continue;
       }
 
-      // Auto-start if paused and should be active
-      if (follower.paused && active) {
-        follower.currentTime = expectedTime;
-        follower.play().catch(() => {});
+      // Auto-start if paused and clock is active
+      if (video.paused && active) {
+        video.currentTime = expectedLocal;
+        video.play().catch(() => {});
       }
 
-      // Clamp to valid range
-      const clampedExpected = Math.min(expectedTime, dur);
-      const actualTime = follower.currentTime;
-      const drift = actualTime - clampedExpected;
-
+      // Drift correction
+      const drift = video.currentTime - expectedLocal;
       if (Math.abs(drift) > DRIFT_THRESHOLD_SEEK) {
-        // Large drift: hard seek
-        follower.currentTime = clampedExpected;
-        follower.playbackRate = PLAYBACK_RATE_NORMAL;
+        video.currentTime = expectedLocal;
+        video.playbackRate = PLAYBACK_RATE_NORMAL;
       } else if (Math.abs(drift) > DRIFT_THRESHOLD_NUDGE) {
-        // Small drift: nudge playback rate
-        follower.playbackRate = drift > 0 ? PLAYBACK_RATE_SLOW : PLAYBACK_RATE_FAST;
+        video.playbackRate = drift > 0 ? PLAYBACK_RATE_SLOW : PLAYBACK_RATE_FAST;
       } else {
-        // In sync: reset playback rate (critical per Pitfall 2)
-        follower.playbackRate = PLAYBACK_RATE_NORMAL;
+        video.playbackRate = PLAYBACK_RATE_NORMAL;
       }
     }
   }
 
-  function onVideoFrame(
-    _now: DOMHighResTimeStamp,
-    metadata: VideoFrameCallbackMetadata,
-  ): void {
+  function tick(): void {
     if (!active) return;
-    const leaderTime = metadata.mediaTime;
-    syncFollowers(leaderTime);
-    onFrame?.(leaderTime);
-    // Re-register for next frame
-    leader.requestVideoFrameCallback(onVideoFrame);
-  }
+    const elapsed = (performance.now() - clockStartWall) / 1000;
+    currentTime = clockStartTime + elapsed;
 
-  function onAnimationFrame(): void {
-    if (!active) return;
-    const leaderTime = leader.currentTime;
-    syncFollowers(leaderTime);
-    onFrame?.(leaderTime);
-    rafId = requestAnimationFrame(onAnimationFrame);
+    if (currentTime >= totalDuration) {
+      currentTime = totalDuration;
+      active = false;
+      syncAllVideos(currentTime);
+      onFrame?.(currentTime);
+      onComplete?.();
+      return;
+    }
+
+    syncAllVideos(currentTime);
+    onFrame?.(currentTime);
+    rafId = requestAnimationFrame(tick);
   }
 
   return {
     start(): void {
       active = true;
-      if (hasRVFC) {
-        leader.requestVideoFrameCallback(onVideoFrame);
-      } else {
-        rafId = requestAnimationFrame(onAnimationFrame);
-      }
+      clockStartWall = performance.now();
+      clockStartTime = currentTime;
+      rafId = requestAnimationFrame(tick);
     },
 
     stop(): void {
@@ -118,23 +112,22 @@ export function createSyncEngine(
         cancelAnimationFrame(rafId);
         rafId = 0;
       }
-      // Reset all followers' playback rates (critical per Pitfall 2)
-      for (const f of followers) {
-        f.playbackRate = PLAYBACK_RATE_NORMAL;
+      for (const v of videos) {
+        v.playbackRate = PLAYBACK_RATE_NORMAL;
       }
     },
 
     seek(time: number): void {
-      leader.currentTime = time;
-      for (let i = 0; i < followers.length; i++) {
-        const expectedTime = time + offsets[i];
-        if (expectedTime < 0) {
-          followers[i].currentTime = 0;
-          if (!followers[i].paused) followers[i].pause();
+      currentTime = time;
+      for (let i = 0; i < videos.length; i++) {
+        const expectedLocal = time - offsets[i];
+        if (expectedLocal < 0) {
+          videos[i].currentTime = 0;
+          if (!videos[i].paused) videos[i].pause();
         } else {
-          followers[i].currentTime = Math.min(expectedTime, followers[i].duration || Infinity);
+          videos[i].currentTime = Math.min(expectedLocal, videos[i].duration || Infinity);
         }
-        followers[i].playbackRate = PLAYBACK_RATE_NORMAL;
+        videos[i].playbackRate = PLAYBACK_RATE_NORMAL;
       }
     },
 

@@ -38,14 +38,17 @@ export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, on
     return () => observer.disconnect();
   }, []);
 
-  // Find the longest track for default zoom
+  // Find the end of the shared timeline (max of offset + duration across all tracks)
   const maxDuration = useMemo(() => {
     let max = 0;
-    for (const peaks of peaksMap.values()) {
-      if (peaks.duration > max) max = peaks.duration;
+    for (const result of results) {
+      const peaks = peaksMap.get(result.fileId);
+      if (!peaks) continue;
+      const end = result.offsetSeconds + peaks.duration;
+      if (end > max) max = end;
     }
     return max;
-  }, [peaksMap]);
+  }, [results, peaksMap]);
 
   const sampleRate = useMemo(() => {
     for (const peaks of peaksMap.values()) {
@@ -110,8 +113,10 @@ export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, on
       setViewState((prev) => {
         const next = { ...prev, ...pending };
 
-        // Clamp scrollOffset
-        const maxOffset = Math.max(0, maxTotalSamples - canvasWidth * next.samplesPerPixel);
+        // Clamp scrollOffset (10% overscroll so the end isn't flush with the edge)
+        const viewSamples = canvasWidth * next.samplesPerPixel;
+        const overscroll = viewSamples * 0.1;
+        const maxOffset = Math.max(0, maxTotalSamples + overscroll - viewSamples);
         next.scrollOffset = Math.max(0, Math.min(next.scrollOffset, maxOffset));
 
         return next;

@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import type { DownloadableResult, MultiResolutionPeaks, DisplayMode, MutedTracks } from '../types/index.ts';
 import { createPosterExtractor } from '../lib/posterFrame.ts';
-import { createSyncEngine } from '../lib/videoSync.ts';
+import { createTimelineClock } from '../lib/videoSync.ts';
 import type { SyncEngine } from '../lib/videoSync.ts';
 import { createAudioMixer } from '../lib/audioMixer.ts';
 import type { AudioMixer } from '../lib/audioMixer.ts';
@@ -49,20 +49,10 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
   const lastExtractTimeRef = useRef(0);
   const scrubRafRef = useRef(0);
 
-  // Determine leader (reference track) and followers from results
-  // Leader = reference track (offset=0), followers have positive offsets on the shared timeline
-  const { leaderIndex, followerIndices, maxOffset } = useMemo(() => {
-    if (results.length === 0) {
-      return { leaderIndex: -1, followerIndices: [] as number[], maxOffset: 0 };
-    }
-    const refIdx = results.findIndex(r => r.isReference);
-    const leaderIdx = refIdx >= 0 ? refIdx : 0;
-    const followers: number[] = [];
-    for (let i = 0; i < results.length; i++) {
-      if (i !== leaderIdx) followers.push(i);
-    }
-    const maxOff = Math.max(...results.map(r => r.offsetSeconds));
-    return { leaderIndex: leaderIdx, followerIndices: followers, maxOffset: maxOff };
+  // Sync point: the earliest time where all cameras have content
+  const maxOffset = useMemo(() => {
+    if (results.length === 0) return 0;
+    return Math.max(...results.map(r => r.offsetSeconds));
   }, [results]);
 
   // Create poster extractors when results change
@@ -149,13 +139,11 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
     }
   }, [results]);
 
-  // When allVideosReady becomes true, set up the sync engine
+  // When allVideosReady becomes true, set up the timeline clock
   useEffect(() => {
-    if (!allVideosReady || results.length === 0 || leaderIndex < 0) return;
+    if (!allVideosReady || results.length === 0) return;
 
     const refs = videoRefs.current;
-    const leaderEl = refs[leaderIndex];
-    if (!leaderEl) return;
 
     // Set initial positions at the sync point (maxOffset) so all cameras have content
     for (let i = 0; i < results.length; i++) {
@@ -166,62 +154,47 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
     }
 
     // Compute total timeline duration: max(offset + video duration) across all tracks
-    let totalDuration = leaderEl.duration; // leader (reference) starts at 0
-    for (const fi of followerIndices) {
-      const el = refs[fi];
+    let totalDuration = 0;
+    const videoEls: HTMLVideoElement[] = [];
+    const videoOffsets: number[] = [];
+    for (let i = 0; i < results.length; i++) {
+      const el = refs[i];
       if (el) {
-        const end = results[fi].offsetSeconds + el.duration;
+        videoEls.push(el);
+        videoOffsets.push(results[i].offsetSeconds);
+        const end = results[i].offsetSeconds + el.duration;
         if (end > totalDuration) totalDuration = end;
       }
     }
     setDuration(isFinite(totalDuration) && totalDuration > 0 ? totalDuration : 0);
     setCurrentTime(maxOffset);
-
-    // Set initial visibility
     updateVideoVisibility(maxOffset);
 
-    // Gather follower elements and their offsets
-    // Negative offset: follower video time = leader time + offset
-    const followerEls: HTMLVideoElement[] = [];
-    const followerOffsets: number[] = [];
-    for (const fi of followerIndices) {
-      const el = refs[fi];
-      if (el) {
-        followerEls.push(el);
-        followerOffsets.push(-results[fi].offsetSeconds);
-      }
-    }
-
-    // Create the sync engine
-    const engine = createSyncEngine(
-      leaderEl,
-      followerEls,
-      followerOffsets,
+    // Create the timeline clock — all videos are equal, no leader
+    const engine = createTimelineClock(
+      videoEls,
+      videoOffsets,
       (time: number) => {
-        // Leader time = shared timeline time directly (no normalization)
         setCurrentTime(time);
         updateVideoVisibility(time);
+      },
+      {
+        totalDuration,
+        onComplete: () => {
+          engine.stop();
+          setIsPlaying(false);
+        },
       },
     );
     syncEngineRef.current = engine;
 
-    // Listen for ended event on the leader to auto-pause
-    const handleEnded = () => {
-      engine.stop();
-      setIsPlaying(false);
-      // Hide all videos at end of playback
-      updateVideoVisibility(Infinity);
-    };
-    leaderEl.addEventListener('ended', handleEnded);
-
     return () => {
-      leaderEl.removeEventListener('ended', handleEnded);
       engine.destroy();
       syncEngineRef.current = null;
       audioMixerRef.current?.destroy();
       audioMixerRef.current = null;
     };
-  }, [allVideosReady, results, leaderIndex, followerIndices, maxOffset, updateVideoVisibility]);
+  }, [allVideosReady, results, maxOffset, updateVideoVisibility]);
 
   const handleAllReady = useCallback(() => {
     setAllVideosReady(true);
@@ -259,39 +232,35 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
       );
       if (videoEls.length > 0) {
         audioMixerRef.current = createAudioMixer(videoEls);
-        // Apply any muted tracks
         for (const idx of mutedTracks) {
           audioMixerRef.current.setTrackMuted(idx, true);
         }
       }
     }
 
-    // Play leader and active followers (followers whose offset has been reached)
-    const leaderEl = refs[leaderIndex];
+    // Play all videos that are active at the current timeline position
     const playPromises: Promise<void>[] = [];
-    if (leaderEl) playPromises.push(leaderEl.play());
-    for (const fi of followerIndices) {
-      const video = refs[fi];
-      if (video && currentTime >= results[fi].offsetSeconds) {
+    for (let i = 0; i < results.length; i++) {
+      const video = refs[i];
+      if (video && currentTime >= results[i].offsetSeconds &&
+          currentTime < results[i].offsetSeconds + video.duration) {
         playPromises.push(video.play());
       }
     }
 
-    // Start the sync engine after all play promises resolve
     Promise.all(playPromises)
       .then(() => {
         engine.start();
         setIsPlaying(true);
       })
       .catch(() => {
-        // If play fails (e.g. autoplay policy), stop everything
         for (const video of refs) {
           if (video) video.pause();
         }
         engine.stop();
         setIsPlaying(false);
       });
-  }, [mutedTracks, leaderIndex, followerIndices, currentTime, results]);
+  }, [mutedTracks, currentTime, results]);
 
   // Pause handler
   const handlePause = useCallback(() => {
@@ -324,7 +293,6 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
       engine.stop();
     }
 
-    // seekTime is shared timeline time — leader time directly
     engine.seek(seekTime);
     setCurrentTime(seekTime);
     updateVideoVisibility(seekTime);
@@ -340,13 +308,11 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
       );
 
       Promise.all(seekPromises).then(() => {
-        // Play leader and active followers at the new seek position
         const playPromises: Promise<void>[] = [];
-        const leaderEl = refs[leaderIndex];
-        if (leaderEl) playPromises.push(leaderEl.play());
-        for (const fi of followerIndices) {
-          const video = refs[fi];
-          if (video && seekTime >= results[fi].offsetSeconds) {
+        for (let i = 0; i < results.length; i++) {
+          const video = refs[i];
+          if (video && seekTime >= results[i].offsetSeconds &&
+              seekTime < results[i].offsetSeconds + video.duration) {
             playPromises.push(video.play());
           }
         }
@@ -360,7 +326,7 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
           });
       });
     }
-  }, [isPlaying, updateVideoVisibility, leaderIndex, followerIndices, results]);
+  }, [isPlaying, updateVideoVisibility, results]);
 
   // Scrub-to-poster pipeline
   const handleScrub = useCallback(
@@ -434,7 +400,6 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
   const handleScrubSeek = useCallback((seekTime: number) => {
     const engine = syncEngineRef.current;
     if (!engine) return;
-    // seekTime is shared timeline time — leader time directly
     engine.seek(seekTime);
     setCurrentTime(seekTime);
     updateVideoVisibility(seekTime);
