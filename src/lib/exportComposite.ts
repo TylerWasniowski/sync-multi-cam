@@ -159,9 +159,9 @@ export function buildExportArgs(
 ): string[] {
   const args: string[] = [];
 
-  // Input flags: -i input0.mp4 -i input1.mp4 ...
+  // Input flags: -i input_0.mp4 -i input_1.mp4 ...
   for (let i = 0; i < inputCount; i++) {
-    args.push('-i', `input${i}.mp4`);
+    args.push('-i', `input_${i}.mp4`);
   }
 
   // Build video filter_complex
@@ -239,9 +239,12 @@ export async function exportComposite(
       const name = `input_${i}.mp4`;
       inputNames.push(name);
 
-      const data = results[i].trimmedData
+      const src = results[i].trimmedData
         ?? new Uint8Array(await results[i].originalFile.arrayBuffer());
-      await ffmpeg.writeFile(name, data);
+      // Copy so FFmpeg's postMessage transfer doesn't detach the original buffer
+      const copy = new Uint8Array(src.length);
+      copy.set(src);
+      await ffmpeg.writeFile(name, copy);
     }
 
     // 2. Compute grid layout at export resolution
