@@ -67,10 +67,11 @@ Plans:
   3. An animated playhead line moves across all waveform tracks in real time during playback
   4. Bare click/drag = seek/scrub; Shift+drag = pan; a visible UI hint communicates the Shift-to-pan modifier
   5. Waveform zoom and pan stay coordinated with the playhead -- zooming in centers on the current playback position
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 07-01: TBD
+- [ ] 07-01-PLAN.md -- Interaction model inversion + playhead rendering (click-to-seek, drag-to-scrub, Shift-to-pan, playhead line)
+- [ ] 07-02-PLAN.md -- Playhead-aware viewport follow mode + zoom anchoring + human verification
 
 ### Phase 8: Composite Export
 **Goal**: Users can download a single MP4 containing all camera angles composited in the grid layout
@@ -112,6 +113,6 @@ Plans:
 | 4. Waveform Visualization | v1.0 | 4/4 | Complete | 2026-03-02 |
 | 5. Video Grid & Synchronized Playback | v2.0 | 3/3 | Complete | 2026-03-02 |
 | 6. Audio Mixing | v2.0 | Complete    | 2026-03-03 | 2026-03-02 |
-| 7. Waveform Scrubbar Integration | v2.0 | 0/? | Not started | - |
+| 7. Waveform Scrubbar Integration | v2.0 | 0/2 | Planned | - |
 | 8. Composite Export | v2.0 | 0/? | Not started | - |
 | 9. Polish | v2.0 | 0/? | Not started | - |
