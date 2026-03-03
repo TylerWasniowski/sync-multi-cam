@@ -15,7 +15,7 @@ import { FFmpegStatus } from './FFmpegStatus.tsx';
 import { SyncButton } from './SyncButton.tsx';
 import { PipelineProgress } from './PipelineProgress.tsx';
 import { SyncResults } from './SyncResults.tsx';
-import { WaveformPanel } from './WaveformPanel.tsx';
+import { PlaybackSection } from './PlaybackSection.tsx';
 
 type FFmpegLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -337,10 +337,10 @@ export default function App() {
           </div>
         )}
 
-        {/* Waveforms -- visible after sync completes with peak data */}
+        {/* Playback section: video grid + waveforms */}
         {syncResults.length > 0 && waveformPeaks.size > 0 && (
           <div className="mt-6">
-            <WaveformPanel peaksMap={waveformPeaks} results={syncResults} />
+            <PlaybackSection peaksMap={waveformPeaks} results={syncResults} />
           </div>
         )}
       </main>
