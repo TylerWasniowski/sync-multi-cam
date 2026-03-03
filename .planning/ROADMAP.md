@@ -20,7 +20,7 @@
 ### v2.0 Synced Playback & Export
 
 - [x] **Phase 5: Video Grid & Synchronized Playback** - Dynamic grid layout with synced multi-camera playback and transport controls (3/3 plans complete)
-- [ ] **Phase 6: Audio Mixing** - Web Audio API routing with all-mix default and per-camera solo
+- [x] **Phase 6: Audio Mixing** - Web Audio API per-track mute/unmute with GainNode graph (1/1 plans complete)
 - [ ] **Phase 7: Waveform Scrubbar Integration** - Click/drag to seek/scrub, Shift+drag to pan, animated playhead
 - [ ] **Phase 8: Composite Export** - FFmpeg WASM xstack composite to single H.264 MP4 at selectable resolutions
 - [ ] **Phase 9: Polish** - Camera labels, fullscreen tile, keyboard shortcuts
@@ -55,7 +55,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 06-01-PLAN.md -- Audio mixer module + PlaybackSection/TransportBar integration + human verification
+- [x] 06-01-PLAN.md -- Audio mixer module + per-track mute toggles + human verification
 
 ### Phase 7: Waveform Scrubbar Integration
 **Goal**: Waveform tracks serve as a visual scrubbar that stays synchronized with video playback
@@ -110,8 +110,8 @@ Plans:
 | 2. Audio Sync Engine | v1.0 | 2/2 | Complete | 2026-03-02 |
 | 3. Video Trimming and Output | v1.0 | 2/2 | Complete | 2026-03-02 |
 | 4. Waveform Visualization | v1.0 | 4/4 | Complete | 2026-03-02 |
-| 5. Video Grid & Synchronized Playback | v2.0 | 0/3 | Planning complete | - |
-| 6. Audio Mixing | v2.0 | 0/1 | Planning complete | - |
+| 5. Video Grid & Synchronized Playback | v2.0 | 3/3 | Complete | 2026-03-02 |
+| 6. Audio Mixing | v2.0 | 1/1 | Complete | 2026-03-02 |
 | 7. Waveform Scrubbar Integration | v2.0 | 0/? | Not started | - |
 | 8. Composite Export | v2.0 | 0/? | Not started | - |
 | 9. Polish | v2.0 | 0/? | Not started | - |

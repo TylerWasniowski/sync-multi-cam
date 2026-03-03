@@ -22,9 +22,9 @@ Requirements for synced playback and composite export. Each maps to roadmap phas
 
 ### Audio
 
-- [ ] **AUD-01**: All camera audio tracks play mixed together by default during preview
-- [ ] **AUD-02**: User can select a single camera's audio via dropdown next to the download button
-- [ ] **AUD-03**: Audio selection persists during playback session (survives seek/pause/play)
+- [x] **AUD-01**: All camera audio tracks play mixed together by default during preview
+- [x] **AUD-02**: User can mute/unmute individual camera audio tracks via per-track toggle buttons
+- [x] **AUD-03**: Audio selection persists during playback session (survives seek/pause/play)
 
 ### Waveform Integration
 
@@ -88,9 +88,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PLAY-02 | Phase 5 | Complete |
 | PLAY-03 | Phase 5 | Complete |
 | PLAY-04 | Phase 5 | Complete |
-| AUD-01 | Phase 6 | Pending |
-| AUD-02 | Phase 6 | Pending |
-| AUD-03 | Phase 6 | Pending |
+| AUD-01 | Phase 6 | Complete |
+| AUD-02 | Phase 6 | Complete |
+| AUD-03 | Phase 6 | Complete |
 | WAVE-01 | Phase 7 | Pending |
 | WAVE-02 | Phase 7 | Pending |
 | WAVE-03 | Phase 7 | Pending |
