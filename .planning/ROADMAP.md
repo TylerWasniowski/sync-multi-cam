@@ -22,7 +22,7 @@
 - [x] **Phase 5: Video Grid & Synchronized Playback** - Dynamic grid layout with synced multi-camera playback and transport controls (3/3 plans complete)
 - [x] **Phase 6: Audio Mixing** - Web Audio API per-track mute/unmute with GainNode graph (1/1 plans complete)
 - [ ] **Phase 7: Waveform Scrubbar Integration** - Click/drag to seek/scrub, Shift+drag to pan, animated playhead
-- [ ] **Phase 8: Composite Export** - FFmpeg WASM xstack composite to single H.264 MP4 at selectable resolutions
+- [x] **Phase 8: Composite Export** - WebCodecs+Mediabunny composite to single H.264 MP4 at selectable resolutions (2/2 plans complete)
 - [ ] **Phase 9: Polish** - Camera labels, fullscreen tile, keyboard shortcuts
 
 ## Phase Details
@@ -86,7 +86,7 @@ Plans:
 
 Plans:
 - [x] 08-01-PLAN.md -- WebCodecs pipeline infrastructure: install Mediabunny, remove FFmpeg WASM, Web Worker with demux/decode/composite/encode/mux, main-thread API
-- [ ] 08-02-PLAN.md -- Export UI wiring + human verification: ExportPanel with cancel button and WebCodecs check, PlaybackSection props update, end-to-end verification
+- [x] 08-02-PLAN.md -- Export UI wiring + human verification: ExportPanel with cancel button and WebCodecs check, PlaybackSection props update, end-to-end verification
 
 ### Phase 9: Polish
 **Goal**: Quality-of-life improvements that make the playback experience feel complete
@@ -96,10 +96,10 @@ Plans:
   1. Each video tile displays the camera's filename as a label overlay during preview
   2. User can click any tile to expand it fullscreen and click again to return to the grid view
   3. User can control playback with keyboard shortcuts: space for play/pause, arrow keys for seeking
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 09-01: TBD
+- [ ] 09-01-PLAN.md -- Camera labels, click-to-expand fullscreen tile, keyboard shortcuts (space/arrows/escape)
 
 ## Progress
 
@@ -114,5 +114,5 @@ Plans:
 | 5. Video Grid & Synchronized Playback | v2.0 | 3/3 | Complete | 2026-03-02 |
 | 6. Audio Mixing | v2.0 | Complete    | 2026-03-03 | 2026-03-02 |
 | 7. Waveform Scrubbar Integration | v2.0 | 0/2 | Planned | - |
-| 8. Composite Export | v2.0 | 0/2 | Rework (WebCodecs) | - |
-| 9. Polish | v2.0 | 0/? | Not started | - |
+| 8. Composite Export | v2.0 | 2/2 | Complete | 2026-03-03 |
+| 9. Polish | v2.0 | 0/1 | Planned | - |
