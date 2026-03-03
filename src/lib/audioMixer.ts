@@ -1,16 +1,12 @@
 /**
  * Web Audio API mixer for multi-camera playback.
  * Routes each video element's audio through a GainNode graph,
- * allowing all-mix (equal gain) or solo (single camera) modes
- * with smooth exponential transitions (no clicks/pops).
+ * allowing per-track mute/unmute with smooth exponential transitions
+ * (no clicks/pops).
  */
 
-export type { AudioMode } from '../types/index.ts';
-
-import type { AudioMode } from '../types/index.ts';
-
 export interface AudioMixer {
-  setMode: (mode: AudioMode) => void;
+  setTrackMuted: (index: number, muted: boolean) => void;
   destroy: () => void;
 }
 
@@ -30,48 +26,32 @@ export function createAudioMixer(videoElements: HTMLVideoElement[]): AudioMixer 
   const audioCtx = new AudioContext();
   const gainNodes: GainNode[] = [];
 
-  // Initial gain: equal mix across all cameras
-  const mixLevel = 1 / videoElements.length;
-
   for (const video of videoElements) {
     const source = audioCtx.createMediaElementSource(video);
     const gain = audioCtx.createGain();
-    gain.gain.value = mixLevel;
+    gain.gain.value = 1.0;
     source.connect(gain);
     gain.connect(audioCtx.destination);
     gainNodes.push(gain);
   }
 
   return {
-    setMode(mode: AudioMode): void {
+    setTrackMuted(index: number, muted: boolean): void {
+      if (index < 0 || index >= gainNodes.length) return;
+
       // Resume if suspended (tab backgrounded or autoplay policy)
       if (audioCtx.state === 'suspended') {
         audioCtx.resume();
       }
 
       const now = audioCtx.currentTime;
-
-      if (mode === 'all') {
-        // All-mix: equal gain for each camera
-        const level = 1 / gainNodes.length;
-        for (const gain of gainNodes) {
-          gain.gain.setTargetAtTime(level, now, FADE_TIME_CONSTANT);
-        }
-      } else {
-        // Solo: full gain on selected index, silence others
-        for (let i = 0; i < gainNodes.length; i++) {
-          const target = i === mode ? 1.0 : 0;
-          gainNodes[i].gain.setTargetAtTime(target, now, FADE_TIME_CONSTANT);
-        }
-      }
+      gainNodes[index].gain.setTargetAtTime(muted ? 0 : 1.0, now, FADE_TIME_CONSTANT);
     },
 
     destroy(): void {
-      // Disconnect all gain nodes
       for (const gain of gainNodes) {
         gain.disconnect();
       }
-      // Close the AudioContext (guard against already-closed state)
       if (audioCtx.state !== 'closed') {
         audioCtx.close();
       }

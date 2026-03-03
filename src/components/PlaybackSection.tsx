@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import type { DownloadableResult, MultiResolutionPeaks, DisplayMode, AudioMode } from '../types/index.ts';
+import type { DownloadableResult, MultiResolutionPeaks, DisplayMode, MutedTracks } from '../types/index.ts';
 import { createPosterExtractor } from '../lib/posterFrame.ts';
 import { createSyncEngine } from '../lib/videoSync.ts';
 import type { SyncEngine } from '../lib/videoSync.ts';
@@ -29,7 +29,7 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
 
   // Audio mixer ref and state
   const audioMixerRef = useRef<AudioMixer | null>(null);
-  const [audioMode, setAudioMode] = useState<AudioMode>('all');
+  const [mutedTracks, setMutedTracks] = useState<MutedTracks>(new Set());
 
   // Poster URLs state
   const [posterUrls, setPosterUrls] = useState<(string | null)[]>(
@@ -206,17 +206,20 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
     setDisplayMode((prev) => (prev === 'fill' ? 'letterbox' : 'fill'));
   }, []);
 
-  // Audio mode change handler
-  const handleAudioModeChange = useCallback((mode: AudioMode) => {
-    setAudioMode(mode);
-    audioMixerRef.current?.setMode(mode);
+  // Mute toggle handler
+  const handleToggleMute = useCallback((index: number) => {
+    setMutedTracks((prev) => {
+      const next = new Set(prev);
+      const nowMuted = !next.has(index);
+      if (nowMuted) {
+        next.add(index);
+      } else {
+        next.delete(index);
+      }
+      audioMixerRef.current?.setTrackMuted(index, nowMuted);
+      return next;
+    });
   }, []);
-
-  // Camera names for the audio dropdown
-  const cameraNames = useMemo(
-    () => results.map((r) => r.fileName),
-    [results],
-  );
 
   // Play handler
   const handlePlay = useCallback(() => {
@@ -231,7 +234,10 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
       );
       if (videoEls.length > 0) {
         audioMixerRef.current = createAudioMixer(videoEls);
-        audioMixerRef.current.setMode(audioMode);
+        // Apply any muted tracks
+        for (const idx of mutedTracks) {
+          audioMixerRef.current.setTrackMuted(idx, true);
+        }
       }
     }
 
@@ -257,7 +263,7 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
         engine.stop();
         setIsPlaying(false);
       });
-  }, [audioMode]);
+  }, [mutedTracks]);
 
   // Pause handler
   const handlePause = useCallback(() => {
@@ -396,17 +402,14 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
         currentTime={currentTime}
         duration={duration}
         displayMode={displayMode}
-        audioMode={audioMode}
-        cameraNames={cameraNames}
         onPlay={handlePlay}
         onPause={handlePause}
         onSeek={handleSeek}
         onDisplayModeToggle={toggleDisplayMode}
-        onAudioModeChange={handleAudioModeChange}
       />
 
       {/* Waveform panel -- rendered as-is to preserve existing behavior */}
-      <WaveformPanel peaksMap={peaksMap} results={results} onScrub={handleScrub} />
+      <WaveformPanel peaksMap={peaksMap} results={results} mutedTracks={mutedTracks} onToggleMute={handleToggleMute} onScrub={handleScrub} />
     </div>
   );
 }

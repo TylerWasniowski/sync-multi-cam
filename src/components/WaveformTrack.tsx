@@ -13,6 +13,8 @@ export interface WaveformTrackProps {
   syncResult: { offsetSeconds: number; confidence: number };
   viewState: ViewState;
   maxSamplesPerPixel: number;
+  isMuted: boolean;
+  onToggleMute: () => void;
   onViewStateChange: (update: Partial<ViewState>) => void;
   onPointerEnter: () => void;
   onPointerLeave: () => void;
@@ -25,6 +27,8 @@ export function WaveformTrack({
   syncResult,
   viewState,
   maxSamplesPerPixel,
+  isMuted,
+  onToggleMute,
   onViewStateChange,
   onPointerEnter,
   onPointerLeave,
@@ -210,19 +214,43 @@ export function WaveformTrack({
   return (
     <div className="flex items-center" style={{ height: TRACK_HEIGHT }}>
       {/* Label column */}
-      <div className="w-40 shrink-0 pr-3 flex flex-col justify-center overflow-hidden">
-        <div className="flex items-center gap-1.5">
+      <div className="w-40 shrink-0 pr-3 flex items-center gap-2 overflow-hidden">
+        {/* Mute toggle */}
+        <button
+          type="button"
+          onClick={onToggleMute}
+          onPointerDown={(e) => e.stopPropagation()}
+          className={`flex-shrink-0 p-1 rounded transition-colors cursor-pointer ${
+            isMuted
+              ? 'text-red-400 hover:text-red-300'
+              : 'text-gray-400 hover:text-gray-200'
+          }`}
+          title={isMuted ? 'Unmute' : 'Mute'}
+        >
+          {isMuted ? (
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+              <path d="M3.5 4.5v5h2.5l3 3V1.5l-3 3H3.5z" />
+              <path d="M10.5 4.5l3 5M13.5 4.5l-3 5" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+              <path d="M3.5 4.5v5h2.5l3 3V1.5l-3 3H3.5z" />
+              <path d="M10.5 3.5c.8.8 1.2 1.9 1.2 3.1s-.4 2.3-1.2 3.1" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+            </svg>
+          )}
+        </button>
+        <div className="flex flex-col justify-center min-w-0">
           <span className="text-xs text-gray-300 truncate" title={fileName}>
             {fileName}
           </span>
-        </div>
-        <div className="flex items-center gap-2 mt-0.5">
-          <span className={`text-[10px] font-mono ${isReference ? 'text-blue-400' : 'text-gray-500'}`}>
-            {offsetLabel}
-          </span>
-          <span className="text-[10px] text-gray-600">
-            {syncResult.confidence}%
-          </span>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className={`text-[10px] font-mono ${isReference ? 'text-blue-400' : 'text-gray-500'}`}>
+              {offsetLabel}
+            </span>
+            <span className="text-[10px] text-gray-600">
+              {syncResult.confidence}%
+            </span>
+          </div>
         </div>
       </div>
 

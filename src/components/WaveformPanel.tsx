@@ -1,14 +1,16 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import type { MultiResolutionPeaks, ViewState, DownloadableResult } from '../types/index.ts';
+import type { MultiResolutionPeaks, ViewState, DownloadableResult, MutedTracks } from '../types/index.ts';
 import { WaveformTrack } from './WaveformTrack.tsx';
 
 export interface WaveformPanelProps {
   peaksMap: Map<string, MultiResolutionPeaks>;
   results: DownloadableResult[];
+  mutedTracks: MutedTracks;
+  onToggleMute: (index: number) => void;
   onScrub?: (time: number | null) => void;
 }
 
-export function WaveformPanel({ peaksMap, results, onScrub }: WaveformPanelProps) {
+export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, onScrub }: WaveformPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const [panelWidth, setPanelWidth] = useState(0);
 
@@ -204,11 +206,12 @@ export function WaveformPanel({ peaksMap, results, onScrub }: WaveformPanelProps
 
   // Memoize track list to avoid re-creating on viewState changes
   const trackEntries = useMemo(() => {
-    return results.map((result) => {
+    return results.map((result, index) => {
       const peaks = peaksMap.get(result.fileId);
       if (!peaks) return null;
       return {
         key: result.fileId,
+        index,
         fileName: result.fileName,
         isReference: result.isReference,
         peaks,
@@ -219,6 +222,7 @@ export function WaveformPanel({ peaksMap, results, onScrub }: WaveformPanelProps
       };
     }).filter(Boolean) as {
       key: string;
+      index: number;
       fileName: string;
       isReference: boolean;
       peaks: MultiResolutionPeaks;
@@ -252,6 +256,8 @@ export function WaveformPanel({ peaksMap, results, onScrub }: WaveformPanelProps
               syncResult={entry.syncResult}
               viewState={viewState}
               maxSamplesPerPixel={maxSamplesPerPixel}
+              isMuted={mutedTracks.has(entry.index)}
+              onToggleMute={() => onToggleMute(entry.index)}
               onViewStateChange={handleViewStateChange}
               onPointerEnter={handlePointerEnter}
               onPointerLeave={handlePointerLeaveAll}

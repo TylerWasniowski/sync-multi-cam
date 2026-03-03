@@ -75,5 +75,5 @@ export interface ViewState {
 /** Video tile display mode: 'fill' crops to fill tiles, 'letterbox' preserves aspect ratio */
 export type DisplayMode = 'fill' | 'letterbox';
 
-/** Audio mixing mode: 'all' mixes all cameras, number solos that camera index */
-export type AudioMode = 'all' | number;
+/** Set of track indices that are currently muted */
+export type MutedTracks = Set<number>;

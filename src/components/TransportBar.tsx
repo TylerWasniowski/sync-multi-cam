@@ -1,4 +1,4 @@
-import type { DisplayMode, AudioMode } from '../types/index.ts';
+import type { DisplayMode } from '../types/index.ts';
 
 export interface TransportBarProps {
   isPlaying: boolean;
@@ -6,13 +6,10 @@ export interface TransportBarProps {
   currentTime: number;
   duration: number;
   displayMode: DisplayMode;
-  audioMode: AudioMode;
-  cameraNames: string[];
   onPlay: () => void;
   onPause: () => void;
   onSeek: (time: number) => void;
   onDisplayModeToggle: () => void;
-  onAudioModeChange: (mode: AudioMode) => void;
 }
 
 function formatTime(t: number): string {
@@ -27,13 +24,10 @@ export function TransportBar({
   currentTime,
   duration,
   displayMode,
-  audioMode,
-  cameraNames,
   onPlay,
   onPause,
   onSeek,
   onDisplayModeToggle,
-  onAudioModeChange,
 }: TransportBarProps) {
   return (
     <div className="flex items-center gap-3 px-4 py-2 border-t border-gray-800">
@@ -101,32 +95,6 @@ export function TransportBar({
         {displayMode === 'fill' ? 'Fill' : 'Letterbox'}
       </button>
 
-      {/* Audio source selector */}
-      <div className="flex items-center gap-1">
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 14 14"
-          fill="currentColor"
-          className="text-gray-400 flex-shrink-0"
-        >
-          <path d="M3.5 4.5v5h2.5l3 3V1.5l-3 3H3.5z" />
-          <path d="M10.5 3.5c.8.8 1.2 1.9 1.2 3.1s-.4 2.3-1.2 3.1" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-        </svg>
-        <select
-          value={audioMode === 'all' ? 'all' : String(audioMode)}
-          onChange={(e) => {
-            const val = e.target.value;
-            onAudioModeChange(val === 'all' ? 'all' : Number(val));
-          }}
-          className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded px-2 py-1 transition-colors cursor-pointer"
-        >
-          <option value="all">All Cameras</option>
-          {cameraNames.map((name, i) => (
-            <option key={i} value={String(i)}>{name}</option>
-          ))}
-        </select>
-      </div>
     </div>
   );
 }
