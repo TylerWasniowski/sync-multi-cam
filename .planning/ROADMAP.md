@@ -37,12 +37,12 @@
   3. User can play, pause, and seek all videos simultaneously with a single set of transport controls
   4. All videos stay visually in sync during playback -- no visible drift between camera angles
   5. Waveform tracks from v1.0 remain interactive immediately after sync completes while video elements load in the background
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 05-01: TBD
-- [ ] 05-02: TBD
-- [ ] 05-03: TBD
+- [ ] 05-01-PLAN.md -- Grid layout algorithm (TDD): pure computeGridLayout function with tile positioning
+- [ ] 05-02-PLAN.md -- Video grid & PlaybackSection UI: VideoTile, VideoGrid, PlaybackSection components
+- [ ] 05-03-PLAN.md -- Sync engine & transport controls: leader-follower sync, play/pause/seek, App.tsx integration
 
 ### Phase 6: Audio Mixing
 **Goal**: Users hear audio during playback and can choose which camera's audio to listen to
@@ -110,7 +110,7 @@ Plans:
 | 2. Audio Sync Engine | v1.0 | 2/2 | Complete | 2026-03-02 |
 | 3. Video Trimming and Output | v1.0 | 2/2 | Complete | 2026-03-02 |
 | 4. Waveform Visualization | v1.0 | 4/4 | Complete | 2026-03-02 |
-| 5. Video Grid & Synchronized Playback | v2.0 | 0/? | Not started | - |
+| 5. Video Grid & Synchronized Playback | v2.0 | 0/3 | Planning complete | - |
 | 6. Audio Mixing | v2.0 | 0/? | Not started | - |
 | 7. Waveform Scrubbar Integration | v2.0 | 0/? | Not started | - |
 | 8. Composite Export | v2.0 | 0/? | Not started | - |
