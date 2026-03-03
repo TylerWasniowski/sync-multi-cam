@@ -1,8 +1,10 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import type { DownloadableResult, MultiResolutionPeaks, DisplayMode } from '../types/index.ts';
+import type { DownloadableResult, MultiResolutionPeaks, DisplayMode, AudioMode } from '../types/index.ts';
 import { createPosterExtractor } from '../lib/posterFrame.ts';
 import { createSyncEngine } from '../lib/videoSync.ts';
 import type { SyncEngine } from '../lib/videoSync.ts';
+import { createAudioMixer } from '../lib/audioMixer.ts';
+import type { AudioMixer } from '../lib/audioMixer.ts';
 import { VideoGrid } from './VideoGrid.tsx';
 import { TransportBar } from './TransportBar.tsx';
 import { WaveformPanel } from './WaveformPanel.tsx';
@@ -24,6 +26,10 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
 
   // Sync engine ref
   const syncEngineRef = useRef<SyncEngine | null>(null);
+
+  // Audio mixer ref and state
+  const audioMixerRef = useRef<AudioMixer | null>(null);
+  const [audioMode, setAudioMode] = useState<AudioMode>('all');
 
   // Poster URLs state
   const [posterUrls, setPosterUrls] = useState<(string | null)[]>(
@@ -187,6 +193,8 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
       leaderEl.removeEventListener('ended', handleEnded);
       engine.destroy();
       syncEngineRef.current = null;
+      audioMixerRef.current?.destroy();
+      audioMixerRef.current = null;
     };
   }, [allVideosReady, results, leaderIndex, followerIndices, leaderTrimSeconds]);
 
@@ -198,11 +206,34 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
     setDisplayMode((prev) => (prev === 'fill' ? 'letterbox' : 'fill'));
   }, []);
 
+  // Audio mode change handler
+  const handleAudioModeChange = useCallback((mode: AudioMode) => {
+    setAudioMode(mode);
+    audioMixerRef.current?.setMode(mode);
+  }, []);
+
+  // Camera names for the audio dropdown
+  const cameraNames = useMemo(
+    () => results.map((r) => r.fileName),
+    [results],
+  );
+
   // Play handler
   const handlePlay = useCallback(() => {
     const refs = videoRefs.current;
     const engine = syncEngineRef.current;
     if (!engine) return;
+
+    // Create audio mixer lazily on first play (user gesture satisfies autoplay policy)
+    if (!audioMixerRef.current) {
+      const videoEls = refs.filter(
+        (v): v is HTMLVideoElement => v !== null,
+      );
+      if (videoEls.length > 0) {
+        audioMixerRef.current = createAudioMixer(videoEls);
+        audioMixerRef.current.setMode(audioMode);
+      }
+    }
 
     // Play all video elements
     const playPromises: Promise<void>[] = [];
@@ -226,7 +257,7 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
         engine.stop();
         setIsPlaying(false);
       });
-  }, []);
+  }, [audioMode]);
 
   // Pause handler
   const handlePause = useCallback(() => {
@@ -365,10 +396,13 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
         currentTime={currentTime}
         duration={duration}
         displayMode={displayMode}
+        audioMode={audioMode}
+        cameraNames={cameraNames}
         onPlay={handlePlay}
         onPause={handlePause}
         onSeek={handleSeek}
         onDisplayModeToggle={toggleDisplayMode}
+        onAudioModeChange={handleAudioModeChange}
       />
 
       {/* Waveform panel -- rendered as-is to preserve existing behavior */}
