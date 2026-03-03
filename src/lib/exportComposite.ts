@@ -183,7 +183,7 @@ export function buildExportArgs(
   // Video codec settings
   args.push(
     '-c:v', 'libx264',
-    '-preset', 'fast',
+    '-preset', 'ultrafast',
     '-crf', String(config.crf),
     '-r', String(config.fps),
     '-pix_fmt', 'yuv420p',
@@ -223,15 +223,23 @@ export async function exportComposite(
   const inputNames: string[] = [];
   const outputName = 'composite_output.mp4';
 
-  // Progress handler: convert FFmpeg time (microseconds) to 0-1 ratio
-  const progressHandler = ({ time }: { progress: number; time: number }) => {
-    if (onProgress && time > 0 && totalDurationSeconds > 0) {
-      const ratio = Math.min(time / (totalDurationSeconds * 1_000_000), 1);
-      onProgress(ratio);
+  // Parse progress from FFmpeg log lines (time=HH:MM:SS.ss)
+  // The 'progress' event doesn't fire for complex filtergraph operations,
+  // but log events reliably contain "time=" in status lines.
+  const timeRegex = /time=(\d{2}):(\d{2}):(\d{2})\.(\d{2})/;
+  const logHandler = ({ message }: { message: string }) => {
+    if (!onProgress || totalDurationSeconds <= 0) return;
+    const match = message.match(timeRegex);
+    if (match) {
+      const seconds = Number(match[1]) * 3600 + Number(match[2]) * 60
+        + Number(match[3]) + Number(match[4]) / 100;
+      if (seconds > 0) {
+        onProgress(Math.min(seconds / totalDurationSeconds, 1));
+      }
     }
   };
 
-  ffmpeg.on('progress', progressHandler);
+  ffmpeg.on('log', logHandler);
 
   try {
     // 1. Write input files to MEMFS
@@ -265,7 +273,7 @@ export async function exportComposite(
     const output = await ffmpeg.readFile(outputName) as Uint8Array;
     return output;
   } finally {
-    ffmpeg.off('progress', progressHandler);
+    ffmpeg.off('log', logHandler);
 
     // Clean up all MEMFS files
     for (const name of inputNames) {

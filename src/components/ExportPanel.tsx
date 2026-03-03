@@ -129,13 +129,17 @@ export function ExportPanel({
         {exportState === 'encoding' && (
           <div className="flex items-center gap-2 flex-1">
             <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-blue-600 rounded-full transition-all duration-300"
-                style={{ width: `${Math.round(progress * 100)}%` }}
-              />
+              {progress === 0 ? (
+                <div className="h-full w-1/4 bg-blue-600 rounded-full animate-pulse" />
+              ) : (
+                <div
+                  className="h-full bg-blue-600 rounded-full transition-all duration-300"
+                  style={{ width: `${Math.round(progress * 100)}%` }}
+                />
+              )}
             </div>
             <span className="text-gray-400 text-xs whitespace-nowrap">
-              {Math.round(progress * 100)}%
+              {progress === 0 ? 'Encoding...' : `${Math.round(progress * 100)}%`}
             </span>
           </div>
         )}
