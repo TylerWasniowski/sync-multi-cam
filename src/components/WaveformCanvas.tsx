@@ -15,7 +15,7 @@ const WAVEFORM_COLOR = 'rgba(59, 130, 246, 0.6)'; // blue-500 at 60%
 const CENTER_LINE_COLOR = '#374151'; // gray-700
 const SYNC_MARKER_COLOR = '#3b82f6'; // blue-500
 const CURSOR_COLOR = '#9ca3af'; // gray-400
-const TRIM_OVERLAY_COLOR = 'rgba(0, 0, 0, 0.3)';
+// TRIM_OVERLAY_COLOR removed — offset-shifted waveforms make empty space self-evident
 const TRACK_END_COLOR = 'rgba(0, 0, 0, 0.35)'; // dimmed overlay beyond audio end
 const TRACK_END_LINE_COLOR = 'rgba(107, 114, 128, 0.5)'; // gray-500 at 50%
 const LABEL_FONT = '10px ui-monospace, monospace';
@@ -73,22 +73,15 @@ export function WaveformCanvas({
     const halfHeight = height / 2;
     const { samplesPerPixel, scrollOffset } = viewState;
 
-    // Calculate visible bucket range
-    const startBucket = Math.floor(scrollOffset / peaks.samplesPerBucket);
+    // Shift waveform by offset so each track starts at its position on the shared timeline
+    const offsetSamples = syncOffsetSeconds * peaks.sampleRate;
+
+    // Calculate visible bucket range (adjusted for offset)
+    const startBucket = Math.max(0, Math.floor((scrollOffset - offsetSamples) / peaks.samplesPerBucket));
     const endBucket = Math.min(
-      Math.ceil((scrollOffset + width * samplesPerPixel) / peaks.samplesPerBucket),
+      Math.ceil((scrollOffset - offsetSamples + width * samplesPerPixel) / peaks.samplesPerBucket),
       peaks.length,
     );
-
-    // Draw trimmed region overlay (before waveform so it's behind)
-    if (!isReference && syncOffsetSeconds > 0) {
-      const trimEndX =
-        (syncOffsetSeconds * peaks.sampleRate - scrollOffset) / samplesPerPixel;
-      if (trimEndX > 0) {
-        ctx.fillStyle = TRIM_OVERLAY_COLOR;
-        ctx.fillRect(0, 0, Math.min(trimEndX, width), height);
-      }
-    }
 
     // Draw waveform
     ctx.fillStyle = WAVEFORM_COLOR;
@@ -96,7 +89,7 @@ export function WaveformCanvas({
     ctx.beginPath();
     for (let i = startBucket; i < endBucket; i++) {
       const x =
-        (i * peaks.samplesPerBucket - scrollOffset) / samplesPerPixel;
+        (i * peaks.samplesPerBucket + offsetSamples - scrollOffset) / samplesPerPixel;
       if (x < -barWidth || x > width + 1) continue;
 
       const minVal = peaks.min[i];
@@ -119,8 +112,8 @@ export function WaveformCanvas({
     ctx.lineTo(width, halfHeight);
     ctx.stroke();
 
-    // Draw track-end boundary (dims empty space beyond audio)
-    drawTrackEnd(ctx, peaks.duration, viewState, peaks.sampleRate, width, height);
+    // Draw track-end boundary (dims empty space beyond audio, using shared-timeline end)
+    drawTrackEnd(ctx, syncOffsetSeconds + peaks.duration, viewState, peaks.sampleRate, width, height);
 
     // Draw sync marker
     drawSyncMarker(ctx, syncOffsetSeconds, isReference, viewState, peaks.sampleRate, width, height);

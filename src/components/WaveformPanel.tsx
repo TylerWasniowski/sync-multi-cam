@@ -77,14 +77,17 @@ export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, on
     }
   }, [defaultSPP]);
 
-  // Max scroll offset
+  // Max scroll offset (accounts for offset + duration on shared timeline)
   const maxTotalSamples = useMemo(() => {
     let max = 0;
-    for (const peaks of peaksMap.values()) {
-      if (peaks.totalSamples > max) max = peaks.totalSamples;
+    for (const result of results) {
+      const peaks = peaksMap.get(result.fileId);
+      if (!peaks) continue;
+      const end = result.offsetSeconds * peaks.sampleRate + peaks.totalSamples;
+      if (end > max) max = end;
     }
     return max;
-  }, [peaksMap]);
+  }, [results, peaksMap]);
 
   const handleViewStateChange = useCallback((update: Partial<ViewState>) => {
     // Track if user has zoomed

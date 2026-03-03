@@ -41,8 +41,30 @@ export function createSyncEngine(
     for (let i = 0; i < followers.length; i++) {
       const follower = followers[i];
       const expectedTime = leaderTime + offsets[i];
+
+      // Not yet active — keep paused at time 0
+      if (expectedTime < 0) {
+        if (!follower.paused) follower.pause();
+        follower.playbackRate = PLAYBACK_RATE_NORMAL;
+        continue;
+      }
+
+      // Past end — keep paused at last frame
+      const dur = follower.duration || Infinity;
+      if (expectedTime >= dur) {
+        if (!follower.paused) follower.pause();
+        follower.playbackRate = PLAYBACK_RATE_NORMAL;
+        continue;
+      }
+
+      // Auto-start if paused and should be active
+      if (follower.paused && active) {
+        follower.currentTime = expectedTime;
+        follower.play().catch(() => {});
+      }
+
       // Clamp to valid range
-      const clampedExpected = Math.max(0, Math.min(expectedTime, follower.duration || Infinity));
+      const clampedExpected = Math.min(expectedTime, dur);
       const actualTime = follower.currentTime;
       const drift = actualTime - clampedExpected;
 
@@ -106,11 +128,12 @@ export function createSyncEngine(
       leader.currentTime = time;
       for (let i = 0; i < followers.length; i++) {
         const expectedTime = time + offsets[i];
-        // Clamp to valid range
-        followers[i].currentTime = Math.max(
-          0,
-          Math.min(expectedTime, followers[i].duration || Infinity),
-        );
+        if (expectedTime < 0) {
+          followers[i].currentTime = 0;
+          if (!followers[i].paused) followers[i].pause();
+        } else {
+          followers[i].currentTime = Math.min(expectedTime, followers[i].duration || Infinity);
+        }
         followers[i].playbackRate = PLAYBACK_RATE_NORMAL;
       }
     },

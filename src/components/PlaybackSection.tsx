@@ -49,25 +49,20 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
   const lastExtractTimeRef = useRef(0);
   const scrubRafRef = useRef(0);
 
-  // Determine leader and follower indices from results
-  // Leader: the video with the minimum trimSeconds (reference or latest-starting)
-  const { leaderIndex, followerIndices, leaderTrimSeconds } = useMemo(() => {
+  // Determine leader (reference track) and followers from results
+  // Leader = reference track (offset=0), followers have positive offsets on the shared timeline
+  const { leaderIndex, followerIndices, maxOffset } = useMemo(() => {
     if (results.length === 0) {
-      return { leaderIndex: -1, followerIndices: [] as number[], leaderTrimSeconds: 0 };
+      return { leaderIndex: -1, followerIndices: [] as number[], maxOffset: 0 };
     }
-    let minIdx = 0;
-    let minTrim = results[0].trimSeconds;
-    for (let i = 1; i < results.length; i++) {
-      if (results[i].trimSeconds < minTrim) {
-        minTrim = results[i].trimSeconds;
-        minIdx = i;
-      }
-    }
+    const refIdx = results.findIndex(r => r.isReference);
+    const leaderIdx = refIdx >= 0 ? refIdx : 0;
     const followers: number[] = [];
     for (let i = 0; i < results.length; i++) {
-      if (i !== minIdx) followers.push(i);
+      if (i !== leaderIdx) followers.push(i);
     }
-    return { leaderIndex: minIdx, followerIndices: followers, leaderTrimSeconds: minTrim };
+    const maxOff = Math.max(...results.map(r => r.offsetSeconds));
+    return { leaderIndex: leaderIdx, followerIndices: followers, maxOffset: maxOff };
   }, [results]);
 
   // Create poster extractors when results change
@@ -95,7 +90,8 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
     );
     extractorsRef.current = extractors;
 
-    // Extract initial poster frames at each video's trim offset
+    // Extract initial poster frames at the sync point (maxOffset = where all cameras overlap)
+    const maxOff = Math.max(...results.map(r => r.offsetSeconds));
     const initialUrls: (string | null)[] = results.map(() => null);
     setPosterUrls(initialUrls);
 
@@ -103,7 +99,7 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
 
     results.forEach((result, index) => {
       const extractor = extractors[index];
-      const initialTime = result.trimSeconds;
+      const initialTime = Math.max(0, maxOff - result.offsetSeconds);
 
       extractor
         .extract(initialTime)
@@ -140,6 +136,19 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
     };
   }, [results]);
 
+  // Update video tile visibility based on shared timeline position
+  // Videos before their offset or after their end show as black (opacity 0, bg-black grid shows through)
+  const updateVideoVisibility = useCallback((time: number) => {
+    for (let i = 0; i < results.length; i++) {
+      const video = videoRefs.current[i];
+      if (video) {
+        const start = results[i].offsetSeconds;
+        const end = start + video.duration;
+        video.style.opacity = (time >= start && time < end) ? '1' : '0';
+      }
+    }
+  }, [results]);
+
   // When allVideosReady becomes true, set up the sync engine
   useEffect(() => {
     if (!allVideosReady || results.length === 0 || leaderIndex < 0) return;
@@ -148,28 +157,38 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
     const leaderEl = refs[leaderIndex];
     if (!leaderEl) return;
 
-    // Set initial currentTime on all videos to their respective trimSeconds positions
+    // Set initial positions at the sync point (maxOffset) so all cameras have content
     for (let i = 0; i < results.length; i++) {
       const video = refs[i];
       if (video) {
-        video.currentTime = results[i].trimSeconds;
+        video.currentTime = Math.max(0, maxOffset - results[i].offsetSeconds);
       }
     }
 
-    // Compute playable duration from the leader
-    const playableDuration = leaderEl.duration - leaderTrimSeconds;
-    setDuration(isFinite(playableDuration) && playableDuration > 0 ? playableDuration : 0);
-    setCurrentTime(0);
+    // Compute total timeline duration: max(offset + video duration) across all tracks
+    let totalDuration = leaderEl.duration; // leader (reference) starts at 0
+    for (const fi of followerIndices) {
+      const el = refs[fi];
+      if (el) {
+        const end = results[fi].offsetSeconds + el.duration;
+        if (end > totalDuration) totalDuration = end;
+      }
+    }
+    setDuration(isFinite(totalDuration) && totalDuration > 0 ? totalDuration : 0);
+    setCurrentTime(maxOffset);
+
+    // Set initial visibility
+    updateVideoVisibility(maxOffset);
 
     // Gather follower elements and their offsets
+    // Negative offset: follower video time = leader time + offset
     const followerEls: HTMLVideoElement[] = [];
     const followerOffsets: number[] = [];
     for (const fi of followerIndices) {
       const el = refs[fi];
       if (el) {
         followerEls.push(el);
-        // Offset: follower's trimSeconds minus leader's trimSeconds
-        followerOffsets.push(results[fi].trimSeconds - leaderTrimSeconds);
+        followerOffsets.push(-results[fi].offsetSeconds);
       }
     }
 
@@ -179,8 +198,9 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
       followerEls,
       followerOffsets,
       (time: number) => {
-        // Normalize to 0-based playback time
-        setCurrentTime(time - leaderTrimSeconds);
+        // Leader time = shared timeline time directly (no normalization)
+        setCurrentTime(time);
+        updateVideoVisibility(time);
       },
     );
     syncEngineRef.current = engine;
@@ -189,6 +209,8 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
     const handleEnded = () => {
       engine.stop();
       setIsPlaying(false);
+      // Hide all videos at end of playback
+      updateVideoVisibility(Infinity);
     };
     leaderEl.addEventListener('ended', handleEnded);
 
@@ -199,7 +221,7 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
       audioMixerRef.current?.destroy();
       audioMixerRef.current = null;
     };
-  }, [allVideosReady, results, leaderIndex, followerIndices, leaderTrimSeconds]);
+  }, [allVideosReady, results, leaderIndex, followerIndices, maxOffset, updateVideoVisibility]);
 
   const handleAllReady = useCallback(() => {
     setAllVideosReady(true);
@@ -244,10 +266,13 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
       }
     }
 
-    // Play all video elements
+    // Play leader and active followers (followers whose offset has been reached)
+    const leaderEl = refs[leaderIndex];
     const playPromises: Promise<void>[] = [];
-    for (const video of refs) {
-      if (video) {
+    if (leaderEl) playPromises.push(leaderEl.play());
+    for (const fi of followerIndices) {
+      const video = refs[fi];
+      if (video && currentTime >= results[fi].offsetSeconds) {
         playPromises.push(video.play());
       }
     }
@@ -266,7 +291,7 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
         engine.stop();
         setIsPlaying(false);
       });
-  }, [mutedTracks]);
+  }, [mutedTracks, leaderIndex, followerIndices, currentTime, results]);
 
   // Pause handler
   const handlePause = useCallback(() => {
@@ -299,26 +324,31 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
       engine.stop();
     }
 
-    // Convert 0-based UI time back to absolute video time
-    const absoluteTime = seekTime + leaderTrimSeconds;
-    engine.seek(absoluteTime);
+    // seekTime is shared timeline time — leader time directly
+    engine.seek(seekTime);
     setCurrentTime(seekTime);
+    updateVideoVisibility(seekTime);
 
     // If was playing, wait for all seeked events then resume
     if (wasPlaying) {
-      const seekPromises = refs
-        .filter((v): v is HTMLVideoElement => v !== null)
-        .map(
-          (video) =>
-            new Promise<void>((resolve) => {
-              video.addEventListener('seeked', () => resolve(), { once: true });
-            }),
-        );
+      const activeRefs = refs.filter((v): v is HTMLVideoElement => v !== null);
+      const seekPromises = activeRefs.map(
+        (video) =>
+          new Promise<void>((resolve) => {
+            video.addEventListener('seeked', () => resolve(), { once: true });
+          }),
+      );
 
       Promise.all(seekPromises).then(() => {
+        // Play leader and active followers at the new seek position
         const playPromises: Promise<void>[] = [];
-        for (const video of refs) {
-          if (video) playPromises.push(video.play());
+        const leaderEl = refs[leaderIndex];
+        if (leaderEl) playPromises.push(leaderEl.play());
+        for (const fi of followerIndices) {
+          const video = refs[fi];
+          if (video && seekTime >= results[fi].offsetSeconds) {
+            playPromises.push(video.play());
+          }
         }
         Promise.all(playPromises)
           .then(() => {
@@ -326,12 +356,11 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
             setIsPlaying(true);
           })
           .catch(() => {
-            // Play failed after seek -- stay paused
             setIsPlaying(false);
           });
       });
     }
-  }, [isPlaying, leaderTrimSeconds]);
+  }, [isPlaying, updateVideoVisibility, leaderIndex, followerIndices, results]);
 
   // Scrub-to-poster pipeline
   const handleScrub = useCallback(
@@ -356,9 +385,9 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
           const extractor = extractors[index];
           if (!extractor) return;
 
-          // Compute per-video time: waveform time is aligned time,
-          // add trim offset to get absolute video time
-          const perVideoTime = time + result.trimSeconds;
+          // Compute per-video time from shared timeline
+          const perVideoTime = time - result.offsetSeconds;
+          if (perVideoTime < 0) return; // before this track's offset — skip
 
           extractor
             .extract(perVideoTime)
@@ -405,11 +434,11 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
   const handleScrubSeek = useCallback((seekTime: number) => {
     const engine = syncEngineRef.current;
     if (!engine) return;
-    // Convert 0-based aligned time to absolute video time
-    const absoluteTime = seekTime + leaderTrimSeconds;
-    engine.seek(absoluteTime);
+    // seekTime is shared timeline time — leader time directly
+    engine.seek(seekTime);
     setCurrentTime(seekTime);
-  }, [leaderTrimSeconds]);
+    updateVideoVisibility(seekTime);
+  }, [updateVideoVisibility]);
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
