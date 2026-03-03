@@ -5,9 +5,10 @@ import { WaveformTrack } from './WaveformTrack.tsx';
 export interface WaveformPanelProps {
   peaksMap: Map<string, MultiResolutionPeaks>;
   results: DownloadableResult[];
+  onScrub?: (time: number | null) => void;
 }
 
-export function WaveformPanel({ peaksMap, results }: WaveformPanelProps) {
+export function WaveformPanel({ peaksMap, results, onScrub }: WaveformPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const [panelWidth, setPanelWidth] = useState(0);
 
@@ -83,6 +84,11 @@ export function WaveformPanel({ peaksMap, results }: WaveformPanelProps) {
       hasUserZoomedRef.current = true;
     }
 
+    // Surface cursor time changes to parent via onScrub callback
+    if (update.cursorTime !== undefined) {
+      onScrub?.(update.cursorTime);
+    }
+
     pendingUpdateRef.current = { ...pendingUpdateRef.current, ...update };
 
     if (rafIdRef.current) return; // already scheduled
@@ -103,7 +109,7 @@ export function WaveformPanel({ peaksMap, results }: WaveformPanelProps) {
         return next;
       });
     });
-  }, [maxTotalSamples, canvasWidth]);
+  }, [maxTotalSamples, canvasWidth, onScrub]);
 
   // --- Wheel zoom at panel level (covers tracks + gaps) ---
   const MIN_SAMPLES_PER_PIXEL = 1;
@@ -192,7 +198,8 @@ export function WaveformPanel({ peaksMap, results }: WaveformPanelProps) {
 
   const handlePointerLeaveAll = useCallback(() => {
     handleViewStateChange({ cursorTime: null });
-  }, [handleViewStateChange]);
+    onScrub?.(null);
+  }, [handleViewStateChange, onScrub]);
 
   // No-op for enter (cursor is tracked via pointer move)
   const handlePointerEnter = useCallback(() => {}, []);
