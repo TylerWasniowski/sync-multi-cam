@@ -82,11 +82,11 @@ Plans:
   2. User can select export resolution (4K, 1080p, or 720p) before exporting
   3. Export shows a progress indicator that updates at frame level so the user knows how far along the encode is
   4. User can select which audio track to include in the exported video (matches playback audio selection options)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 08-01: TBD
-- [ ] 08-02: TBD
+- [ ] 08-01-PLAN.md -- Pure filtergraph builder (TDD): buildExportArgs with scale+xstack, audio args, resolution presets
+- [ ] 08-02-PLAN.md -- Export pipeline + ExportPanel UI: MEMFS I/O, progress reporting, download, resolution picker, wired into PlaybackSection
 
 ### Phase 9: Polish
 **Goal**: Quality-of-life improvements that make the playback experience feel complete
@@ -114,5 +114,5 @@ Plans:
 | 5. Video Grid & Synchronized Playback | v2.0 | 3/3 | Complete | 2026-03-02 |
 | 6. Audio Mixing | v2.0 | Complete    | 2026-03-03 | 2026-03-02 |
 | 7. Waveform Scrubbar Integration | v2.0 | 0/2 | Planned | - |
-| 8. Composite Export | v2.0 | 0/? | Not started | - |
+| 8. Composite Export | v2.0 | 0/2 | Planned | - |
 | 9. Polish | v2.0 | 0/? | Not started | - |
