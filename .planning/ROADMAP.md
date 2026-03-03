@@ -19,7 +19,7 @@
 
 ### v2.0 Synced Playback & Export
 
-- [ ] **Phase 5: Video Grid & Synchronized Playback** - Dynamic grid layout with synced multi-camera playback and transport controls
+- [x] **Phase 5: Video Grid & Synchronized Playback** - Dynamic grid layout with synced multi-camera playback and transport controls (3/3 plans complete)
 - [ ] **Phase 6: Audio Mixing** - Web Audio API routing with all-mix default and per-camera solo
 - [ ] **Phase 7: Waveform Scrubbar Integration** - Click/drag to seek/scrub, Shift+drag to pan, animated playhead
 - [ ] **Phase 8: Composite Export** - FFmpeg WASM xstack composite to single H.264 MP4 at selectable resolutions
@@ -40,9 +40,9 @@
 **Plans**: 3 plans
 
 Plans:
-- [ ] 05-01-PLAN.md -- Grid layout algorithm (TDD): pure computeGridLayout function with tile positioning
-- [ ] 05-02-PLAN.md -- Video grid & PlaybackSection UI: VideoTile, VideoGrid, PlaybackSection components
-- [ ] 05-03-PLAN.md -- Sync engine & transport controls: leader-follower sync, play/pause/seek, App.tsx integration
+- [x] 05-01-PLAN.md -- Grid layout algorithm (TDD): pure computeGridLayout function with tile positioning
+- [x] 05-02-PLAN.md -- Video grid & PlaybackSection UI: VideoTile, VideoGrid, PlaybackSection components
+- [x] 05-03-PLAN.md -- Sync engine & transport controls: leader-follower sync, play/pause/seek, App.tsx integration
 
 ### Phase 6: Audio Mixing
 **Goal**: Users hear audio during playback and can choose which camera's audio to listen to

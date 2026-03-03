@@ -15,9 +15,9 @@ Requirements for synced playback and composite export. Each maps to roadmap phas
 
 ### Synchronized Playback
 
-- [ ] **PLAY-01**: User can play/pause all synced videos simultaneously with a single transport control
-- [ ] **PLAY-02**: All videos maintain frame-level sync during playback via drift-corrected sync loop
-- [ ] **PLAY-03**: User can seek to any point and all videos jump to the correct offset position
+- [x] **PLAY-01**: User can play/pause all synced videos simultaneously with a single transport control
+- [x] **PLAY-02**: All videos maintain frame-level sync during playback via drift-corrected sync loop
+- [x] **PLAY-03**: User can seek to any point and all videos jump to the correct offset position
 - [x] **PLAY-04**: Waveform tracks remain interactive immediately after sync completes while video previews load in background
 
 ### Audio
@@ -84,9 +84,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GRID-01 | Phase 5 | Complete |
 | GRID-02 | Phase 5 | Complete |
 | GRID-03 | Phase 5 | Complete |
-| PLAY-01 | Phase 5 | Pending |
-| PLAY-02 | Phase 5 | Pending |
-| PLAY-03 | Phase 5 | Pending |
+| PLAY-01 | Phase 5 | Complete |
+| PLAY-02 | Phase 5 | Complete |
+| PLAY-03 | Phase 5 | Complete |
 | PLAY-04 | Phase 5 | Complete |
 | AUD-01 | Phase 6 | Pending |
 | AUD-02 | Phase 6 | Pending |
