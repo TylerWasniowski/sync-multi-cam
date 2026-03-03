@@ -111,7 +111,7 @@ Plans:
 | 3. Video Trimming and Output | v1.0 | 2/2 | Complete | 2026-03-02 |
 | 4. Waveform Visualization | v1.0 | 4/4 | Complete | 2026-03-02 |
 | 5. Video Grid & Synchronized Playback | v2.0 | 3/3 | Complete | 2026-03-02 |
-| 6. Audio Mixing | v2.0 | 1/1 | Complete | 2026-03-02 |
+| 6. Audio Mixing | v2.0 | Complete    | 2026-03-03 | 2026-03-02 |
 | 7. Waveform Scrubbar Integration | v2.0 | 0/? | Not started | - |
 | 8. Composite Export | v2.0 | 0/? | Not started | - |
 | 9. Polish | v2.0 | 0/? | Not started | - |
