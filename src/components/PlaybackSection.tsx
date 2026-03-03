@@ -455,6 +455,7 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
         results={results}
         mutedTracks={mutedTracks}
         totalDurationSeconds={duration}
+        tileAspectRatio={16 / 9}
         disabled={!allVideosReady}
       />
     </div>
