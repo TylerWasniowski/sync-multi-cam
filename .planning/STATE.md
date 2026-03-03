@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Synced Playback & Export
-status: unknown
-last_updated: "2026-03-03T17:56:44.924Z"
+status: executing
+last_updated: "2026-03-03T18:19:21Z"
 progress:
   total_phases: 3
   completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
+  total_plans: 8
+  completed_plans: 7
 ---
 
 # Project State
@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** Accurately sync multiple camera angles by audio so users get aligned video files without installing any software
-**Current focus:** Phase 7 -- Waveform Scrubbar Integration (IN PROGRESS)
+**Current focus:** Phase 8 -- Composite Export (IN PROGRESS)
 
 ## Current Position
 
-Phase: 7 of 9 (Waveform Scrubbar Integration) -- IN PROGRESS
-Plan: 1 of 2 in Phase 7 -- COMPLETE
-Status: Executing Phase 7
-Last activity: 2026-03-02 -- Completed 07-01 Waveform Scrubbar Integration
+Phase: 8 of 9 (Composite Export) -- IN PROGRESS
+Plan: 1 of 2 in Phase 8 -- COMPLETE
+Status: Executing Phase 8
+Last activity: 2026-03-03 -- Completed 08-01 Filtergraph Builder
 
-Progress: [████████░░] 83%
+Progress: [████████░░] 88%
 
 ## Performance Metrics
 
@@ -43,6 +43,7 @@ Progress: [████████░░] 83%
 | 05 | 3/3 | 9min | 3min |
 | 06 | 1/1 | 15min | 15min |
 | 07 | 1/2 | 4min | 4min |
+| 08 | 1/2 | 4min | 4min |
 
 *Updated after each plan completion*
 
@@ -70,6 +71,10 @@ Full decision log in PROJECT.md Key Decisions table.
 - 07-01: Bare click treated as zero-distance scrub -- no separate click handler needed
 - 07-01: Touch gestures unchanged (single-finger pan, pinch-to-zoom) since no keyboard modifiers on touch
 - 07-01: Shift key detection via document keydown/keyup for cursor styling
+- 08-01: Even dimension rounding uses bitwise AND ~1 for H.264 compliance
+- 08-01: Audio amix uses normalize=0 and duration=longest for predictable output
+- 08-01: Single-element mix array optimized to direct map (no amix overhead)
+- 08-01: Video and audio filter parts combined into single -filter_complex string
 
 ### Pending Todos
 
@@ -77,11 +82,10 @@ None.
 
 ### Blockers/Concerns
 
-- Phase 8 (Export): FFmpeg xstack filter string generation for variable tile layouts needs prototyping spike
-- Phase 8 (Export): Audio strategy for "all mix" export needs decision (reference track vs amix filter)
+None. (Previously: xstack filter generation and audio strategy -- resolved in 08-01)
 
 ## Session Continuity
 
-Last session: 2026-03-02
-Stopped at: Completed 07-01-PLAN.md
+Last session: 2026-03-03
+Stopped at: Completed 08-01-PLAN.md
 Resume file: None
