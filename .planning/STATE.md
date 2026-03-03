@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Synced Playback & Export
-status: executing
-last_updated: "2026-03-03T01:57:45Z"
+status: unknown
+last_updated: "2026-03-03T02:01:36.008Z"
 progress:
-  total_phases: 5
+  total_phases: 1
   completed_phases: 1
   total_plans: 3
   completed_plans: 3
