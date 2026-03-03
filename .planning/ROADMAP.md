@@ -75,18 +75,18 @@ Plans:
 
 ### Phase 8: Composite Export
 **Goal**: Users can download a single MP4 containing all camera angles composited in the grid layout
-**Depends on**: Phase 5 (grid layout algorithm provides tile coordinates for xstack filtergraph)
+**Depends on**: Phase 5 (grid layout algorithm provides tile coordinates for compositing)
 **Requirements**: EXP-01, EXP-02, EXP-03, EXP-04
 **Success Criteria** (what must be TRUE):
   1. User can trigger export and receive a single MP4 file with all cameras composited in the grid layout
   2. User can select export resolution (4K, 1080p, or 720p) before exporting
   3. Export shows a progress indicator that updates at frame level so the user knows how far along the encode is
   4. User can select which audio track to include in the exported video (matches playback audio selection options)
-**Plans**: 2 plans
+**Plans**: 2 plans (REWORK -- WebCodecs replacing FFmpeg WASM)
 
 Plans:
-- [x] 08-01-PLAN.md -- Pure filtergraph builder (TDD): buildExportArgs with scale+xstack, audio args, resolution presets
-- [x] 08-02-PLAN.md -- Export pipeline + ExportPanel UI: MEMFS I/O, progress reporting, download, resolution picker, wired into PlaybackSection
+- [ ] 08-01-PLAN.md -- WebCodecs pipeline infrastructure: install Mediabunny, remove FFmpeg WASM, Web Worker with demux/decode/composite/encode/mux, main-thread API
+- [ ] 08-02-PLAN.md -- Export UI wiring + human verification: ExportPanel with cancel button and WebCodecs check, PlaybackSection props update, end-to-end verification
 
 ### Phase 9: Polish
 **Goal**: Quality-of-life improvements that make the playback experience feel complete
@@ -114,5 +114,5 @@ Plans:
 | 5. Video Grid & Synchronized Playback | v2.0 | 3/3 | Complete | 2026-03-02 |
 | 6. Audio Mixing | v2.0 | Complete    | 2026-03-03 | 2026-03-02 |
 | 7. Waveform Scrubbar Integration | v2.0 | 0/2 | Planned | - |
-| 8. Composite Export | v2.0 | 0/2 | Planned | - |
+| 8. Composite Export | v2.0 | 0/2 | Rework (WebCodecs) | - |
 | 9. Polish | v2.0 | 0/? | Not started | - |
