@@ -151,6 +151,8 @@ async function runExport(
   const width = config.resolution.width & ~1;
   const height = config.resolution.height & ~1;
 
+  console.log('[ExportWorker] starting pipeline', { width, height, files: config.files.length });
+
   // 1. Create Mediabunny Inputs (one per source file)
   const inputs = config.files.map(file => new Input({
     formats: [MP4],
@@ -170,6 +172,7 @@ async function runExport(
       track ? new VideoSampleSink(track) : null,
     );
 
+    console.log('[ExportWorker] video tracks loaded:', videoTracks.map(t => t !== null));
     if (cancelled) { post({ type: 'cancelled' }); return; }
 
     // 3. Set up OffscreenCanvas at export resolution
@@ -185,11 +188,9 @@ async function runExport(
     videoSource = new CanvasSource(canvas, {
       codec: 'avc',
       bitrate: config.bitrate,
-      hardwareAcceleration: 'prefer-hardware',
-      latencyMode: 'quality',
       keyFrameInterval: 2,
     });
-    output.addVideoTrack(videoSource, { frameRate: config.fps });
+    output.addVideoTrack(videoSource);
 
     // 5. Handle audio
     const mixedAudio = await mixAudio(
@@ -218,6 +219,7 @@ async function runExport(
     );
 
     // 7. Start output and run frame loop
+    console.log('[ExportWorker] starting output + frame loop, totalFrames:', Math.ceil(config.totalDurationSeconds * config.fps));
     await output.start();
 
     const frameDuration = 1 / config.fps;
@@ -310,10 +312,12 @@ async function runExport(
 
 self.onmessage = (e: MessageEvent<ExportWorkerCommand>) => {
   const msg = e.data;
+  console.log('[ExportWorker] received message:', msg.type);
 
   switch (msg.type) {
     case 'start':
       runExport(msg).catch((err: unknown) => {
+        console.error('[ExportWorker] pipeline error:', err);
         const message = err instanceof Error ? err.message : String(err);
         post({ type: 'error', message });
       });
