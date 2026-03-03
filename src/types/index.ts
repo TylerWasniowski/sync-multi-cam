@@ -71,3 +71,6 @@ export interface ViewState {
   scrollOffset: number; // horizontal scroll position in samples
   cursorTime: number | null; // hover position in seconds, null when not hovering
 }
+
+/** Video tile display mode: 'fill' crops to fill tiles, 'letterbox' preserves aspect ratio */
+export type DisplayMode = 'fill' | 'letterbox';

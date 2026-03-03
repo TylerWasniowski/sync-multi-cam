@@ -79,15 +79,18 @@ describe('computeGridLayout', () => {
 
       // Tiles should be stacked vertically, centered horizontally
       const [tile0, tile1] = result.tiles;
-      expect(tile0.width).toBe(Math.round(300 * (16 / 9)));
-      expect(tile0.height).toBe(300);
-      expect(tile1.width).toBe(Math.round(300 * (16 / 9)));
-      expect(tile1.height).toBe(300);
+      const expectedW = Math.round(300 * (16 / 9)); // 533
+      const expectedH = 300;
+      expect(tile0.width).toBe(expectedW);
+      expect(tile0.height).toBe(expectedH);
+      expect(tile1.width).toBe(expectedW);
+      expect(tile1.height).toBe(expectedH);
 
-      // Centered horizontally: (800 - 533) / 2 = 133 or 134
-      expect(tile0.x).toBe(Math.round((800 - 300 * (16 / 9)) / 2));
+      // Centered horizontally: offset = (800 - 533) / 2 = 133.5 -> rounds to 134
+      const expectedOffsetX = Math.round((800 - expectedW) / 2);
+      expect(tile0.x).toBe(expectedOffsetX);
       expect(tile0.y).toBe(0);
-      expect(tile1.x).toBe(Math.round((800 - 300 * (16 / 9)) / 2));
+      expect(tile1.x).toBe(expectedOffsetX);
       expect(tile1.y).toBe(300);
     });
   });
