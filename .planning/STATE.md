@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Synced Playback & Export
 status: executing
-last_updated: "2026-03-03T18:44:38.453Z"
+last_updated: "2026-03-03T19:52:36.658Z"
 progress:
-  total_phases: 3
+  total_phases: 4
   completed_phases: 3
   total_plans: 8
-  completed_plans: 8
+  completed_plans: 7
 ---
 
 # Project State
@@ -18,16 +18,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-02)
 
 **Core value:** Accurately sync multiple camera angles by audio so users get aligned video files without installing any software
-**Current focus:** Phase 8 -- Composite Export (COMPLETE)
+**Current focus:** Phase 8 -- Composite Export (REWORK -- replacing FFmpeg WASM with WebCodecs)
 
 ## Current Position
 
-Phase: 8 of 9 (Composite Export) -- COMPLETE
-Plan: 2 of 2 in Phase 8 -- COMPLETE
-Status: Phase 8 Complete
-Last activity: 2026-03-03 -- Completed 08-02 Export Pipeline & UI
+Phase: 8 of 9 (Composite Export) -- REWORK IN PROGRESS
+Plan: 1 of 2 in Phase 8 (rework) -- COMPLETE
+Status: Executing Phase 8 Rework
+Last activity: 2026-03-03 -- Completed 08-01 WebCodecs export pipeline infrastructure
 
-Progress: [██████████] 100%
+Progress: [█████████░] 90% (rework: 1/2 plans complete)
 
 ## Performance Metrics
 
@@ -46,6 +46,7 @@ Progress: [██████████] 100%
 | 08 | 2/2 | 24min | 12min |
 
 *Updated after each plan completion*
+| Phase 08 P01 | 6min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -53,7 +54,7 @@ Progress: [██████████] 100%
 
 Full decision log in PROJECT.md Key Decisions table.
 
-- v2.0: FFmpeg WASM xstack for export (not WebCodecs -- Firefox/Safari gaps)
+- v2.0: WebCodecs+Mediabunny for export (replaced FFmpeg WASM -- too slow for compositing)
 - v2.0: rAF/rVFC leader-follower sync loop (not timeupdate events)
 - v2.0: Native video elements in CSS grid (not canvas compositing for playback)
 - 05-01: Tile dimension rounding before centering offset -- avoids sub-pixel gaps
@@ -71,14 +72,12 @@ Full decision log in PROJECT.md Key Decisions table.
 - 07-01: Bare click treated as zero-distance scrub -- no separate click handler needed
 - 07-01: Touch gestures unchanged (single-finger pan, pinch-to-zoom) since no keyboard modifiers on touch
 - 07-01: Shift key detection via document keydown/keyup for cursor styling
-- 08-01: Even dimension rounding uses bitwise AND ~1 for H.264 compliance
-- 08-01: Audio amix uses normalize=0 and duration=longest for predictable output
-- 08-01: Single-element mix array optimized to direct map (no amix overhead)
-- 08-01: Video and audio filter parts combined into single -filter_complex string
-- 08-02: Copy Uint8Array before FFmpeg writeFile to prevent ArrayBuffer detachment via postMessage
-- 08-02: Audio config derived from mute state (all muted = none, else mix unmuted)
-- 08-02: ExportPanel uses preparing/encoding state distinction for user feedback clarity
-- 08-02: Auto-download on completion with 2s display before reset to idle
+- 08-01 (rework): Keep @ffmpeg/ffmpeg packages for sync pipeline (audioExtractor, videoTrimmer)
+- 08-01 (rework): AudioConfig type in shared types/index.ts for cross-module access
+- 08-01 (rework): VideoSample.close() in try/finally for GPU memory safety
+- 08-01 (rework): Even dimension rounding via bitwise AND ~1 for H.264 compliance
+- 08-01 (rework): Audio mixing via OfflineAudioContext at 48kHz stereo
+- 08-01 (rework): CanvasSource.add() await for encoder backpressure
 
 ### Pending Todos
 
@@ -91,5 +90,5 @@ None. (Previously: xstack filter generation and audio strategy -- resolved in 08
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed 08-02-PLAN.md
+Stopped at: Completed 08-01-PLAN.md (rework)
 Resume file: None

@@ -85,7 +85,7 @@ Plans:
 **Plans**: 2 plans (REWORK -- WebCodecs replacing FFmpeg WASM)
 
 Plans:
-- [ ] 08-01-PLAN.md -- WebCodecs pipeline infrastructure: install Mediabunny, remove FFmpeg WASM, Web Worker with demux/decode/composite/encode/mux, main-thread API
+- [x] 08-01-PLAN.md -- WebCodecs pipeline infrastructure: install Mediabunny, remove FFmpeg WASM, Web Worker with demux/decode/composite/encode/mux, main-thread API
 - [ ] 08-02-PLAN.md -- Export UI wiring + human verification: ExportPanel with cancel button and WebCodecs check, PlaybackSection props update, end-to-end verification
 
 ### Phase 9: Polish
