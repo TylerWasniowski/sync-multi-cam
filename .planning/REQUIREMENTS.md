@@ -10,15 +10,15 @@ Requirements for synced playback and composite export. Each maps to roadmap phas
 ### Grid Layout
 
 - [x] **GRID-01**: User sees all synced videos in a dynamic grid that packs tiles to minimize blank space based on video count and aspect ratios
-- [ ] **GRID-02**: User can toggle between "preserve aspect ratio" (letterbox) and "fill tiles" (crop) display modes
-- [ ] **GRID-03**: Grid layout responds to container resize without requiring manual refresh
+- [x] **GRID-02**: User can toggle between "preserve aspect ratio" (letterbox) and "fill tiles" (crop) display modes
+- [x] **GRID-03**: Grid layout responds to container resize without requiring manual refresh
 
 ### Synchronized Playback
 
 - [ ] **PLAY-01**: User can play/pause all synced videos simultaneously with a single transport control
 - [ ] **PLAY-02**: All videos maintain frame-level sync during playback via drift-corrected sync loop
 - [ ] **PLAY-03**: User can seek to any point and all videos jump to the correct offset position
-- [ ] **PLAY-04**: Waveform tracks remain interactive immediately after sync completes while video previews load in background
+- [x] **PLAY-04**: Waveform tracks remain interactive immediately after sync completes while video previews load in background
 
 ### Audio
 
@@ -82,12 +82,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | GRID-01 | Phase 5 | Complete |
-| GRID-02 | Phase 5 | Pending |
-| GRID-03 | Phase 5 | Pending |
+| GRID-02 | Phase 5 | Complete |
+| GRID-03 | Phase 5 | Complete |
 | PLAY-01 | Phase 5 | Pending |
 | PLAY-02 | Phase 5 | Pending |
 | PLAY-03 | Phase 5 | Pending |
-| PLAY-04 | Phase 5 | Pending |
+| PLAY-04 | Phase 5 | Complete |
 | AUD-01 | Phase 6 | Pending |
 | AUD-02 | Phase 6 | Pending |
 | AUD-03 | Phase 6 | Pending |

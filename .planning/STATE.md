@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Synced Playback & Export
 status: executing
-last_updated: "2026-03-03T01:45:00Z"
+last_updated: "2026-03-03T01:50:51Z"
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -23,11 +23,11 @@ See: .planning/PROJECT.md (updated 2026-03-02)
 ## Current Position
 
 Phase: 5 of 9 (Video Grid & Synchronized Playback)
-Plan: 2 of 3 in Phase 5
+Plan: 3 of 3 in Phase 5
 Status: Executing
-Last activity: 2026-03-03 -- Completed 05-01 Grid Layout Algorithm
+Last activity: 2026-03-03 -- Completed 05-02 Video Grid UI Components
 
-Progress: [███░░░░░░░] 33%
+Progress: [██████░░░░] 67%
 
 ## Performance Metrics
 
@@ -40,7 +40,7 @@ Progress: [███░░░░░░░] 33%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 05 | 1/3 | 3min | 3min |
+| 05 | 2/3 | 6min | 3min |
 
 *Updated after each plan completion*
 
@@ -55,6 +55,9 @@ Full decision log in PROJECT.md Key Decisions table.
 - v2.0: Native video elements in CSS grid (not canvas compositing for playback)
 - 05-01: Tile dimension rounding before centering offset -- avoids sub-pixel gaps
 - 05-01: Area comparison uses unrounded values for accuracy, rounding only on final output
+- 05-02: WaveformPanel kept as nested card within PlaybackSection (no modifications to its container styling)
+- 05-02: Reusable poster extractor per file for ~10fps scrub performance (one hidden video element alive per file)
+- 05-02: Poster frames persist on pointer leave (not cleared) so user always sees last-scrubbed frame
 
 ### Pending Todos
 
@@ -68,5 +71,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-03
-Stopped at: Completed 05-01-PLAN.md
+Stopped at: Completed 05-02-PLAN.md
 Resume file: None
