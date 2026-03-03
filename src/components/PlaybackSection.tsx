@@ -18,7 +18,11 @@ export interface PlaybackSectionProps {
 export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
   const [displayMode, setDisplayMode] = useState<DisplayMode>('fill');
   const [allVideosReady, setAllVideosReady] = useState(false);
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
+
+  // Tile aspect ratio (detected from first video's intrinsic dimensions)
+  const [tileAspectRatio, setTileAspectRatio] = useState(16 / 9);
 
   // Playback state
   const [isPlaying, setIsPlaying] = useState(false);
@@ -199,6 +203,10 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
 
   const handleAllReady = useCallback(() => {
     setAllVideosReady(true);
+  }, []);
+
+  const handleTileClick = useCallback((index: number) => {
+    setExpandedIndex(prev => prev === index ? null : index);
   }, []);
 
   const toggleDisplayMode = useCallback(() => {
@@ -420,6 +428,9 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
         posterUrls={posterUrls}
         videoRefs={videoRefs}
         onAllReady={handleAllReady}
+        onAspectRatioDetected={setTileAspectRatio}
+        expandedIndex={expandedIndex}
+        onTileClick={handleTileClick}
       />
 
       {/* Transport bar -- between grid and waveforms */}
@@ -455,7 +466,8 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
         results={results}
         mutedTracks={mutedTracks}
         totalDurationSeconds={duration}
-        tileAspectRatio={16 / 9}
+        tileAspectRatio={tileAspectRatio}
+        displayMode={displayMode}
         disabled={!allVideosReady}
       />
     </div>

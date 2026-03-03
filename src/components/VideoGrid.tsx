@@ -9,6 +9,9 @@ export interface VideoGridProps {
   posterUrls: (string | null)[];
   videoRefs: React.RefObject<(HTMLVideoElement | null)[]>;
   onAllReady: () => void;
+  onAspectRatioDetected?: (ratio: number) => void;
+  expandedIndex?: number | null;
+  onTileClick?: (index: number) => void;
 }
 
 export function VideoGrid({
@@ -17,6 +20,9 @@ export function VideoGrid({
   posterUrls,
   videoRefs,
   onAllReady,
+  onAspectRatioDetected,
+  expandedIndex,
+  onTileClick,
 }: VideoGridProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -62,14 +68,18 @@ export function VideoGrid({
       if (!video) return;
 
       if (video.videoWidth > 0 && video.videoHeight > 0) {
-        setAspectRatio(video.videoWidth / video.videoHeight);
+        const ar = video.videoWidth / video.videoHeight;
+        setAspectRatio(ar);
+        onAspectRatioDetected?.(ar);
         clearInterval(interval);
         return;
       }
 
       const checkMetadata = () => {
         if (video.videoWidth > 0 && video.videoHeight > 0) {
-          setAspectRatio(video.videoWidth / video.videoHeight);
+          const ar = video.videoWidth / video.videoHeight;
+          setAspectRatio(ar);
+          onAspectRatioDetected?.(ar);
           clearInterval(interval);
         }
       };
@@ -121,20 +131,23 @@ export function VideoGrid({
         layout.tiles.map((tile, index) => {
           const result = results[index];
           if (!result) return null;
+          const isExpanded = expandedIndex === index;
+          const tileStyle = isExpanded
+            ? { left: 0, top: 0, width: containerWidth, height: containerHeight, zIndex: 10 }
+            : { left: tile.x, top: tile.y, width: tile.width, height: tile.height };
           return (
             <VideoTile
               key={result.fileId}
               file={result.originalFile}
               posterUrl={posterUrls[index] ?? null}
-              displayMode={displayMode}
+              displayMode={isExpanded ? 'letterbox' : displayMode}
               style={{
-                left: tile.x,
-                top: tile.y,
-                width: tile.width,
-                height: tile.height,
+                ...tileStyle,
+                transition: 'all 200ms ease-in-out',
               }}
               videoRef={videoRefCallbacks[index]}
               onReady={handleTileReady}
+              onClick={() => onTileClick?.(index)}
             />
           );
         })}

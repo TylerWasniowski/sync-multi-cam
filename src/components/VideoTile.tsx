@@ -8,6 +8,7 @@ export interface VideoTileProps {
   style: React.CSSProperties;
   videoRef: (el: HTMLVideoElement | null) => void;
   onReady: () => void;
+  onClick?: () => void;
 }
 
 export function VideoTile({
@@ -17,6 +18,7 @@ export function VideoTile({
   style,
   videoRef,
   onReady,
+  onClick,
 }: VideoTileProps) {
   const [loading, setLoading] = useState(true);
   const localRef = useRef<HTMLVideoElement | null>(null);
@@ -65,10 +67,12 @@ export function VideoTile({
 
   return (
     <div
+      onClick={onClick}
       style={{
         ...style,
         position: 'absolute',
         overflow: 'hidden',
+        cursor: onClick ? 'pointer' : undefined,
       }}
     >
       <video
@@ -85,6 +89,11 @@ export function VideoTile({
           display: 'block',
         }}
       />
+      <div className="absolute bottom-0 left-0 right-0 px-2 py-1 bg-gradient-to-t from-black/70 to-transparent pointer-events-none">
+        <span className="text-xs text-white truncate block drop-shadow-sm">
+          {file.name}
+        </span>
+      </div>
       {loading && (
         <div
           className="absolute inset-0 flex items-center justify-center bg-black/50"
