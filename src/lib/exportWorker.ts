@@ -345,13 +345,19 @@ async function runExport(
 
     // 8. Process audio (decode, mix, feed) — happens after all video frames
     if (audioSource) {
-      await processAudio(
-        inputs,
-        config.audioConfig,
-        config.offsets,
-        config.totalDurationSeconds,
-        audioSource,
-      );
+      try {
+        await processAudio(
+          inputs,
+          config.audioConfig,
+          config.offsets,
+          config.totalDurationSeconds,
+          audioSource,
+        );
+      } catch (audioErr) {
+        // AAC encoder may not be supported (e.g. headless Chromium).
+        // Produce video-only output rather than failing the entire export.
+        console.warn('[ExportWorker] audio encoding failed, producing video-only output:', audioErr);
+      }
       audioSource.close();
       audioSource = null;
     }
