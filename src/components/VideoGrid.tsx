@@ -10,8 +10,8 @@ export interface VideoGridProps {
   videoRefs: React.RefObject<(HTMLVideoElement | null)[]>;
   onAllReady: () => void;
   onAspectRatioDetected?: (ratio: number) => void;
-  expandedIndex?: number | null;
-  onTileClick?: (index: number) => void;
+
+
 }
 
 export function VideoGrid({
@@ -21,8 +21,8 @@ export function VideoGrid({
   videoRefs,
   onAllReady,
   onAspectRatioDetected,
-  expandedIndex,
-  onTileClick,
+
+
 }: VideoGridProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -131,23 +131,18 @@ export function VideoGrid({
         layout.tiles.map((tile, index) => {
           const result = results[index];
           if (!result) return null;
-          const isExpanded = expandedIndex === index;
-          const tileStyle = isExpanded
-            ? { left: 0, top: 0, width: containerWidth, height: containerHeight, zIndex: 10 }
-            : { left: tile.x, top: tile.y, width: tile.width, height: tile.height };
+          const tileStyle = { left: tile.x, top: tile.y, width: tile.width, height: tile.height };
           return (
             <VideoTile
               key={result.fileId}
               file={result.originalFile}
               posterUrl={posterUrls[index] ?? null}
-              displayMode={isExpanded ? 'letterbox' : displayMode}
-              style={{
-                ...tileStyle,
-                transition: 'all 200ms ease-in-out',
-              }}
+              displayMode={displayMode}
+              style={tileStyle}
               videoRef={videoRefCallbacks[index]}
               onReady={handleTileReady}
-              onClick={() => onTileClick?.(index)}
+
+
             />
           );
         })}

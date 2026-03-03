@@ -8,7 +8,8 @@ export interface VideoTileProps {
   style: React.CSSProperties;
   videoRef: (el: HTMLVideoElement | null) => void;
   onReady: () => void;
-  onClick?: () => void;
+
+
 }
 
 export function VideoTile({
@@ -18,7 +19,6 @@ export function VideoTile({
   style,
   videoRef,
   onReady,
-  onClick,
 }: VideoTileProps) {
   const [loading, setLoading] = useState(true);
   const localRef = useRef<HTMLVideoElement | null>(null);
@@ -67,12 +67,10 @@ export function VideoTile({
 
   return (
     <div
-      onClick={onClick}
       style={{
         ...style,
         position: 'absolute',
         overflow: 'hidden',
-        cursor: onClick ? 'pointer' : undefined,
       }}
     >
       <video

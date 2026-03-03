@@ -18,7 +18,7 @@ export interface PlaybackSectionProps {
 export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
   const [displayMode, setDisplayMode] = useState<DisplayMode>('fill');
   const [allVideosReady, setAllVideosReady] = useState(false);
-  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
 
   // Tile aspect ratio (detected from first video's intrinsic dimensions)
@@ -205,9 +205,8 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
     setAllVideosReady(true);
   }, []);
 
-  const handleTileClick = useCallback((index: number) => {
-    setExpandedIndex(prev => prev === index ? null : index);
-  }, []);
+
+
 
   const toggleDisplayMode = useCallback(() => {
     setDisplayMode((prev) => (prev === 'fill' ? 'letterbox' : 'fill'));
@@ -439,9 +438,8 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
           e.preventDefault();
           handleSeek(Math.min(duration, currentTime + SEEK_STEP));
           break;
-        case 'Escape':
-          setExpandedIndex(null);
-          break;
+
+
       }
     };
 
@@ -464,8 +462,8 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
         videoRefs={videoRefs}
         onAllReady={handleAllReady}
         onAspectRatioDetected={setTileAspectRatio}
-        expandedIndex={expandedIndex}
-        onTileClick={handleTileClick}
+
+
       />
 
       {/* Transport bar -- between grid and waveforms */}
