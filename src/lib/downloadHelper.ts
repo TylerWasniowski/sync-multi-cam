@@ -3,7 +3,7 @@
  * Creates a temporary blob URL and anchor element, clicks it, then cleans up.
  */
 export function triggerDownload(data: Uint8Array, filename: string, mimeType: string): void {
-  const blob = new Blob([data], { type: mimeType });
+  const blob = new Blob([data as BlobPart], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

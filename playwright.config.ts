@@ -20,6 +20,14 @@ export default defineConfig({
         },
       },
     },
+    {
+      name: 'edge-cdp',
+      testMatch: /edge-cdp-test/,
+      use: {
+        // connectOverCDP handled in test file itself
+        browserName: 'chromium',
+      },
+    },
   ],
   webServer: {
     command: 'npm run dev',

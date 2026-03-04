@@ -16,7 +16,7 @@ export interface WaveformPanelProps {
   onScrubSeek?: (time: number) => void;
 }
 
-export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, onScrub, playheadTime, isPlaying, onSeek, onScrubStart, onScrubEnd, onScrubSeek }: WaveformPanelProps) {
+export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, onScrub, playheadTime, isPlaying, onScrubStart, onScrubEnd, onScrubSeek }: WaveformPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const [panelWidth, setPanelWidth] = useState(0);
 

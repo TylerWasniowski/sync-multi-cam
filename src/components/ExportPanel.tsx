@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import type { DownloadableResult, MutedTracks, ExportState, AudioConfig } from '../types/index.ts';
+import type { DownloadableResult, MutedTracks, ExportState, AudioConfig, DisplayMode } from '../types/index.ts';
 import {
   startExport,
   cancelExport,
@@ -14,6 +14,7 @@ interface ExportPanelProps {
   mutedTracks: MutedTracks;
   totalDurationSeconds: number;
   tileAspectRatio: number;
+  displayMode: DisplayMode;
   disabled?: boolean;
 }
 
@@ -22,6 +23,7 @@ export function ExportPanel({
   mutedTracks,
   totalDurationSeconds,
   tileAspectRatio,
+  displayMode,
   disabled = false,
 }: ExportPanelProps) {
   const [resolution, setResolution] = useState<ResolutionKey>('1080p');
@@ -73,6 +75,7 @@ export function ExportPanel({
         audioConfig,
         totalDurationSeconds,
         tileAspectRatio,
+        displayMode,
       },
       {
         onProgress: (ratio) => setProgress(ratio),
@@ -97,7 +100,7 @@ export function ExportPanel({
         },
       },
     );
-  }, [results, mutedTracks, totalDurationSeconds, tileAspectRatio, resolution]);
+  }, [results, mutedTracks, totalDurationSeconds, tileAspectRatio, displayMode, resolution]);
 
   const handleCancel = useCallback(() => {
     cancelExport();
@@ -137,7 +140,7 @@ export function ExportPanel({
       ) : (
         <button
           onClick={handleExport}
-          disabled={disabled || isExporting || webCodecsSupported === false}
+          disabled={disabled || isExporting || !webCodecsSupported}
           className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium
                      rounded px-4 py-1.5 transition-colors
                      disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"

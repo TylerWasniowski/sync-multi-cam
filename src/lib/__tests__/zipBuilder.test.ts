@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 
 // We test buildZip directly -- fflate is a real dependency (small, pure JS)
 // so we can use it without mocking for integration-style tests.

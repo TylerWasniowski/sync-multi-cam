@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeGridLayout, GridTile, LayoutResult } from '../gridLayout';
+import { computeGridLayout } from '../gridLayout';
 
 describe('computeGridLayout', () => {
   const AR_16_9 = 16 / 9;

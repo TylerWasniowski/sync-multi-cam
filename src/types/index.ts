@@ -99,6 +99,7 @@ export type ExportWorkerCommand =
       audioConfig: AudioConfig;
       totalDurationSeconds: number;
       tileAspectRatio: number;
+      displayMode: DisplayMode;
     }
   | { type: 'cancel' };
 

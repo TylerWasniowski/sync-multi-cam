@@ -21,9 +21,60 @@ import {
   AudioSampleSink, AudioSampleSource, AudioSample,
 } from 'mediabunny';
 import { computeGridLayout } from './gridLayout';
-import type { ExportWorkerCommand, ExportWorkerMessage, AudioConfig } from '../types/index';
+import type { ExportWorkerCommand, ExportWorkerMessage, AudioConfig, DisplayMode } from '../types/index';
 
 let cancelled = false;
+
+// ---------------------------------------------------------------------------
+// Cover / Contain drawing helpers (canvas equivalent of CSS object-fit)
+// ---------------------------------------------------------------------------
+
+interface VideoSample {
+  displayWidth: number;
+  displayHeight: number;
+  draw(
+    ctx: OffscreenCanvasRenderingContext2D,
+    sx: number, sy: number, sWidth: number, sHeight: number,
+    dx: number, dy: number, dWidth: number, dHeight: number,
+  ): void;
+  close(): void;
+}
+
+/**
+ * Draw a video sample into a tile rect using cover or contain mode.
+ *
+ * cover (fill): scale up until tile is filled, crop overflow (centered)
+ * contain (letterbox): scale down until entire frame fits, black bars remain
+ */
+function drawSample(
+  ctx: OffscreenCanvasRenderingContext2D,
+  sample: VideoSample,
+  tile: { x: number; y: number; width: number; height: number },
+  mode: DisplayMode,
+): void {
+  const srcW = sample.displayWidth;
+  const srcH = sample.displayHeight;
+  const dstW = tile.width;
+  const dstH = tile.height;
+
+  if (mode === 'fill') {
+    // Cover: scale source so it fills destination, crop overflow
+    const scale = Math.max(dstW / srcW, dstH / srcH);
+    const cropW = dstW / scale;
+    const cropH = dstH / scale;
+    const sx = (srcW - cropW) / 2;
+    const sy = (srcH - cropH) / 2;
+    sample.draw(ctx, sx, sy, cropW, cropH, tile.x, tile.y, dstW, dstH);
+  } else {
+    // Contain: scale source to fit inside destination, center it
+    const scale = Math.min(dstW / srcW, dstH / srcH);
+    const drawW = srcW * scale;
+    const drawH = srcH * scale;
+    const dx = tile.x + (dstW - drawW) / 2;
+    const dy = tile.y + (dstH - drawH) / 2;
+    sample.draw(ctx, 0, 0, srcW, srcH, dx, dy, drawW, drawH);
+  }
+}
 
 function post(msg: ExportWorkerMessage, transfer?: Transferable[]): void {
   if (transfer) {
@@ -327,8 +378,7 @@ async function runExport(
         const sample = await sink.getSample(localTime);
         if (sample) {
           try {
-            const tile = layout.tiles[i];
-            sample.draw(ctx, tile.x, tile.y, tile.width, tile.height);
+            drawSample(ctx, sample as unknown as VideoSample, layout.tiles[i], config.displayMode);
           } finally {
             // CRITICAL: release GPU memory
             sample.close();

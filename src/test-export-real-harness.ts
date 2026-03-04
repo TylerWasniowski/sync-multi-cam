@@ -68,6 +68,7 @@ async function runTest(files: File[]): Promise<void> {
           audioConfig,
           totalDurationSeconds: exportDuration,
           tileAspectRatio: 16 / 9,
+          displayMode: 'fill',
         },
         {
           onProgress: (ratio) => {

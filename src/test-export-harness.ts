@@ -9,7 +9,6 @@
 
 import {
   startExport,
-  cancelExport,
   checkWebCodecsSupport,
 } from './lib/exportComposite.ts';
 import type { AudioConfig } from './types/index.ts';
@@ -47,22 +46,27 @@ async function createTestVideo(
   const stream = canvas.captureStream(30);
 
   // Add audio: oscillator at the given frequency
+  // Resume AudioContext to handle autoplay policy in real browsers.
+  // resume() hangs if autoplay blocked, so race with a timeout.
   const audioCtx = new AudioContext();
-  const oscillator = audioCtx.createOscillator();
-  oscillator.frequency.value = frequency;
-  const gain = audioCtx.createGain();
-  gain.gain.value = 0.3; // don't clip
-  const dest = audioCtx.createMediaStreamDestination();
-  oscillator.connect(gain).connect(dest);
-  oscillator.start();
+  await Promise.race([audioCtx.resume(), new Promise<void>(r => setTimeout(r, 500))]);
+  const hasAudio = audioCtx.state === 'running';
 
-  const combined = new MediaStream([
-    ...stream.getVideoTracks(),
-    ...dest.stream.getAudioTracks(),
-  ]);
+  let oscillator: OscillatorNode | null = null;
+  if (hasAudio) {
+    oscillator = audioCtx.createOscillator();
+    oscillator.frequency.value = frequency;
+    const gain = audioCtx.createGain();
+    gain.gain.value = 0.3;
+    const dest = audioCtx.createMediaStreamDestination();
+    oscillator.connect(gain).connect(dest);
+    oscillator.start();
+    stream.addTrack(dest.stream.getAudioTracks()[0]);
+  }
 
-  const recorder = new MediaRecorder(combined, {
-    mimeType: 'video/webm; codecs=vp8,opus',
+  const mimeType = hasAudio ? 'video/webm; codecs=vp8,opus' : 'video/webm; codecs=vp8';
+  const recorder = new MediaRecorder(stream, {
+    mimeType,
     videoBitsPerSecond: 500_000,
   });
 
@@ -73,7 +77,7 @@ async function createTestVideo(
 
   return new Promise((resolve) => {
     recorder.onstop = () => {
-      oscillator.stop();
+      if (oscillator) oscillator.stop();
       audioCtx.close();
       const blob = new Blob(chunks, { type: 'video/webm' });
       const file = new File([blob], `test-${label}.webm`, { type: 'video/webm' });
@@ -125,6 +129,7 @@ async function runTest(): Promise<void> {
           audioConfig,
           totalDurationSeconds: 2,
           tileAspectRatio: 4 / 3,
+          displayMode: 'fill',
         },
         {
           onProgress: (ratio) => {
