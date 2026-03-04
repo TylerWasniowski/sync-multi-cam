@@ -46,6 +46,52 @@
 
 ---
 
+## Milestone: v2.0 — Synced Playback & Export
+
+**Shipped:** 2026-03-04
+**Phases:** 5 | **Plans:** 9 | **Sessions:** ~6
+
+### What Was Built
+- Dynamic grid layout with aspect-ratio-aware tile packing and fill/letterbox modes
+- Synchronized multi-camera playback via standalone rAF timeline clock
+- Web Audio API per-track mute/unmute mixing with lazy AudioContext creation
+- Interactive waveform scrubbar: click-to-seek, drag-to-scrub, Shift+drag-to-pan, animated playhead with auto-follow
+- WebCodecs + Mediabunny GPU-accelerated composite export (H.264 MP4 at 4K/1080p/720p)
+- Camera filename labels and keyboard shortcuts for playback polish
+
+### What Worked
+- Phased dependency chain (grid → audio → waveform → export → polish) allowed clean iteration on each subsystem
+- WebCodecs rework of Phase 8 was the right call — FFmpeg WASM compositing would have been 10-100x slower
+- Timeline clock replacing leader-follower sync (Phase 7) was a clean architecture upgrade that solved drift
+- Small autonomous plans (avg 2-15min execution) kept context fresh and commits atomic
+- User feedback loop on POL-02 (expand feature) caught a bad UX decision early — removed same session
+
+### What Was Inefficient
+- Phase 8 had two false starts: first FFmpeg WASM compositing (too slow), then WebCodecs demux errors from incorrect Mediabunny API usage. Better research into the specific library API would have saved a session.
+- Roadmap progress table got out of sync for Phases 7 and 9 — the `roadmap update-plan-progress` CLI didn't always fire correctly. Had to fix manually at milestone completion.
+- Phase 8 Playwright testing required WSL mirrored networking for Edge CDP — environment-specific blocker that consumed time without delivering value
+
+### Patterns Established
+- Standalone timeline clock: rAF + performance.now() wall-clock drives all videos equally (no leader/follower)
+- Offset-based shared timeline: videos positioned by offsetSeconds on a unified timeline
+- Scrub lifecycle pattern (start/seek/end): prevents rapid pause-seek-resume stutter during drag
+- Lazy AudioContext creation in play handler (user gesture satisfies autoplay policy)
+- WebCodecs Worker with typed message protocol for export pipeline isolation
+- OfflineAudioContext for mixing audio tracks into export without playback
+
+### Key Lessons
+1. **WebCodecs > FFmpeg for compositing.** Hardware encoder access makes GPU-accelerated export 10-100x faster. FFmpeg WASM is still right for extraction and stream-copy, but not for pixel-level compositing.
+2. **Replace sync models early.** Leader-follower sync worked for Phase 5 but accumulated drift. Phase 7's timeline clock was simpler and more correct. Don't wait for multiple phases of workarounds.
+3. **User testing catches UX assumptions.** POL-02 (click-to-expand) seemed obvious in planning but didn't feel right in practice. Ship fast, get feedback, iterate.
+4. **Environment-specific test infra is a time sink.** Edge CDP + WSL mirrored networking was fragile. Browser-based manual verification is faster for small projects.
+
+### Cost Observations
+- Model mix: ~65% opus, ~30% sonnet (verifier/checker), ~5% haiku
+- Sessions: ~6 sessions across 2 days
+- Notable: Full v2.0 (grid playback + export + polish) in 2 days, ~1 hour of plan execution time
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -53,14 +99,18 @@
 | Milestone | Sessions | Phases | Key Change |
 |-----------|----------|--------|------------|
 | v1.0 | ~4 | 4 | Initial project — established all patterns |
+| v2.0 | ~6 | 5 | WebCodecs rework mid-phase, user feedback loop on UX |
 
 ### Cumulative Quality
 
 | Milestone | Tests | Coverage | Zero-Dep Additions |
 |-----------|-------|----------|-------------------|
 | v1.0 | 51 | Core libs | 0 (all deps justified) |
+| v2.0 | 51 | Core libs + export | 1 (mediabunny for WebCodecs mux) |
 
 ### Top Lessons (Verified Across Milestones)
 
 1. Test with real device footage (iPhone HEVC) during research phase, not after implementation
 2. Stream-copy is the safe default for video trimming — re-encoding is fragile
+3. Research specific library APIs (not just concepts) before planning — FFmpeg WASM compositing and Mediabunny demux both had false starts from API misunderstanding
+4. Ship UX features fast and get user feedback — assumptions about "obvious" interactions (expand tiles, smart rendering) were wrong both milestones

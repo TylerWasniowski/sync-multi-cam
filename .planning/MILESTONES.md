@@ -1,5 +1,29 @@
 # Milestones
 
+## v2.0 Synced Playback & Export (Shipped: 2026-03-04)
+
+**Delivered:** Synced multi-camera video playback in a dynamic grid with GPU-accelerated composite export. Watch all angles simultaneously, seek via waveforms, and download a single MP4 with all cameras composited.
+
+**Phases completed:** 5 phases, 9 plans
+**Timeline:** 2 days (2026-03-02 → 2026-03-03)
+**Codebase:** 6,445 LOC TypeScript, 73 commits
+**Requirements:** 21/22 shipped (POL-02 click-to-expand dropped per user preference)
+
+**Key accomplishments:**
+1. Dynamic grid layout with aspect-ratio-aware tile packing and fill/letterbox display modes
+2. Synchronized multi-camera playback via standalone rAF timeline clock with offset-based shared timeline
+3. Web Audio API mixer with per-track mute/unmute GainNode graph
+4. Interactive waveform scrubbar: click-to-seek, drag-to-scrub, Shift+drag-to-pan, animated playhead with auto-follow
+5. WebCodecs + Mediabunny GPU-accelerated composite export producing single H.264 MP4 at 4K/1080p/720p
+6. Camera filename labels and keyboard shortcuts (Space, arrows) for playback polish
+
+**Known Gaps:**
+- POL-02: Click-to-expand fullscreen tile — removed per user feedback after implementation
+
+**Archive:** `milestones/v2.0-ROADMAP.md`, `milestones/v2.0-REQUIREMENTS.md`
+
+---
+
 ## v1.0 MVP (Shipped: 2026-03-02)
 
 **Delivered:** Browser-based multi-camera video synchronization tool — drop files, sync by audio, download trimmed results. Zero install, fully client-side.
