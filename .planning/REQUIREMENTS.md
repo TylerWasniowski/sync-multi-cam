@@ -38,18 +38,18 @@ Requirements for UI polish release. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MUTE-01 | — | Pending |
-| MUTE-02 | — | Pending |
-| PRIV-01 | — | Pending |
-| EXPORT-01 | — | Pending |
-| EXPORT-02 | — | Pending |
-| EXPORT-03 | — | Pending |
+| MUTE-01 | Phase 10 | Pending |
+| MUTE-02 | Phase 10 | Pending |
+| PRIV-01 | Phase 10 | Pending |
+| EXPORT-01 | Phase 11 | Pending |
+| EXPORT-02 | Phase 11 | Pending |
+| EXPORT-03 | Phase 11 | Pending |
 
 **Coverage:**
 - v2.1 requirements: 6 total
-- Mapped to phases: 0
-- Unmapped: 6 ⚠️
+- Mapped to phases: 6
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-07*
-*Last updated: 2026-03-07 after initial definition*
+*Last updated: 2026-03-07 after roadmap creation*
