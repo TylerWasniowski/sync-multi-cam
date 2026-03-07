@@ -9,6 +9,7 @@ export interface WaveformCanvasProps {
   width: number; // CSS pixel width
   height: number; // CSS pixel height (recommend 80)
   playheadTime?: number | null; // current playback position (0-based seconds)
+  waveformColor?: string; // override bar fill color (defaults to blue-500 at 60%)
 }
 
 const WAVEFORM_COLOR = 'rgba(59, 130, 246, 0.6)'; // blue-500 at 60%
@@ -36,6 +37,7 @@ export function WaveformCanvas({
   width,
   height,
   playheadTime,
+  waveformColor = WAVEFORM_COLOR,
 }: WaveformCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
@@ -84,7 +86,7 @@ export function WaveformCanvas({
     );
 
     // Draw waveform
-    ctx.fillStyle = WAVEFORM_COLOR;
+    ctx.fillStyle = waveformColor;
     const barWidth = Math.max(1, Math.ceil(peaks.samplesPerBucket / samplesPerPixel));
     ctx.beginPath();
     for (let i = startBucket; i < endBucket; i++) {
@@ -123,7 +125,7 @@ export function WaveformCanvas({
 
     // Draw playhead line (on top of cursor when they overlap)
     drawPlayhead(ctx, playheadTime ?? null, viewState, peaks.sampleRate, width, height);
-  }, [peaks, viewState, syncOffsetSeconds, isReference, width, height, playheadTime]);
+  }, [peaks, viewState, syncOffsetSeconds, isReference, width, height, playheadTime, waveformColor]);
 
   return (
     <canvas
