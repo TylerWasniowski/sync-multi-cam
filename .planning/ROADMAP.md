@@ -48,10 +48,10 @@
   1. When a track is muted, the entire waveform row appears dimmed/grayed out (not just the mute icon)
   2. The mute/unmute visual transition is smooth — no abrupt flash or jarring color jump
   3. The "files never leave your browser" privacy message is prominently visible on the page without scrolling (not small gray text buried in the header)
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 10-01: TBD
+- [ ] 10-01-PLAN.md — Dim muted waveform rows, gray canvas bars, smooth transitions, and drop zone privacy message
 
 ### Phase 11: Export Bar Redesign
 **Goal**: Users find the export controls intuitive with a clean, centered layout and a prominent export button
@@ -82,5 +82,5 @@ Phases execute in numeric order: 10 → 11
 | 7. Waveform Scrubbar Integration | v2.0 | 2/2 | Complete | 2026-03-03 |
 | 8. Composite Export | v2.0 | 2/2 | Complete | 2026-03-03 |
 | 9. Polish | v2.0 | 1/1 | Complete | 2026-03-03 |
-| 10. Visual Feedback Polish | v2.1 | 0/? | Not started | - |
+| 10. Visual Feedback Polish | v2.1 | 0/1 | In progress | - |
 | 11. Export Bar Redesign | v2.1 | 0/? | Not started | - |
