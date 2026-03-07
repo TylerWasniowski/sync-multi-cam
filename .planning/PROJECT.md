@@ -33,7 +33,9 @@ Accurately sync multiple camera angles by audio so users get aligned video files
 
 ### Active
 
-(None yet — define with next milestone)
+- [ ] Muted waveform track visual — dim/gray the entire waveform row when muted, not just the icon
+- [ ] Privacy messaging prominence — make the "files never leave your browser" message more visible
+- [ ] Export controls redesign — rethink the bottom bar layout, center controls, bigger export button
 
 ### Out of Scope
 
@@ -84,5 +86,14 @@ Accurately sync multiple camera angles by audio so users get aligned video files
 | Shift+drag for waveform pan | Bare drag = scrub (most common action), Shift modifier for pan | ✓ Good — intuitive after hint |
 | Drop POL-02 click-to-expand | User didn't find fullscreen tile useful after trying it | ⚠️ Revisit — may want different expand UX later |
 
+## Current Milestone: v2.1 UI Polish
+
+**Goal:** Refine visual feedback and layout for muted tracks, privacy messaging, and export controls.
+
+**Target features:**
+- Muted waveform row visual state (dim/gray entire row)
+- More prominent privacy messaging
+- Redesigned export controls bar (centered, bigger button)
+
 ---
-*Last updated: 2026-03-04 after v2.0 milestone*
+*Last updated: 2026-03-07 after v2.1 milestone start*

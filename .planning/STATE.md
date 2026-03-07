@@ -1,9 +1,9 @@
 ---
 gsd_state_version: 1.0
-milestone: (none)
-milestone_name: (none)
-status: milestone_complete
-last_updated: "2026-03-04"
+milestone: v2.1
+milestone_name: UI Polish
+status: defining_requirements
+last_updated: "2026-03-07"
 progress:
   total_phases: 0
   completed_phases: 0
@@ -15,16 +15,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-04)
+See: .planning/PROJECT.md (updated 2026-03-07)
 
 **Core value:** Accurately sync multiple camera angles by audio so users get aligned video files without installing any software
-**Current focus:** Planning next milestone
+**Current focus:** Defining requirements for v2.1 UI Polish
 
 ## Current Position
 
-Phase: None — between milestones
-Status: v2.0 shipped, no active milestone
-Last activity: 2026-03-04 — Completed v2.0 Synced Playback & Export milestone
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-07 — Milestone v2.1 started
 
 ## Accumulated Context
 
@@ -43,7 +44,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-04
-Stopped at: v2.0 milestone archived and tagged
+Last session: 2026-03-07
+Stopped at: Defining requirements for v2.1
 Resume file: None
-Next: /gsd:new-milestone to start next version
+Next: Define requirements and create roadmap
