@@ -35,7 +35,7 @@
 
 ### v2.1 UI Polish
 
-- [ ] **Phase 10: Visual Feedback Polish** — Dim muted waveform rows and make privacy messaging more prominent
+- [x] **Phase 10: Visual Feedback Polish** — Dim muted waveform rows and make privacy messaging more prominent (completed 2026-03-07)
 - [ ] **Phase 11: Export Bar Redesign** — Center export controls, enlarge export button, clean up bottom bar layout
 
 ## Phase Details
@@ -82,5 +82,5 @@ Phases execute in numeric order: 10 → 11
 | 7. Waveform Scrubbar Integration | v2.0 | 2/2 | Complete | 2026-03-03 |
 | 8. Composite Export | v2.0 | 2/2 | Complete | 2026-03-03 |
 | 9. Polish | v2.0 | 1/1 | Complete | 2026-03-03 |
-| 10. Visual Feedback Polish | v2.1 | 0/1 | In progress | - |
+| 10. Visual Feedback Polish | 1/1 | Complete   | 2026-03-07 | - |
 | 11. Export Bar Redesign | v2.1 | 0/? | Not started | - |

@@ -9,12 +9,12 @@ Requirements for UI polish release. Each maps to roadmap phases.
 
 ### Waveform Mute Visual
 
-- [ ] **MUTE-01**: User sees the entire waveform row dimmed/grayed when a track is muted
-- [ ] **MUTE-02**: Mute visual state transitions smoothly (not jarring)
+- [x] **MUTE-01**: User sees the entire waveform row dimmed/grayed when a track is muted
+- [x] **MUTE-02**: Mute visual state transitions smoothly (not jarring)
 
 ### Privacy Messaging
 
-- [ ] **PRIV-01**: User sees the "files never leave your browser" privacy message prominently (not just small gray text in the header)
+- [x] **PRIV-01**: User sees the "files never leave your browser" privacy message prominently (not just small gray text in the header)
 
 ### Export Controls
 
@@ -38,9 +38,9 @@ Requirements for UI polish release. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MUTE-01 | Phase 10 | Pending |
-| MUTE-02 | Phase 10 | Pending |
-| PRIV-01 | Phase 10 | Pending |
+| MUTE-01 | Phase 10 | Complete |
+| MUTE-02 | Phase 10 | Complete |
+| PRIV-01 | Phase 10 | Complete |
 | EXPORT-01 | Phase 11 | Pending |
 | EXPORT-02 | Phase 11 | Pending |
 | EXPORT-03 | Phase 11 | Pending |
