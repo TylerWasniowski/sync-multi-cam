@@ -4,7 +4,7 @@
 
 - ✅ **v1.0 MVP** — Phases 1-4 (shipped 2026-03-02)
 - ✅ **v2.0 Synced Playback & Export** — Phases 5-9 (shipped 2026-03-04)
-- 🚧 **v2.1 UI Polish** — Phases 10-11 (in progress)
+- ✅ **v2.1 UI Polish** — Phases 10-11 (shipped 2026-03-07)
 
 ## Phases
 
@@ -36,7 +36,7 @@
 ### v2.1 UI Polish
 
 - [x] **Phase 10: Visual Feedback Polish** — Dim muted waveform rows and make privacy messaging more prominent (completed 2026-03-07)
-- [ ] **Phase 11: Export Bar Redesign** — Center export controls, enlarge export button, clean up bottom bar layout
+- [x] **Phase 11: Export Bar Redesign** — Center export controls, enlarge export button, clean up bottom bar layout (completed 2026-03-07)
 
 ## Phase Details
 
@@ -51,7 +51,7 @@
 **Plans**: 1 plan
 
 Plans:
-- [ ] 10-01-PLAN.md — Dim muted waveform rows, gray canvas bars, smooth transitions, and drop zone privacy message
+- [x] 10-01-PLAN.md — Dim muted waveform rows, gray canvas bars, smooth transitions, and drop zone privacy message
 
 ### Phase 11: Export Bar Redesign
 **Goal**: Users find the export controls intuitive with a clean, centered layout and a prominent export button
@@ -64,7 +64,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 11-01-PLAN.md — Center export controls, enlarge export button, redesign all state displays
+- [x] 11-01-PLAN.md — Center export controls, enlarge export button, redesign all state displays
 
 ## Progress
 
@@ -82,5 +82,5 @@ Phases execute in numeric order: 10 → 11
 | 7. Waveform Scrubbar Integration | v2.0 | 2/2 | Complete | 2026-03-03 |
 | 8. Composite Export | v2.0 | 2/2 | Complete | 2026-03-03 |
 | 9. Polish | v2.0 | 1/1 | Complete | 2026-03-03 |
-| 10. Visual Feedback Polish | 1/1 | Complete    | 2026-03-07 | - |
-| 11. Export Bar Redesign | v2.1 | 0/1 | Not started | - |
+| 10. Visual Feedback Polish | v2.1 | 1/1 | Complete | 2026-03-07 |
+| 11. Export Bar Redesign | v2.1 | 1/1 | Complete | 2026-03-07 |

@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: UI Polish
-status: unknown
-last_updated: "2026-03-07T21:46:12.433Z"
+status: complete
+last_updated: "2026-03-07T21:57:00.000Z"
 progress:
-  total_phases: 1
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
+  total_phases: 2
+  completed_phases: 2
+  total_plans: 2
+  completed_plans: 2
 ---
 
 # Project State
@@ -18,29 +18,30 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-07)
 
 **Core value:** Accurately sync multiple camera angles by audio so users get aligned video files without installing any software
-**Current focus:** Phase 10 — Visual Feedback Polish
+**Current focus:** v2.1 UI Polish milestone complete
 
 ## Current Position
 
-Phase: 10 of 11 (Visual Feedback Polish)
+Phase: 11 of 11 (Export Bar Redesign)
 Plan: 1 of 1 in current phase (COMPLETE)
-Status: Phase 10 complete
-Last activity: 2026-03-07 — Plan 10-01 executed (visual feedback polish)
+Status: v2.1 milestone complete — all phases and plans finished
+Last activity: 2026-03-07 — Plan 11-01 executed (export bar redesign)
 
-Progress: [█████░░░░░] 50%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1 (v2.1)
-- Average duration: 12min
-- Total execution time: 12min
+- Total plans completed: 2 (v2.1)
+- Average duration: 7min
+- Total execution time: 14min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 10 | 1 | 12min | 12min |
+| 11 | 1 | 2min | 2min |
 
 *Updated after each plan completion*
 
@@ -55,6 +56,8 @@ v1.0 and v2.0 decisions archived in respective milestone files.
 - [10-01]: Mute button isolated outside dimmed container for reliable full-opacity clickability
 - [10-01]: Inline styles for opacity/filter/transition instead of Tailwind for reliable filter animation
 - [10-01]: Gray waveform bar color as secondary visual cue alongside row-level grayscale
+- [11-01]: Persistent completion state instead of auto-reset — user clicks Export Another to return to idle
+- [11-01]: Export Another button styled as bordered ghost button to differentiate from primary Export MP4 action
 
 ### Pending Todos
 
@@ -67,5 +70,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-07
-Stopped at: Completed 10-01-PLAN.md (visual feedback polish)
-Resume file: .planning/phases/10-visual-feedback-polish/10-01-SUMMARY.md
+Stopped at: Completed 11-01-PLAN.md (export bar redesign) — v2.1 milestone complete
+Resume file: .planning/phases/11-export-bar-redesign/11-01-SUMMARY.md

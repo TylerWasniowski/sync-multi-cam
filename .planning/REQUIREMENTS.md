@@ -18,9 +18,9 @@ Requirements for UI polish release. Each maps to roadmap phases.
 
 ### Export Controls
 
-- [ ] **EXPORT-01**: Export controls are centered in the bottom bar
-- [ ] **EXPORT-02**: Export button is larger and more prominent than current small button
-- [ ] **EXPORT-03**: Export bar layout is clean and well-organized with resolution options
+- [x] **EXPORT-01**: Export controls are centered in the bottom bar
+- [x] **EXPORT-02**: Export button is larger and more prominent than current small button
+- [x] **EXPORT-03**: Export bar layout is clean and well-organized with resolution options
 
 ## Future Requirements
 
@@ -41,9 +41,9 @@ Requirements for UI polish release. Each maps to roadmap phases.
 | MUTE-01 | Phase 10 | Complete |
 | MUTE-02 | Phase 10 | Complete |
 | PRIV-01 | Phase 10 | Complete |
-| EXPORT-01 | Phase 11 | Pending |
-| EXPORT-02 | Phase 11 | Pending |
-| EXPORT-03 | Phase 11 | Pending |
+| EXPORT-01 | Phase 11 | Complete |
+| EXPORT-02 | Phase 11 | Complete |
+| EXPORT-03 | Phase 11 | Complete |
 
 **Coverage:**
 - v2.1 requirements: 6 total
