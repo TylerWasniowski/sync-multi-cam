@@ -24,3 +24,25 @@ dist-ssr
 *.sw?
 
 test-videos
+test-results/
+
+# WSL/system dotfiles leaked into project dir
+.bash_profile
+.bashrc
+.profile
+.zprofile
+.zshrc
+.gitconfig
+.ripgreprc
+
+# Local tool configs
+.claude/
+.mcp.json
+
+# Bare git repo fragments
+.gitmodules
+HEAD
+config
+hooks
+objects
+refs
