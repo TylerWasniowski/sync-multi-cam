@@ -61,10 +61,10 @@ Plans:
   1. Export controls are visually centered in the bottom bar
   2. The export button is noticeably larger and more prominent than surrounding controls
   3. Resolution options and export button are organized in a clean, uncluttered layout with clear visual hierarchy
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 11-01: TBD
+- [ ] 11-01-PLAN.md — Center export controls, enlarge export button, redesign all state displays
 
 ## Progress
 
@@ -83,4 +83,4 @@ Phases execute in numeric order: 10 → 11
 | 8. Composite Export | v2.0 | 2/2 | Complete | 2026-03-03 |
 | 9. Polish | v2.0 | 1/1 | Complete | 2026-03-03 |
 | 10. Visual Feedback Polish | 1/1 | Complete    | 2026-03-07 | - |
-| 11. Export Bar Redesign | v2.1 | 0/? | Not started | - |
+| 11. Export Bar Redesign | v2.1 | 0/1 | Not started | - |
