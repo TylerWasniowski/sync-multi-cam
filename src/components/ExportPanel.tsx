@@ -128,6 +128,7 @@ export function ExportPanel({
           <select
             value={resolution}
             onChange={(e) => setResolution(e.target.value as ResolutionKey)}
+            disabled={disabled}
             className="bg-gray-700 text-gray-300 text-sm rounded-lg px-3 py-2.5
                        border border-gray-600 focus:outline-none focus:border-gray-500
                        disabled:opacity-50 disabled:cursor-not-allowed"
