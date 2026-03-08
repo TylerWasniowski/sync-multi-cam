@@ -30,12 +30,13 @@ Accurately sync multiple camera angles by audio so users get aligned video files
 - ✓ Progressive loading: waveforms interactive immediately while video buffers in background — v2.0
 - ✓ Camera filename labels on video tiles — v2.0
 - ✓ Keyboard shortcuts for transport controls (Space, arrow keys) — v2.0
+- ✓ Muted waveform track visual — dim/gray the entire waveform row when muted — v2.1
+- ✓ Privacy messaging prominence — shield icon and message in drop zone — v2.1
+- ✓ Export controls redesign — centered bar, enlarged button, persistent completion state — v2.1
 
 ### Active
 
-- [ ] Muted waveform track visual — dim/gray the entire waveform row when muted, not just the icon
-- [ ] Privacy messaging prominence — make the "files never leave your browser" message more visible
-- [ ] Export controls redesign — rethink the bottom bar layout, center controls, bigger export button
+(No active requirements — define next milestone with `/gsd:new-milestone`)
 
 ### Out of Scope
 
@@ -50,7 +51,7 @@ Accurately sync multiple camera angles by audio so users get aligned video files
 
 ## Context
 
-- **Shipped v2.0** with 6,445 LOC TypeScript across 9 phases (5 v1.0 + 5 v2.0) over 3 days
+- **Shipped v2.1** with 6,664 LOC TypeScript across 11 phases (4 v1.0 + 5 v2.0 + 2 v2.1) over 7 days
 - **Tech stack:** Vite + React 19 + Tailwind CSS v4 + FFmpeg WASM + SynAudio WASM SIMD + mp4box.js + fflate + Mediabunny (WebCodecs) + Web Audio API
 - **Deployed at:** https://sync-multi-cam.pages.dev
 - Target users: people doing multi-camera shoots (events, podcasts, interviews) who need a quick way to align angles, preview sync, and export a composite
@@ -85,15 +86,9 @@ Accurately sync multiple camera angles by audio so users get aligned video files
 | Web Audio API GainNode graph for mixing | Per-track mute/unmute without re-encoding; lazy init in user gesture | ✓ Good |
 | Shift+drag for waveform pan | Bare drag = scrub (most common action), Shift modifier for pan | ✓ Good — intuitive after hint |
 | Drop POL-02 click-to-expand | User didn't find fullscreen tile useful after trying it | ⚠️ Revisit — may want different expand UX later |
-
-## Current Milestone: v2.1 UI Polish
-
-**Goal:** Refine visual feedback and layout for muted tracks, privacy messaging, and export controls.
-
-**Target features:**
-- Muted waveform row visual state (dim/gray entire row)
-- More prominent privacy messaging
-- Redesigned export controls bar (centered, bigger button)
+| Persistent export completion state | User feedback: auto-reset was confusing, prefer explicit "Export Another" reset | ✓ Good — clearer UX |
+| Mute button outside dim container | Structural isolation preserves full clickability vs CSS counter-opacity | ✓ Good |
+| Inline styles for dim transitions | Tailwind transition-all doesn't reliably cover CSS filter property | ✓ Good |
 
 ---
-*Last updated: 2026-03-07 after v2.1 milestone start*
+*Last updated: 2026-03-08 after v2.1 milestone*

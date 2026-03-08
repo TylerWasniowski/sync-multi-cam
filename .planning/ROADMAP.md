@@ -4,7 +4,7 @@
 
 - ✅ **v1.0 MVP** — Phases 1-4 (shipped 2026-03-02)
 - ✅ **v2.0 Synced Playback & Export** — Phases 5-9 (shipped 2026-03-04)
-- ✅ **v2.1 UI Polish** — Phases 10-11 (shipped 2026-03-07)
+- ✅ **v2.1 UI Polish** — Phases 10-11 (shipped 2026-03-08)
 
 ## Phases
 
@@ -33,46 +33,18 @@
 
 </details>
 
-### v2.1 UI Polish
+<details>
+<summary>v2.1 UI Polish (Phases 10-11) — SHIPPED 2026-03-08</summary>
 
-- [x] **Phase 10: Visual Feedback Polish** — Dim muted waveform rows and make privacy messaging more prominent (completed 2026-03-07)
-- [x] **Phase 11: Export Bar Redesign** — Center export controls, enlarge export button, clean up bottom bar layout (completed 2026-03-07)
+- [x] Phase 10: Visual Feedback Polish (1/1 plan) — completed 2026-03-07
+- [x] Phase 11: Export Bar Redesign (1/1 plan) — completed 2026-03-07
 
-## Phase Details
-
-### Phase 10: Visual Feedback Polish
-**Goal**: Users get clear visual feedback for muted tracks and see the privacy guarantee prominently
-**Depends on**: Phase 9 (v2.0 complete)
-**Requirements**: MUTE-01, MUTE-02, PRIV-01
-**Success Criteria** (what must be TRUE):
-  1. When a track is muted, the entire waveform row appears dimmed/grayed out (not just the mute icon)
-  2. The mute/unmute visual transition is smooth — no abrupt flash or jarring color jump
-  3. The "files never leave your browser" privacy message is prominently visible on the page without scrolling (not small gray text buried in the header)
-**Plans**: 1 plan
-
-Plans:
-- [x] 10-01-PLAN.md — Dim muted waveform rows, gray canvas bars, smooth transitions, and drop zone privacy message
-
-### Phase 11: Export Bar Redesign
-**Goal**: Users find the export controls intuitive with a clean, centered layout and a prominent export button
-**Depends on**: Phase 10
-**Requirements**: EXPORT-01, EXPORT-02, EXPORT-03
-**Success Criteria** (what must be TRUE):
-  1. Export controls are visually centered in the bottom bar
-  2. The export button is noticeably larger and more prominent than surrounding controls
-  3. Resolution options and export button are organized in a clean, uncluttered layout with clear visual hierarchy
-**Plans**: 1 plan
-
-Plans:
-- [x] 11-01-PLAN.md — Center export controls, enlarge export button, redesign all state displays
+</details>
 
 ## Progress
 
-**Execution Order:**
-Phases execute in numeric order: 10 → 11
-
-| Phase | Milestone | Plans Complete | Status | Completed |
-|-------|-----------|----------------|--------|-----------|
+| Phase | Milestone | Plans | Status | Completed |
+|-------|-----------|-------|--------|-----------|
 | 1. Foundation and File Input | v1.0 | 3/3 | Complete | 2026-03-02 |
 | 2. Audio Sync Engine | v1.0 | 2/2 | Complete | 2026-03-02 |
 | 3. Video Trimming and Output | v1.0 | 2/2 | Complete | 2026-03-02 |
@@ -83,4 +55,4 @@ Phases execute in numeric order: 10 → 11
 | 8. Composite Export | v2.0 | 2/2 | Complete | 2026-03-03 |
 | 9. Polish | v2.0 | 1/1 | Complete | 2026-03-03 |
 | 10. Visual Feedback Polish | v2.1 | 1/1 | Complete | 2026-03-07 |
-| 11. Export Bar Redesign | v2.1 | Complete    | 2026-03-08 | 2026-03-07 |
+| 11. Export Bar Redesign | v2.1 | 1/1 | Complete | 2026-03-07 |

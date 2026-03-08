@@ -92,6 +92,45 @@
 
 ---
 
+## Milestone: v2.1 — UI Polish
+
+**Shipped:** 2026-03-08
+**Phases:** 2 | **Plans:** 2 | **Sessions:** 1
+
+### What Was Built
+- Muted waveform rows dim with grayscale + opacity and smooth 300ms CSS transitions
+- Configurable waveform canvas bar color (gray when muted) via prop
+- Privacy message with shield icon in file drop zone
+- Centered export bar with enlarged, prominent export button
+- Persistent completion state with "Export Another" flow
+
+### What Worked
+- Small milestone scope (2 phases, 2 plans) executed cleanly in a single session
+- Human-verify checkpoints caught a UX issue (auto-reset confusion) before shipping
+- Integration checker found a real bug (missing `disabled` prop on select) that would have shipped otherwise
+- Quality model profile with opus executors produced clean, well-structured code
+
+### What Was Inefficient
+- SUMMARY.md `one_liner` field not populated by executors — had to read summaries manually for milestone completion
+- Dev server instability in sandbox mode required multiple restarts and sandbox bypass
+
+### Patterns Established
+- Structural isolation for interactive controls inside dimmed containers (mute button outside opacity wrapper)
+- Inline styles for CSS filter transitions (Tailwind transition-all doesn't cover filter property reliably)
+- State-swapping centered layout: single flex-center container conditionally renders one state group at a time
+
+### Key Lessons
+1. **Checkpoint-driven UX iteration works.** Auto-reset vs persistent completion was only caught because the user tested during the checkpoint. Always include human-verify for UI changes.
+2. **Integration checkers find real bugs.** The missing `disabled` on `<select>` was a genuine oversight — had Tailwind disabled classes but no disabled attribute. Automated cross-checking catches what humans miss.
+3. **Small polish milestones are efficient.** 2 phases in 1 session with no false starts. Keeping scope tight avoids the research/rework overhead of larger milestones.
+
+### Cost Observations
+- Model mix: ~60% opus (executor), ~35% sonnet (verifier/checker), ~5% haiku
+- Sessions: 1 session
+- Notable: Entire milestone (plan → execute → verify → audit → complete) in a single session
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -100,6 +139,7 @@
 |-----------|----------|--------|------------|
 | v1.0 | ~4 | 4 | Initial project — established all patterns |
 | v2.0 | ~6 | 5 | WebCodecs rework mid-phase, user feedback loop on UX |
+| v2.1 | 1 | 2 | Smallest milestone — checkpoint-driven UX iteration, integration audit |
 
 ### Cumulative Quality
 
@@ -107,10 +147,12 @@
 |-----------|-------|----------|-------------------|
 | v1.0 | 51 | Core libs | 0 (all deps justified) |
 | v2.0 | 51 | Core libs + export | 1 (mediabunny for WebCodecs mux) |
+| v2.1 | 51 | Core libs + export | 0 (CSS/layout only) |
 
 ### Top Lessons (Verified Across Milestones)
 
 1. Test with real device footage (iPhone HEVC) during research phase, not after implementation
 2. Stream-copy is the safe default for video trimming — re-encoding is fragile
 3. Research specific library APIs (not just concepts) before planning — FFmpeg WASM compositing and Mediabunny demux both had false starts from API misunderstanding
-4. Ship UX features fast and get user feedback — assumptions about "obvious" interactions (expand tiles, smart rendering) were wrong both milestones
+4. Ship UX features fast and get user feedback — assumptions about "obvious" interactions (expand tiles, smart rendering, auto-reset) were wrong across all milestones
+5. Integration checkers catch prop-level bugs that manual review misses — always run before shipping

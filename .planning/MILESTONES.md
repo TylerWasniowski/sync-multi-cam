@@ -1,5 +1,25 @@
 # Milestones
 
+## v2.1 UI Polish (Shipped: 2026-03-08)
+
+**Delivered:** Visual polish for muted track feedback, privacy messaging, and export controls redesign. Clearer visual hierarchy and better UX flow.
+
+**Phases completed:** 2 phases, 2 plans, 5 tasks
+**Timeline:** 1 day (2026-03-07)
+**Codebase:** 6,664 LOC TypeScript
+**Requirements:** 6/6 shipped
+
+**Key accomplishments:**
+1. Muted waveform rows dim with grayscale + opacity and smooth 300ms CSS transitions
+2. Mute button stays bright via structural isolation outside dimmed container
+3. Privacy message with shield icon prominently displayed in file drop zone
+4. Centered export bar with enlarged, visually dominant export button
+5. Persistent completion state with "Export Another" flow (user-approved UX improvement)
+
+**Archive:** `milestones/v2.1-ROADMAP.md`, `milestones/v2.1-REQUIREMENTS.md`
+
+---
+
 ## v2.0 Synced Playback & Export (Shipped: 2026-03-04)
 
 **Delivered:** Synced multi-camera video playback in a dynamic grid with GPU-accelerated composite export. Watch all angles simultaneously, seek via waveforms, and download a single MP4 with all cameras composited.
