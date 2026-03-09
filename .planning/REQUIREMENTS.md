@@ -34,16 +34,16 @@ Requirements for milestone v2.2 Cursor Fixes & UI Cleanup.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PLAY-01 | — | Pending |
-| PLAY-02 | — | Pending |
-| UI-01 | — | Pending |
-| UI-02 | — | Pending |
+| PLAY-01 | Phase 12 | Pending |
+| PLAY-02 | Phase 12 | Pending |
+| UI-01 | Phase 13 | Pending |
+| UI-02 | Phase 13 | Pending |
 
 **Coverage:**
 - v2.2 requirements: 4 total
-- Mapped to phases: 0
-- Unmapped: 4 ⚠️
+- Mapped to phases: 4
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-08*
-*Last updated: 2026-03-08 after initial definition*
+*Last updated: 2026-03-08 after roadmap creation*

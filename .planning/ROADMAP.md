@@ -5,6 +5,7 @@
 - ✅ **v1.0 MVP** — Phases 1-4 (shipped 2026-03-02)
 - ✅ **v2.0 Synced Playback & Export** — Phases 5-9 (shipped 2026-03-04)
 - ✅ **v2.1 UI Polish** — Phases 10-11 (shipped 2026-03-08)
+- **v2.2 Cursor Fixes & UI Cleanup** — Phases 12-13 (in progress)
 
 ## Phases
 
@@ -41,7 +42,45 @@
 
 </details>
 
+### v2.2 Cursor Fixes & UI Cleanup
+
+- [ ] **Phase 12: Playback Cursor Fixes** - Fix cursor state mismatch and play-from-cursor behavior
+- [ ] **Phase 13: UI Cleanup** - Remove Sync Results area and add precise offset display on waveform tracks
+
+## Phase Details
+
+### Phase 12: Playback Cursor Fixes
+**Goal**: Cursor and playhead position are consistent and reliable -- what the user sees is where playback starts
+**Depends on**: Nothing (first phase of v2.2)
+**Requirements**: PLAY-01, PLAY-02
+**Success Criteria** (what must be TRUE):
+  1. User clicks a position on the waveform and the cursor preview line stays at that exact position across all audio tracks
+  2. User clicks a waveform position then presses Play, and playback begins from that clicked position (not from the beginning)
+  3. User presses Play without having clicked anywhere, and playback starts from the sync start point (beginning of the synced timeline)
+  4. After pausing and resuming, playback continues from the paused position
+**Plans**: TBD
+
+Plans:
+- [ ] 12-01: TBD
+
+### Phase 13: UI Cleanup
+**Goal**: Offset information moves from a separate results panel to inline display on waveform tracks with professional-grade precision
+**Depends on**: Phase 12
+**Requirements**: UI-01, UI-02
+**Success Criteria** (what must be TRUE):
+  1. The Sync Results download area is no longer visible anywhere in the UI after sync completes
+  2. Each waveform track displays its sync offset in milliseconds (e.g., `+1.234s`)
+  3. Each waveform track displays its offset in NLE timecode format (e.g., `00:00:01:07 @ 30fps`)
+  4. The offset display is visible without user interaction (no hover or expand needed)
+**Plans**: TBD
+
+Plans:
+- [ ] 13-01: TBD
+
 ## Progress
+
+**Execution Order:**
+Phases execute in numeric order: 12 -> 13
 
 | Phase | Milestone | Plans | Status | Completed |
 |-------|-----------|-------|--------|-----------|
@@ -56,3 +95,5 @@
 | 9. Polish | v2.0 | 1/1 | Complete | 2026-03-03 |
 | 10. Visual Feedback Polish | v2.1 | 1/1 | Complete | 2026-03-07 |
 | 11. Export Bar Redesign | v2.1 | 1/1 | Complete | 2026-03-07 |
+| 12. Playback Cursor Fixes | v2.2 | 0/? | Not started | - |
+| 13. UI Cleanup | v2.2 | 0/? | Not started | - |
