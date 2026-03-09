@@ -58,10 +58,10 @@
   2. User clicks a waveform position then presses Play, and playback begins from that clicked position (not from the beginning)
   3. User presses Play without having clicked anywhere, and playback starts from the sync start point (beginning of the synced timeline)
   4. After pausing and resuming, playback continues from the paused position
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 12-01: TBD
+- [ ] 12-01-PLAN.md — Fix cursor position mismatch and play-from-beginning bugs
 
 ### Phase 13: UI Cleanup
 **Goal**: Offset information moves from a separate results panel to inline display on waveform tracks with professional-grade precision
@@ -95,5 +95,5 @@ Phases execute in numeric order: 12 -> 13
 | 9. Polish | v2.0 | 1/1 | Complete | 2026-03-03 |
 | 10. Visual Feedback Polish | v2.1 | 1/1 | Complete | 2026-03-07 |
 | 11. Export Bar Redesign | v2.1 | 1/1 | Complete | 2026-03-07 |
-| 12. Playback Cursor Fixes | v2.2 | 0/? | Not started | - |
+| 12. Playback Cursor Fixes | v2.2 | 0/1 | Not started | - |
 | 13. UI Cleanup | v2.2 | 0/? | Not started | - |
