@@ -193,6 +193,10 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
     );
     syncEngineRef.current = engine;
 
+    // Sync the engine's internal currentTime to maxOffset so first play starts
+    // from the sync point (where all cameras overlap), not from time 0
+    engine.seek(maxOffset);
+
     return () => {
       engine.destroy();
       syncEngineRef.current = null;
