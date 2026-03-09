@@ -20,6 +20,9 @@ export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, on
   const panelRef = useRef<HTMLDivElement>(null);
   const [panelWidth, setPanelWidth] = useState(0);
 
+  // Dynamically measured: distance from panel left edge to first canvas container
+  const [labelOffset, setLabelOffset] = useState(176); // fallback until measured
+
   // rAF gating for view state updates
   const pendingUpdateRef = useRef<Partial<ViewState> | null>(null);
   const rafIdRef = useRef<number>(0);
@@ -37,6 +40,17 @@ export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, on
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+
+  // Measure label offset dynamically from the first canvas container
+  useEffect(() => {
+    const el = panelRef.current;
+    if (!el || results.length === 0) return;
+    const canvas = el.querySelector('[data-waveform-canvas]');
+    if (!canvas) return;
+    const panelRect = el.getBoundingClientRect();
+    const canvasRect = canvas.getBoundingClientRect();
+    setLabelOffset(canvasRect.left - panelRect.left);
+  }, [panelWidth, results.length]);
 
   // Find the end of the shared timeline (max of offset + duration across all tracks)
   const maxDuration = useMemo(() => {
@@ -57,8 +71,8 @@ export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, on
     return 16000; // fallback
   }, [peaksMap]);
 
-  // Default samplesPerPixel: fit longest track in panel width (minus px-4 padding + w-40 label = 176px)
-  const canvasWidth = Math.max(panelWidth - 176, 200);
+  // Default samplesPerPixel: fit longest track in panel width minus dynamically measured label offset
+  const canvasWidth = Math.max(panelWidth - labelOffset, 200);
   const defaultSPP = maxDuration > 0 && canvasWidth > 0
     ? (maxDuration * sampleRate) / canvasWidth
     : 100;
@@ -137,8 +151,7 @@ export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, on
     const el = panelRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    // Account for px-4 padding (16px) + label column w-40 (160px)
-    const offsetX = e.clientX - rect.left - 176;
+    const offsetX = e.clientX - rect.left - labelOffset;
     const clampedX = Math.max(0, Math.min(offsetX, canvasWidth));
     const factor = e.deltaY > 0 ? 1.1 : 0.9;
     const oldSPP = viewState.samplesPerPixel;
@@ -163,7 +176,7 @@ export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, on
         scrollOffset: Math.max(0, newOffset),
       });
     }
-  }, [viewState.samplesPerPixel, viewState.scrollOffset, maxSamplesPerPixel, canvasWidth, handleViewStateChange, isPlaying, playheadTime, sampleRate]);
+  }, [viewState.samplesPerPixel, viewState.scrollOffset, maxSamplesPerPixel, canvasWidth, handleViewStateChange, isPlaying, playheadTime, sampleRate, labelOffset]);
 
   // Attach native wheel listener with passive: false so preventDefault() works
   useEffect(() => {
@@ -215,10 +228,10 @@ export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, on
     const el = panelRef.current;
     if (!el) return 0;
     const rect = el.getBoundingClientRect();
-    const offsetX = e.clientX - rect.left - 176;
+    const offsetX = e.clientX - rect.left - labelOffset;
     const clampedX = Math.max(0, offsetX);
     return (viewState.scrollOffset + clampedX * viewState.samplesPerPixel) / sampleRate;
-  }, [viewState.scrollOffset, viewState.samplesPerPixel, sampleRate]);
+  }, [viewState.scrollOffset, viewState.samplesPerPixel, sampleRate, labelOffset]);
 
   const handlePanelPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
@@ -266,12 +279,12 @@ export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, on
       const el = panelRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
-      const offsetX = e.clientX - rect.left - 176;
+      const offsetX = e.clientX - rect.left - labelOffset;
       const clampedX = Math.max(0, offsetX);
       const time = (viewState.scrollOffset + clampedX * viewState.samplesPerPixel) / sampleRate;
       handleViewStateChange({ cursorTime: time });
     }
-  }, [viewState.samplesPerPixel, viewState.scrollOffset, sampleRate, handleViewStateChange, onScrubSeek, panelPointerToTime]);
+  }, [viewState.samplesPerPixel, viewState.scrollOffset, sampleRate, handleViewStateChange, onScrubSeek, panelPointerToTime, labelOffset]);
 
   const handlePanelPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     const mode = panelModeRef.current;
