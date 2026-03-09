@@ -95,5 +95,5 @@ Phases execute in numeric order: 12 -> 13
 | 9. Polish | v2.0 | 1/1 | Complete | 2026-03-03 |
 | 10. Visual Feedback Polish | v2.1 | 1/1 | Complete | 2026-03-07 |
 | 11. Export Bar Redesign | v2.1 | 1/1 | Complete | 2026-03-07 |
-| 12. Playback Cursor Fixes | 1/1 | Complete   | 2026-03-09 | - |
+| 12. Playback Cursor Fixes | 1/1 | Complete    | 2026-03-09 | - |
 | 13. UI Cleanup | v2.2 | 0/? | Not started | - |
