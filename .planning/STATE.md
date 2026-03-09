@@ -1,8 +1,8 @@
 ---
 gsd_state_version: 1.0
-milestone: null
-milestone_name: null
-status: between_milestones
+milestone: v2.2
+milestone_name: Cursor Fixes & UI Cleanup
+status: defining_requirements
 last_updated: "2026-03-08"
 progress:
   total_phases: 0
@@ -18,13 +18,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-08)
 
 **Core value:** Accurately sync multiple camera angles by audio so users get aligned video files without installing any software
-**Current focus:** Planning next milestone
+**Current focus:** Milestone v2.2 — Cursor Fixes & UI Cleanup
 
 ## Current Position
 
-Phase: N/A — between milestones
-Status: v2.1 UI Polish shipped. Ready for next milestone.
-Last activity: 2026-03-08 — v2.1 milestone completed and archived
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-08 — Milestone v2.2 started
 
 ## Accumulated Context
 
@@ -44,5 +45,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-08
-Stopped at: v2.1 milestone completed and archived
-Resume file: .planning/MILESTONES.md
+Stopped at: Defining v2.2 requirements
+Resume file: .planning/PROJECT.md

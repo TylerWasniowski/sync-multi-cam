@@ -36,7 +36,14 @@ Accurately sync multiple camera angles by audio so users get aligned video files
 
 ### Active
 
-(No active requirements — define next milestone with `/gsd:new-milestone`)
+## Current Milestone: v2.2 Cursor Fixes & UI Cleanup
+
+**Goal:** Fix waveform cursor/playback bugs and remove redundant sync results UI, improving offset display precision for NLE users.
+
+**Target features:**
+- Fix cursor state not matching cursor preview in audio tracks
+- Fix play starting from beginning instead of cursor/sync start position
+- Remove Sync Results download area, show precise offsets (ms + timecode) on waveform tracks
 
 ### Out of Scope
 
@@ -91,4 +98,4 @@ Accurately sync multiple camera angles by audio so users get aligned video files
 | Inline styles for dim transitions | Tailwind transition-all doesn't reliably cover CSS filter property | ✓ Good |
 
 ---
-*Last updated: 2026-03-08 after v2.1 milestone*
+*Last updated: 2026-03-08 after v2.2 milestone started*
