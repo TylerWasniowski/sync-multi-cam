@@ -9,8 +9,8 @@ Requirements for milestone v2.2 Cursor Fixes & UI Cleanup.
 
 ### Playback
 
-- [ ] **PLAY-01**: Cursor state matches cursor preview position 1:1 in audio tracks (GH#1)
-- [ ] **PLAY-02**: Play starts from cursor position if user has seeked, or from sync start point if no cursor set (GH#2)
+- [x] **PLAY-01**: Cursor state matches cursor preview position 1:1 in audio tracks (GH#1)
+- [x] **PLAY-02**: Play starts from cursor position if user has seeked, or from sync start point if no cursor set (GH#2)
 
 ### UI Cleanup
 
@@ -34,8 +34,8 @@ Requirements for milestone v2.2 Cursor Fixes & UI Cleanup.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PLAY-01 | Phase 12 | Pending |
-| PLAY-02 | Phase 12 | Pending |
+| PLAY-01 | Phase 12 | Complete |
+| PLAY-02 | Phase 12 | Complete |
 | UI-01 | Phase 13 | Pending |
 | UI-02 | Phase 13 | Pending |
 

@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Cursor Fixes & UI Cleanup
-status: planning
-stopped_at: Phase 12 context gathered
-last_updated: "2026-03-09T01:23:09.040Z"
-last_activity: 2026-03-08 — Roadmap created for v2.2
+status: completed
+stopped_at: Completed 12-01-PLAN.md
+last_updated: "2026-03-09T04:49:19.392Z"
+last_activity: 2026-03-09 — Completed 12-01 cursor and playback fixes
 progress:
   total_phases: 2
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 1
+  total_plans: 1
+  completed_plans: 1
+  percent: 100
 ---
 
 # Project State
@@ -26,25 +26,26 @@ See: .planning/PROJECT.md (updated 2026-03-08)
 ## Current Position
 
 Phase: 12 of 13 (Playback Cursor Fixes)
-Plan: —
-Status: Ready to plan
-Last activity: 2026-03-08 — Roadmap created for v2.2
+Plan: 1 of 1 complete
+Status: Phase 12 complete
+Last activity: 2026-03-09 — Completed 12-01 cursor and playback fixes
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0 (v2.2)
-- Average duration: —
-- Total execution time: —
+- Total plans completed: 1 (v2.2)
+- Average duration: 3min
+- Total execution time: 3min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 12. Playback Cursor Fixes | 0/? | — | — |
+| 12. Playback Cursor Fixes | 1/1 | 3min | 3min |
 | 13. UI Cleanup | 0/? | — | — |
+| Phase 12 P01 | 3min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -52,6 +53,8 @@ Progress: [░░░░░░░░░░] 0%
 
 Full decision log in PROJECT.md Key Decisions table.
 v1.0, v2.0, and v2.1 decisions archived in respective milestone files.
+- [Phase 12]: Used useState for labelOffset (not useRef) so canvasWidth re-derives on measurement
+- [Phase 12]: engine.seek(maxOffset) after creation rather than constructor initial-time param
 
 ### Pending Todos
 
@@ -63,6 +66,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-09T01:23:09.019Z
-Stopped at: Phase 12 context gathered
-Resume file: .planning/phases/12-playback-cursor-fixes/12-CONTEXT.md
+Last session: 2026-03-09T04:49:08.466Z
+Stopped at: Completed 12-01-PLAN.md
+Resume file: None
