@@ -72,10 +72,10 @@ Plans:
   2. Each waveform track displays its sync offset in milliseconds (e.g., `+1.234s`)
   3. Each waveform track displays its offset in NLE timecode format (e.g., `00:00:01:07 @ 30fps`)
   4. The offset display is visible without user interaction (no hover or expand needed)
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 13-01: TBD
+- [ ] 13-01-PLAN.md — Remove SyncResults/trimming/ZIP pipeline and add inline NLE timecode offset display
 
 ## Progress
 
@@ -95,5 +95,5 @@ Phases execute in numeric order: 12 -> 13
 | 9. Polish | v2.0 | 1/1 | Complete | 2026-03-03 |
 | 10. Visual Feedback Polish | v2.1 | 1/1 | Complete | 2026-03-07 |
 | 11. Export Bar Redesign | v2.1 | 1/1 | Complete | 2026-03-07 |
-| 12. Playback Cursor Fixes | 1/1 | Complete    | 2026-03-09 | - |
-| 13. UI Cleanup | v2.2 | 0/? | Not started | - |
+| 12. Playback Cursor Fixes | v2.2 | 1/1 | Complete | 2026-03-09 |
+| 13. UI Cleanup | v2.2 | 0/1 | Not started | - |
