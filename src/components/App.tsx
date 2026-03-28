@@ -1,12 +1,10 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import type { VideoFile, PipelineProgress as PipelineProgressType, DownloadableResult, TrimmedFile, MultiResolutionPeaks } from '../types/index.ts';
+import type { VideoFile, PipelineProgress as PipelineProgressType, DownloadableResult, MultiResolutionPeaks } from '../types/index.ts';
 import { MAX_FILES } from '../lib/constants.ts';
 import { validateFiles } from '../lib/fileValidation.ts';
 import { getFFmpeg } from '../lib/ffmpeg.ts';
 import { extractAudio } from '../lib/audioExtractor.ts';
 import { syncAudioTracks } from '../lib/audioSync.ts';
-import { trimVideo, calculateAlignedTrims } from '../lib/videoTrimmer.ts';
-import { buildZip } from '../lib/zipBuilder.ts';
 import { computeMultiResolutionPeaks } from '../lib/waveformPeaks.ts';
 import { PrivacyBanner } from './PrivacyBanner.tsx';
 import { FileDropZone } from './FileDropZone.tsx';
@@ -14,7 +12,6 @@ import { FileList } from './FileList.tsx';
 import { FFmpegStatus } from './FFmpegStatus.tsx';
 import { SyncButton } from './SyncButton.tsx';
 import { PipelineProgress } from './PipelineProgress.tsx';
-import { SyncResults } from './SyncResults.tsx';
 import { PlaybackSection } from './PlaybackSection.tsx';
 
 type FFmpegLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -67,7 +64,6 @@ export default function App() {
   });
   const [syncResults, setSyncResults] = useState<DownloadableResult[]>([]);
   const [syncError, setSyncError] = useState<string | undefined>(undefined);
-  const [zipData, setZipData] = useState<Uint8Array | null>(null);
   const [waveformPeaks, setWaveformPeaks] = useState<Map<string, MultiResolutionPeaks>>(new Map());
 
   const handleSync = useCallback(async () => {
@@ -76,7 +72,6 @@ export default function App() {
     // Reset all state for new pipeline run
     setSyncResults([]);
     setSyncError(undefined);
-    setZipData(null);
     setWaveformPeaks(new Map());
     setSyncProgress({ stage: 'extracting', current: 0, total: files.length, message: 'Starting audio extraction...' });
 
@@ -120,112 +115,18 @@ export default function App() {
         });
       });
 
-      // Phase 3: Trim videos
-      // Calculate trim amounts: align all files to the latest-starting track
-      const maxOffset = Math.max(...results.map(r => r.offsetSeconds));
-
-      setSyncProgress({
-        stage: 'trimming',
-        current: 0,
-        total: files.length,
-        message: 'Calculating keyframe-aligned trim points...',
+      // Build simplified downloadable results (no trimming/ZIP needed)
+      const downloadableResults: DownloadableResult[] = results.map(syncResult => {
+        const videoFile = files.find(f => f.id === syncResult.fileId)!;
+        return { ...syncResult, originalFile: videoFile.file };
       });
-
-      // Build per-file ideal trims and get coordinated snap points
-      const idealTrims = results.map(r => {
-        const videoFile = files.find(f => f.id === r.fileId)!;
-        return { file: videoFile.file, idealTrimSeconds: maxOffset - r.offsetSeconds };
-      });
-      const alignedTrims = await calculateAlignedTrims(idealTrims);
-
-      const downloadableResults: DownloadableResult[] = [];
-      let trimFailCount = 0;
-
-      for (let i = 0; i < results.length; i++) {
-        const syncResult = results[i];
-        const videoFile = files.find(f => f.id === syncResult.fileId);
-        if (!videoFile) continue;
-
-        const trimSeconds = alignedTrims[i].snapTrimSeconds;
-
-        setSyncProgress({
-          stage: 'trimming',
-          current: i + 1,
-          total: files.length,
-          message: `Trimming ${syncResult.fileName}...`,
-        });
-
-        let trimmedData: Uint8Array | null = null;
-        try {
-          trimmedData = await trimVideo(videoFile.file, trimSeconds);
-        } catch (err: unknown) {
-          console.warn(
-            `Failed to trim ${syncResult.fileName}:`,
-            err instanceof Error ? err.message : err
-          );
-          trimFailCount++;
-        }
-
-        downloadableResults.push({
-          fileId: syncResult.fileId,
-          fileName: syncResult.fileName,
-          offsetSeconds: syncResult.offsetSeconds,
-          offsetSamples: syncResult.offsetSamples,
-          confidence: syncResult.confidence,
-          isReference: syncResult.isReference,
-          trimmedData,
-          trimSeconds,
-          originalFile: videoFile.file,
-        });
-      }
-
-      // If ALL files failed trimming, set error state
-      if (trimFailCount === files.length) {
-        throw new Error('All files failed to trim. Please try again with different files.');
-      }
-
       setSyncResults(downloadableResults);
-
-      // Phase 4: Build ZIP
-      setSyncProgress({
-        stage: 'zipping',
-        current: 0,
-        total: 1,
-        message: 'Creating ZIP archive...',
-      });
-
-      const zipFiles: TrimmedFile[] = [];
-      for (const result of downloadableResults) {
-        if (result.trimmedData) {
-          zipFiles.push({
-            name: `synced_${result.fileName}`,
-            data: result.trimmedData,
-          });
-        } else {
-          // Skipped file (reference/latest): include original
-          const buffer = await result.originalFile.arrayBuffer();
-          zipFiles.push({
-            name: result.fileName,
-            data: new Uint8Array(buffer),
-          });
-        }
-      }
-
-      const zip = buildZip(zipFiles);
-      setZipData(zip);
-
-      setSyncProgress({
-        stage: 'zipping',
-        current: 1,
-        total: 1,
-        message: 'ZIP ready',
-      });
 
       setSyncProgress({
         stage: 'complete',
         current: files.length,
         total: files.length,
-        message: `Pipeline complete — ${files.length} files synced and ready for download`,
+        message: `Sync complete — ${files.length} files aligned`,
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Pipeline failed';
@@ -310,7 +211,7 @@ export default function App() {
           <div className="mt-6">
             <SyncButton
               fileCount={files.length}
-              isSyncing={['extracting', 'correlating', 'trimming', 'zipping'].includes(syncProgress.stage)}
+              isSyncing={['extracting', 'correlating'].includes(syncProgress.stage)}
               onClick={handleSync}
             />
           </div>
@@ -327,13 +228,6 @@ export default function App() {
         {syncError && (
           <div className="mt-4 bg-red-900/30 border border-red-800 rounded-lg p-4">
             <p className="text-sm text-red-400">{syncError}</p>
-          </div>
-        )}
-
-        {/* Results -- visible after sync completes */}
-        {syncResults.length > 0 && (
-          <div className="mt-6">
-            <SyncResults results={syncResults} zipData={zipData} />
           </div>
         )}
 

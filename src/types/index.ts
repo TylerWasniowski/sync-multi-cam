@@ -25,8 +25,6 @@ export type PipelineStage =
   | 'idle'
   | 'extracting'
   | 'correlating'
-  | 'trimming'
-  | 'zipping'
   | 'complete'
   | 'error';
 
@@ -37,15 +35,8 @@ export interface PipelineProgress {
   message: string;
 }
 
-export interface TrimmedFile {
-  name: string;
-  data: Uint8Array;
-}
-
 export interface DownloadableResult extends SyncResult {
-  trimmedData: Uint8Array | null; // null means skipped (use original file)
-  trimSeconds: number;
-  originalFile: File; // reference to original File for skipped downloads
+  originalFile: File;
 }
 
 export interface WaveformPeaks {

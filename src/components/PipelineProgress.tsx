@@ -10,8 +10,6 @@ export function PipelineProgress({ progress }: PipelineProgressProps) {
   const stageLabels: Record<string, string> = {
     extracting: 'Extracting Audio',
     correlating: 'Analyzing Sync',
-    trimming: 'Trimming Videos',
-    zipping: 'Building Download',
     complete: 'Complete',
     error: 'Failed',
   };
