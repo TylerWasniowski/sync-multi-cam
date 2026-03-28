@@ -14,6 +14,22 @@ export function formatOffset(seconds: number): string {
 }
 
 /**
+ * Format seconds as NLE-style timecode: HH:MM:SS:FF @ {fps}fps
+ * Uses 30fps as default (NTSC standard, most common NLE timeline).
+ */
+export function formatNLETimecode(seconds: number, fps: number = 30): string {
+  const abs = Math.abs(seconds);
+  const totalFrames = Math.round(abs * fps);
+  const ff = totalFrames % fps;
+  const totalSecs = Math.floor(totalFrames / fps);
+  const ss = totalSecs % 60;
+  const mm = Math.floor(totalSecs / 60) % 60;
+  const hh = Math.floor(totalSecs / 3600);
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+  return `${pad2(hh)}:${pad2(mm)}:${pad2(ss)}:${pad2(ff)} @ ${fps}fps`;
+}
+
+/**
  * Classify confidence percentage into display level.
  * high (>=70): Strong correlation, reliable sync
  * medium (40-69): Decent correlation, likely correct

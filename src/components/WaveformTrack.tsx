@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import type { MultiResolutionPeaks, ViewState } from '../types/index.ts';
 import { selectPeakLevel } from '../lib/waveformPeaks.ts';
+import { formatOffset, formatNLETimecode } from '../lib/audioSync.ts';
 import { WaveformCanvas } from './WaveformCanvas.tsx';
 
 const MIN_SAMPLES_PER_PIXEL = 1;
@@ -259,10 +260,6 @@ export function WaveformTrack({
     }
   }, [viewState.scrollOffset]);
 
-  const offsetLabel = isReference
-    ? 'REF'
-    : `+${syncResult.offsetSeconds.toFixed(2)}s`;
-
   return (
     <div className="flex items-center" style={{ height: TRACK_HEIGHT }}>
       {/* Mute toggle — outside dimmed scope so it stays at full opacity */}
@@ -300,19 +297,38 @@ export function WaveformTrack({
         }}
       >
         {/* Label column */}
-        <div className="w-32 shrink-0 pr-3 flex items-center overflow-hidden">
+        <div className="w-36 shrink-0 pr-3 flex items-center overflow-hidden">
           <div className="flex flex-col justify-center min-w-0">
             <span className="text-xs text-gray-300 truncate" title={fileName}>
               {fileName}
             </span>
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className={`text-[10px] font-mono ${isReference ? 'text-blue-400' : 'text-gray-500'}`}>
-                {offsetLabel}
-              </span>
-              <span className="text-[10px] text-gray-600">
-                {syncResult.confidence}%
-              </span>
-            </div>
+            {isReference ? (
+              <>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-[10px] font-mono text-blue-400">REF</span>
+                  <span className="text-[10px] text-gray-600">
+                    {syncResult.confidence}%
+                  </span>
+                </div>
+                <span className="text-[10px] font-mono text-gray-600 mt-px">
+                  {formatNLETimecode(0)}
+                </span>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-[10px] font-mono text-gray-400">
+                    {formatOffset(syncResult.offsetSeconds)}
+                  </span>
+                  <span className="text-[10px] text-gray-600">
+                    {syncResult.confidence}%
+                  </span>
+                </div>
+                <span className="text-[10px] font-mono text-gray-600 mt-px">
+                  {formatNLETimecode(syncResult.offsetSeconds)}
+                </span>
+              </>
+            )}
           </div>
         </div>
 
