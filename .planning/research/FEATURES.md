@@ -1,208 +1,302 @@
-# Feature Research
+# Feature Landscape: Robust Audio Synchronization
 
-**Domain:** Browser-based synced multi-cam video grid playback and GPU-accelerated composite export
-**Researched:** 2026-03-02
-**Confidence:** HIGH (stack), MEDIUM (UX patterns — limited browser-based multi-cam player prior art)
-
----
-
-## Context: v2.0 Adds On Top of v1.0
-
-v1.0 is shipped and complete. This research covers ONLY the new v2.0 milestone:
-synced video grid playback with dynamic packing, waveform-as-scrubbar integration,
-audio mixing, and GPU-accelerated composite MP4 export. All v1.0 features (upload,
-sync pipeline, trimmed file downloads, waveform visualization) remain in place.
+**Domain:** Audio synchronization algorithms for multi-camera video alignment
+**Researched:** 2026-03-28
+**Confidence:** MEDIUM-HIGH (algorithms well-documented in literature; browser/WASM implementation specifics have less prior art)
 
 ---
 
-## Feature Landscape
+## Context: v2.3 Replaces the Sync Engine Only
 
-### Table Stakes (Users Expect These)
+v2.2 is shipped and complete. This research covers ONLY the v2.3 milestone:
+replacing the SynAudio Pearson correlation engine with a spectral/frequency-domain
+sync algorithm. The existing pipeline interface is preserved: video files in,
+`{offsetSeconds, offsetSamples, confidence, isReference}` per file out. Everything
+upstream (FFmpeg WASM audio extraction) and downstream (waveform visualization,
+grid playback, composite export) remains unchanged.
 
-Features a multi-cam playback and export tool must have. Missing any of these makes
-the feature feel broken or incomplete.
+### Current Pipeline (Being Replaced)
+
+```
+FFmpeg WASM → 16kHz mono PCM → SynAudio WASM SIMD Pearson correlation → offsets + confidence
+```
+
+**Current limitations driving this milestone:**
+- SynAudio uses time-domain Pearson correlation on raw waveform samples
+- Sensitive to device frequency response differences (phone mic vs DSLR preamp)
+- Fails on repetitive content (concert music) where many correlation peaks are similar
+- Confidence score (raw |correlation|) does not distinguish "good match with ambient noise" from "ambiguous match with multiple candidates"
+- `correlationSampleSize=11025` and `initialGranularity=16` are fixed — no multi-resolution refinement
+- Comparison clip must be a subset of the base clip (SynAudio constraint)
+
+---
+
+## Table Stakes
+
+Features users expect from audio sync that "just works." Missing any of these means the algorithm is not meaningfully better than SynAudio.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Synchronized playback (all cameras play together) | The entire point of a multi-cam player. If cameras drift during playback, the feature is worthless. | HIGH | `requestVideoFrameCallback()` is the modern approach (available Chrome/Edge/Firefox since 2024, Safari 2025+). Use rAF drift correction loop: every ~500ms check `video.currentTime` against master clock and seek if delta > 1 frame. Not frame-accurate but visually acceptable for review. |
-| Play / pause / seek controls | Universal media player expectation. Users need a single shared transport that controls all cameras simultaneously. | MEDIUM | Single transport bar controlling all `<video>` elements together. Clicking seek sets all `video.currentTime` to the new offset. Must account for per-camera sync offsets from v1.0 pipeline (`SyncResult.offsetSeconds`). |
-| Video grid layout (all cameras visible) | Users want to see all angles simultaneously, not tab through them. | MEDIUM | CSS Grid baseline is fine for equal-sized grid. Dynamic packing for mixed aspect ratios requires a packing algorithm. Start with simple N-up grid, upgrade to packing algorithm. |
-| Show camera labels / filenames | Users need to know which angle they are watching, especially with 4+ cameras. | LOW | Overlay filename or user-defined label on each video tile. Subtle but required for production review work. |
-| Fullscreen single-camera mode | Users need to focus on one angle at a time. Click-to-expand a single tile is universally expected in multi-view players. | MEDIUM | Click any tile to expand it to fullscreen or replace the grid with a single large view. Clicking again returns to grid. |
-| Keyboard shortcuts (space = play/pause) | Space bar for play/pause is muscle memory for video workers. Any media player without it feels broken. | LOW | Space = play/pause. Left/right arrows = seek ±5s. These three are non-negotiable minimum. |
-| Export progress feedback | Video export is the heaviest operation in the app (potentially minutes). A spinner with no progress = users think it crashed. | MEDIUM | Show frame-level progress (e.g., "Encoding frame 450 / 2400"). Ideally show estimated time remaining. WebCodecs encoding is synchronous per-frame in the render loop so progress is trackable. |
-| Export downloads as MP4 | Users expect H.264 MP4 as the output format. It's the universal playback format. | MEDIUM | WebCodecs `VideoEncoder` + Mediabunny muxer → H.264 MP4. Browser codec string: `avc1.4d0034` for high profile. Must include audio track. |
+| Spectral-domain cross-correlation | Raw waveform correlation is fragile to device differences. Spectral methods normalize timbral variation so a phone recording matches a DSLR recording of the same event. This is the core upgrade. | HIGH | FFT-based cross-correlation in frequency domain. Compute STFT of both signals, multiply conjugate spectra, IFFT to get cross-correlation. GCC-PHAT variant whitens magnitudes (retains only phase) for robustness to different mic frequency responses. |
+| Coarse-to-fine multi-resolution search | Brute-force correlation at full sample rate is O(N*M). Must be fast enough for 30 files x multi-minute recordings in a browser. SynAudio already uses `initialGranularity=16` for this reason, but a spectral approach needs its own multi-res strategy. | MEDIUM | Stage 1: Downsample to ~1kHz, FFT cross-correlate for coarse offset (resolution ~1ms). Stage 2: Refine in a narrow window at full sample rate (16kHz) for fine offset. Reduces FFT size from millions to tens of thousands in the coarse pass. |
+| Meaningful confidence scoring | Current SynAudio returns `|correlation|` scaled to 0-100. This doesn't distinguish "clear unique peak" from "many similar peaks" (repetitive music). Users need confidence that actually predicts sync reliability. | MEDIUM | Peak-to-sidelobe ratio (PSR): compare the primary peak height to the second-best peak. A PSR of 3+ means unambiguous match. PSR < 1.5 means multiple candidates — flag as low confidence. Also report the absolute correlation magnitude. Combined metric: `confidence = f(PSR, peak_magnitude)`. |
+| Device-invariant matching | Different microphones (phone, DSLR, lavalier, shotgun) have wildly different frequency responses. A phone clips bass, a lavalier boosts mids. The sync algorithm must find alignment despite these spectral differences. | MEDIUM | GCC-PHAT normalization handles this by discarding magnitude information and using only phase. Additional robustness: operate on a frequency band (300Hz-5kHz) where most devices have usable response, ignoring sub-bass rumble and ultrasonic noise. |
+| Robust to ambient noise and reverb | Multi-camera shoots in reverberant spaces (churches, concert halls) add room reflections that smear temporal features. The algorithm must handle SNR as low as 10-15 dB. | MEDIUM | GCC-PHAT is specifically designed for noisy/reverberant environments — the phase whitening suppresses colored noise. Band-pass filtering (300Hz-5kHz) removes low-frequency rumble and high-frequency hiss that carry room modes and device noise. |
+| Same pipeline interface as SynAudio | Downstream code expects `SyncResult[]` with `offsetSeconds`, `offsetSamples`, `confidence`, `isReference`. Breaking this interface means rewriting the waveform visualization, grid player offset logic, and export offset logic. | LOW | Drop-in replacement. `syncAudioTracks(tracks, onProgress) => Promise<SyncResult[]>`. Internal algorithm changes, external contract unchanged. |
+| Runs entirely client-side in browser | The app is a static site on Cloudflare Pages. No server round-trips. Audio processing must happen in WebAssembly or JavaScript with Web Workers. | HIGH (constraint) | FFT via WASM (KissFFT or PFFFT compiled to WASM) for performance. All correlation logic in a Web Worker to avoid blocking UI. Memory budget: ~50-100MB for processing 30 tracks of 10-minute audio at 16kHz. |
 
-### Differentiators (Competitive Advantage)
+---
 
-Features that are not universally expected but add meaningful value.
+## Differentiators
+
+Features that are not strictly required for "better than SynAudio" but meaningfully improve the product.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Dynamic aspect-ratio-aware grid packing | Most multi-cam players use a rigid NxM grid that wastes space when cameras have mixed aspect ratios (16:9 + 9:16 + 1:1). Packing algorithm maximizes canvas utilization. | HIGH | Pure JavaScript rectangle packing. RectanglePacker (aslamhus/RectanglePacker on GitHub) handles same-AR tiles. For mixed ARs, custom shelf-packing: sort tiles by height descending, place on next shelf when row overflows. Target: < 10% wasted space. Runs in < 5ms for ≤ 30 tiles. |
-| Two display modes: Letterbox (preserve AR) vs Fill (crop) | Professional video workers need letterbox for accurate framing review. Fill mode is better for presentation or social exports. A toggle is a meaningful power user feature. | MEDIUM | Letterbox: `object-fit: contain` on `<video>` elements, padding fills with black. Fill: `object-fit: cover`, clips to tile boundaries. For export: letterbox = black bars composited on canvas; fill = CSS transform equivalent computed for canvas `drawImage()`. |
-| Waveform as scrubbar / click-to-seek | The waveform panel is already built. Reusing it as a timeline scrubbar means users can click audio events (claps, speech) to jump precisely to sync points. Eliminates need for a separate timeline widget. | MEDIUM | Add `onClick` handler to existing `WaveformPanel` that converts click position to time and calls `seek(time)` on all video elements. The existing `ViewState.cursorTime` is already tracked — wire it to video playback position during play. |
-| Audio track selection (all mixed / per-camera solo) | During review, users often want to listen to one camera's audio in isolation (e.g., lavalier on camera 2 vs room mic on camera 1). | MEDIUM | Web Audio API: one `MediaElementAudioSourceNode` per `<video>` element, each fed through a `GainNode`, all merged into `AudioContext.destination`. UI dropdown/button set to solo one gain (set others to 0) or mix all equally. Pitfall: only one `AudioContext` per tab; each `<video>` can only be connected to one `MediaElementSourceNode` per context. |
-| GPU-accelerated canvas composite export | Off-loads frame rendering to GPU via `OffscreenCanvas` + WebCodecs `VideoEncoder`. 5-10x faster than FFmpeg WASM re-encode approach. Runs in a Web Worker so main thread stays responsive during export. | HIGH | Architecture: Web Worker owns `OffscreenCanvas`, draws each camera's `VideoFrame` at computed positions, calls `VideoEncoder.encode()`, Mediabunny muxes chunks to ArrayBuffer. Main thread sends per-frame seek commands and transfers `ImageBitmap` data to worker. Export pipeline must be separate from playback pipeline. |
-| Resolution presets (4K / 1080p / 720p) | Users expect to choose output quality. 4K for archival, 1080p as default, 720p for quick review sharing. | LOW | Parameter passed to `VideoEncoder` config: width/height determine canvas size. Grid layout algorithm runs once per export with the chosen canvas dimensions. Bitrate scales proportionally (4K: ~20 Mbps, 1080p: ~8 Mbps, 720p: ~4 Mbps for H.264). |
-| Progressive loading: waveforms interactive before video loads | The waveform panel is already populated during v1.0 sync pipeline. Video file buffering should not block scrubbar interaction. | MEDIUM | `<video>` elements use `preload="metadata"` initially. Full video data loads in the background (`preload="auto"` after waveforms are ready). Playback becomes available when `video.readyState >= HAVE_ENOUGH_DATA`. Show a loading indicator per tile until ready. |
+| Spectral flatness feature extraction | Google Research (2014) found spectral flatness outperforms zero-crossing rate and signal energy for audio synchronization cross-correlation. Operating on spectral flatness time series rather than raw audio further compresses representation and improves noise robustness. | MEDIUM | Compute per-frame spectral flatness (geometric mean / arithmetic mean of power spectrum). Cross-correlate the spectral flatness curves between tracks. This is a 1D signal at ~100 Hz frame rate — cross-correlation is extremely fast. Can serve as the coarse alignment stage. |
+| Landmark-based fingerprint pre-filter | For large file counts (10-30 cameras), pairwise correlation is O(N^2). Fingerprint-based matching can quickly identify which clips overlap in time before running expensive correlation, and can cluster clips that recorded the same event segment. | HIGH | Extract spectral peak landmarks (Shazam-style) from each track. Hash pairs of peaks by (frequency_delta, time_delta). Match hashes between tracks to get candidate offsets. Only run full GCC-PHAT on tracks with hash matches. Libraries: `stream-audio-fingerprint` (JS, landmark algorithm) or Olaf (C compiled to WASM). |
+| Subsample-accurate offset refinement | 16kHz sample rate gives 62.5 microsecond resolution. For professional use, sub-sample accuracy via parabolic or Gaussian peak interpolation on the cross-correlation curve yields fractional-sample offsets. At 30fps video, this is overkill — but it makes the confidence metric more reliable. | LOW | Fit a parabola (or Gaussian) to the 3 samples around the correlation peak. The interpolated peak position gives a fractional sample offset. Gaussian interpolation is more accurate than parabolic for cross-correlation peaks (research-verified). Trivial to implement: 5 lines of math. |
+| Multi-pair graph-based offset resolution | When syncing N cameras, instead of correlating all against one reference, correlate multiple pairs and use a graph algorithm to find globally consistent offsets. Detects outlier pairs. Google's MST approach is elegant and handles pairwise failures gracefully. | HIGH | Build a complete graph where edge weights are pairwise correlation confidence. Use Minimum Spanning Tree (MST) to find the most confident path from each node to the reference. Offset for each camera = sum of offsets along the MST path. Outlier detection: if an edge's correlation is below threshold, flag that camera pair. |
+| Adaptive frequency band selection | Different audio scenarios have energy in different bands. A concert has energy everywhere; a quiet dialogue scene has energy only in 100Hz-4kHz. Auto-detecting the useful frequency range and focusing correlation there improves SNR. | MEDIUM | Compute average spectral energy across both tracks. Select bands where both tracks have energy above a noise floor. Apply correlation only in those bands. Fallback to full-band if no clear energy concentration is found. |
+| Confidence breakdown in UI | Instead of a single confidence number, show users *why* confidence is high or low: "Strong unique peak" vs "Multiple candidate offsets detected — verify manually" vs "Low signal overlap." | LOW | Decompose confidence into: (1) PSR rating, (2) overlap percentage, (3) spectral similarity. Display the dominant factor in the UI tooltip. E.g., "87% confidence — clear match" vs "42% confidence — repetitive audio, verify alignment." |
+| Progress reporting per-stage | The multi-stage algorithm (extract features, coarse correlate, refine, score) can report granular progress instead of just "correlating..." | LOW | Report which stage and which pair is being processed: "Coarse alignment: camera 3 of 8" then "Refining: camera 3 of 8". Wires into existing `onProgress` callback. |
 
-### Anti-Features (Commonly Requested, Often Problematic)
+---
 
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|---------------|-----------------|-------------|
-| Real-time multi-stream canvas composite during playback | Users want to see the composited grid "as it will export" | Rendering N video streams to a canvas in real-time at 30fps each stresses the GPU and causes playback drift. HTML `<video>` elements use the browser's GPU-accelerated compositor — fighting it with canvas overlays during live playback degrades quality. | Use native `<video>` elements in a CSS grid for playback (browser compositor handles it efficiently). Canvas composite is only for export, run faster-than-realtime by seeking frame-by-frame in the worker. |
-| Frame-accurate multi-stream sync during browser playback | Video editors expect frame-perfect sync | HTML `<video>` `currentTime` is not frame-accurate; `timeupdate` fires every 15-250ms; drift between streams is guaranteed at some level. No browser API provides frame-locked multi-stream playback without WebCodecs decode-to-canvas, which is prohibitively complex for a playback UI. | `requestVideoFrameCallback()` + periodic drift correction keeps visual sync within ~1 frame for review purposes. Document that for frame-accurate verification, users should import the aligned files into their NLE. |
-| Trimming/cutting within the playback UI | Natural extension: "I can see all angles, let me pick the best moment" | Clip editing is a separate product domain. Adds enormous complexity (in/out points, multicam cut editing, timeline). Competes with DaVinci Resolve. | Export aligned files → user edits in their NLE. That is the intended workflow. |
-| Streaming export (show preview while exporting) | Users want to watch the composite as it encodes | Export runs faster-than-realtime (seeking frame-by-frame). You cannot "watch" a faster-than-realtime render. Attempting to stream causes frame timing issues in the export. | Show frame count progress. Allow cancellation. |
-| Support for more than 30 videos in the grid | Power users push limits | 30 videos × even 720p decode buffers = multi-GB GPU memory. Browser tabs have strict memory ceilings. Grid layout becomes unusable past ~9 tiles at standard monitor resolutions. | Keep MAX_FILES = 30 (already enforced). For export, warn if tile count > 9 that individual tiles will be very small in the output frame. |
-| WebGPU-based compositing pipeline | Maximum GPU performance for complex effects | WebGPU is unsupported in Firefox stable (2026-03-02). Adds WGSL shader complexity. Canvas 2D `drawImage()` from `VideoFrame` is sufficient for grid compositing without effects. | OffscreenCanvas + Canvas 2D API for compositing. WebGPU is relevant only if per-tile effects (color grading, overlays) are added in a future milestone. |
-| Audio export via WebAudio capture (MediaStreamDestination) | Capture mixed audio as a stream | `MediaStreamDestination` → `MediaRecorder` cannot be synchronized with frame-by-frame video export. Audio and video end up out of sync in the resulting file. | Extract audio from the original trimmed files using FFmpeg WASM (already in-project), mix using FFmpeg's `amix` filter, attach as audio track during mux. This keeps audio/video sync guaranteed. |
+## Anti-Features
+
+Features to explicitly NOT build in v2.3. Commonly suggested, actively harmful or out of scope.
+
+| Anti-Feature | Why Suggested | Why Avoid | What to Do Instead |
+|--------------|---------------|-----------|-------------------|
+| Audio drift compensation (clock rate correction) | Different devices record at slightly different actual sample rates (e.g., 47998 vs 48000 Hz), causing progressive drift over long recordings (20+ frames over 30 minutes). | Drift compensation requires resampling one track relative to another — this is extremely complex, error-prone, and changes the audio data. The PROJECT.md explicitly lists this as out of scope. For typical multi-cam shoots (< 30 min), drift is < 1 frame and imperceptible. | Document the limitation. For long recordings, suggest users sync at multiple points and split into segments. Detect drift as a quality signal in confidence scoring but do not correct it. |
+| Machine-learning-based sync (neural audio embeddings) | Neural fingerprinting (PeakNetFP, Neural GCC-PHAT) achieves SOTA accuracy in noisy conditions. | ML models require downloading weights (10-100MB), inference is slow in WASM without WebGPU, and the model becomes a maintenance burden. The classical signal processing approach (GCC-PHAT + spectral features) is well-understood, fast, and sufficient for this use case. | Use classical DSP. The improvement from ML is marginal for clean multi-camera audio where all devices recorded the same event. ML matters for degraded audio (radio broadcast, lossy streaming) — not this use case. |
+| Chromagram / MFCC-based correlation | Chroma features are robust to timbre changes and popular in music information retrieval. MFCCs capture perceptual spectral shape. | Chroma features are designed for musical pitch analysis — they collapse octaves, losing temporal transient information that is critical for precise time alignment. MFCCs are designed for speech recognition, not time-delay estimation. Both are good for *content matching* ("is this the same song?") but poor for *sample-accurate temporal alignment*. | Use spectral flatness or power spectrum cross-correlation for time alignment. Chroma/MFCC would only be useful if we needed to match recordings of *different performances* of the same music — not the same event captured by multiple devices. |
+| Full Shazam-style database architecture | Fingerprint storage, indexing, and retrieval via hash tables or B-trees for scalable matching. | We are matching N clips against each other in-memory, not searching a database of millions of songs. The overhead of building and querying a fingerprint database is not justified for 2-30 clips. | Use fingerprints only as a lightweight pre-filter to identify overlapping segments and candidate offsets, then run full cross-correlation. No persistent database needed. |
+| WebGPU-accelerated FFT | GPU compute shaders for massively parallel FFT operations. | WebGPU is not available in Firefox (as of March 2026). FFT sizes for audio at 16kHz are small enough (16K-64K points) that WASM SIMD handles them in < 1ms per transform. GPU dispatch overhead would actually slow things down for these sizes. | WASM SIMD FFT (KissFFT or PFFFT). GPU acceleration only matters for real-time video processing, not offline audio correlation. |
+| User-configurable algorithm parameters | Expose FFT size, hop size, frequency bands, correlation threshold as UI controls. | Audio sync should "just work." Exposing algorithm internals creates confusion and support burden. PluralEyes has only one meaningful user control: "Try Really Hard" (which just runs more iterations). | Auto-tune parameters internally. Expose only one user-facing option if any: a "thorough mode" toggle that uses more compute for difficult scenarios. |
+| Support for non-overlapping audio segments | Detect that camera A recorded segment 1 and camera B recorded segment 2 with no temporal overlap. | This is a fundamentally different problem (content-based segmentation) that requires a fingerprint database approach. With no overlapping audio, cross-correlation will correctly return low confidence — which is the right answer. | Low confidence score is the correct output for non-overlapping clips. The UI already communicates this. No algorithm change needed. |
 
 ---
 
 ## Feature Dependencies
 
 ```
-[v1.0 sync pipeline: SyncResult with offsetSeconds per file]
+[FFmpeg WASM audio extraction — EXISTING, unchanged]
     |
-    +--requires--> [Synced video grid player]
-    |                   |
-    |                   +--requires--> [<video> elements loaded with trimmed file URLs or original files]
-    |                   |
-    |                   +--requires--> [Shared transport (play/pause/seek)]
-    |                   |
-    |                   +--enhances--> [Waveform panel as scrubbar]
-    |                                       (cursor time drives video seek)
+    v
+[16kHz mono PCM Float32Array — EXISTING format]
     |
-    +--requires--> [GPU composite export]
-                        |
-                        +--requires--> [Grid layout algorithm] (computes tile positions)
-                        |
-                        +--requires--> [OffscreenCanvas + WebCodecs VideoEncoder]
-                        |
-                        +--requires--> [Mediabunny muxer] (wraps encoded chunks into MP4)
-                        |
-                        +--requires--> [Audio mix from trimmed files] (FFmpeg WASM amix)
-                        |
-                        +--enhances--> [Resolution presets] (canvas dimensions + bitrate)
-
-[Web Audio API audio mixer]
-    +--enhances--> [Synced video grid player] (per-camera solo / all-mix)
-    +--conflicts--> [Audio export via MediaStreamDestination] (sync problems)
-
-[Dynamic grid packing algorithm]
-    +--enhances--> [Synced video grid player] (tile layout)
-    +--enhances--> [GPU composite export] (same algorithm reused for canvas layout)
-
-[Display mode: Letterbox vs Fill]
-    +--enhances--> [Synced video grid player] (CSS object-fit)
-    +--enhances--> [GPU composite export] (drawImage crop/letterbox math)
+    v
+[NEW: Spectral Feature Extraction]
+    |
+    +-- STFT (Short-Time Fourier Transform) via WASM FFT
+    |     |
+    |     +-- Window function (Hann)
+    |     +-- FFT size (1024 or 2048)
+    |     +-- Hop size (512 or 256)
+    |
+    +-- Spectral flatness computation (per frame)
+    |
+    +-- Optional: Spectral peak landmark extraction (for pre-filter)
+    |
+    v
+[NEW: Coarse Alignment Stage]
+    |
+    +-- Cross-correlate spectral flatness curves (fast, ~100Hz frame rate)
+    |   OR
+    +-- FFT-based cross-correlation of downsampled signal
+    |
+    +-- Produces: candidate offset(s) with coarse resolution (~1-10ms)
+    |
+    v
+[NEW: Fine Alignment Stage]
+    |
+    +-- GCC-PHAT cross-correlation in narrow window around coarse offset
+    |     |
+    |     +-- Band-pass filter (300Hz-5kHz)
+    |     +-- Phase-only weighting (PHAT)
+    |     +-- FFT cross-correlation
+    |
+    +-- Parabolic/Gaussian peak interpolation for sub-sample accuracy
+    |
+    +-- Produces: refined offset at sample-level precision
+    |
+    v
+[NEW: Confidence Scoring]
+    |
+    +-- Peak-to-sidelobe ratio (PSR)
+    +-- Absolute peak magnitude
+    +-- Overlap percentage estimation
+    +-- Combined confidence metric (0-100)
+    |
+    v
+[EXISTING: SyncResult interface — unchanged]
+    { offsetSeconds, offsetSamples, confidence, isReference }
+    |
+    v
+[EXISTING: Waveform visualization, grid playback, export — unchanged]
 ```
 
-### Dependency Notes
+### Key Dependency Notes
 
-- **Video player requires sync offsets from v1.0 pipeline:** The `SyncResult.offsetSeconds` values produced by the audio cross-correlation pipeline are used to set `video.currentTime` correctly so all cameras play from the equivalent real-world moment.
-- **Export pipeline is separate from playback pipeline:** Playback uses native `<video>` elements. Export uses `VideoFrame` objects decoded by seeking `<video>` elements frame-by-frame and drawing to `OffscreenCanvas`. These two pipelines share the grid layout algorithm but should not share state.
-- **Audio export depends on existing FFmpeg WASM:** The cleanest path for mixed audio in the exported composite is to run `ffmpeg -i cam1.mp4 -i cam2.mp4 ... -filter_complex amix=inputs=N` via the existing FFmpeg WASM instance. This produces a mixed audio blob that Mediabunny can attach alongside the video.
-- **Mediabunny replaces mp4-muxer/webm-muxer:** Both predecessor libraries are deprecated (2025). Mediabunny (github.com/Vanilagy/mediabunny) is the current recommendation — zero dependencies, pure TypeScript, WebCodecs-native, H.264 + AAC output. The CanvasSource API directly accepts canvas frames.
-- **Grid layout algorithm is shared infrastructure:** The same function that computes tile positions for the CSS grid is called again at export time with canvas pixel dimensions. It must accept both CSS pixel inputs (for display) and export pixel dimensions (for rendering).
-- **Waveform scrubbar requires bidirectional binding:** Currently `ViewState.cursorTime` is hover-only. For scrubbar integration, clicking the waveform must drive `video.currentTime`, and `video.currentTime` during playback must update `cursorTime` (so the cursor moves during play). This is a bidirectional sync that needs care to avoid feedback loops.
+- **FFT library is the foundation.** Every other feature depends on having a fast FFT. Choose between KissFFT (WASM, well-tested, 55KB) and PFFFT (WASM, SIMD-optimized, used by Olaf/Panako ecosystem). Decision drives all downstream implementation.
+- **Spectral flatness extraction is independent of cross-correlation method.** Can be computed once and cached. Cross-correlating spectral flatness curves is the cheapest possible coarse alignment.
+- **GCC-PHAT operates on the same STFT data** that spectral flatness uses. No redundant FFT computation needed if the STFT is computed once and shared.
+- **Confidence scoring depends on the raw cross-correlation output**, not just the peak. The full correlation curve around the peak must be preserved for PSR computation.
+- **The SyncResult interface is a hard constraint.** The new algorithm must produce identical output shape. Internal enrichment (PSR, overlap percentage) can be added as optional fields without breaking downstream consumers.
 
 ---
 
-## MVP Definition
+## Algorithm Properties That Matter
 
-### Launch With (v2.0)
+Ranked by importance for this specific use case (multi-camera shoot sync in browser).
 
-Minimum viable feature set for the v2.0 milestone.
+### Critical (Must Have)
 
-- [ ] **Synced video grid player** — all trimmed videos play/pause/seek together, offsets applied per-camera
-- [ ] **Dynamic grid layout** — aspect-ratio-aware packing for up to 9 tiles (simple shelf packing is acceptable)
-- [ ] **Two display modes** — Letterbox (preserve AR) / Fill (crop to tile)
-- [ ] **Waveform-as-scrubbar** — click waveform to seek all videos; cursor tracks playhead during playback
-- [ ] **Audio mixing** — all tracks mixed by default; dropdown to solo one camera's audio
-- [ ] **GPU export pipeline** — WebCodecs VideoEncoder + OffscreenCanvas composite + Mediabunny mux → H.264 MP4
-- [ ] **Resolution presets** — 720p / 1080p / 4K canvas size options at export
-- [ ] **Export progress** — frame-level progress bar during encoding
+| Property | Why It Matters | How to Achieve |
+|----------|---------------|----------------|
+| **Device invariance** | Users mix phone, GoPro, DSLR, dedicated audio recorder. Different mic preamps, different clipping behavior, different frequency response curves. | GCC-PHAT phase-only weighting normalizes all magnitude differences. Band-pass filtering (300Hz-5kHz) avoids device-specific low/high frequency artifacts. |
+| **Speed (< 30s for 8 tracks x 10 min)** | Browser-based tool. Users expect results in seconds, not minutes. SynAudio currently takes ~5-15s for typical use. New algorithm must not regress. | Coarse-to-fine: spectral flatness cross-correlation at ~100Hz for coarse offset (< 100ms per pair), then 1-second GCC-PHAT window for refinement (< 50ms per pair). Total for 8 tracks: < 5s. |
+| **Repetitive content handling** | Concerts, music rehearsals, rhythmic audio produce multiple high-correlation peaks at beat intervals. Current algorithm picks the wrong beat. | PSR-based confidence identifies ambiguous cases. Multi-pair graph resolution (if implemented) detects inconsistent offsets. Band-pass focus on transient-rich frequencies (2-5kHz) favors percussive attacks over sustained tones. |
+| **Noise robustness (10-15 dB SNR)** | Outdoor shoots, crowd noise, HVAC hum, distant cameras with poor audio. | GCC-PHAT is specifically designed for this. Whitening suppresses colored noise. Band-pass filtering removes out-of-band noise. Spectral flatness is inherently noise-characterizing. |
 
-### Add After v2.0 Validation
+### Important (Should Have)
 
-- [ ] **Per-tile camera label overlay** — drawn onto canvas at playback and baked into export
-- [ ] **Click-to-fullscreen single tile** — expand any camera to fill available space
-- [ ] **Export bitrate control** — expose CRF/bitrate slider for advanced users
-- [ ] **Keyboard shortcuts** — space, arrow keys wired to transport
+| Property | Why It Matters | How to Achieve |
+|----------|---------------|----------------|
+| **Graceful degradation** | When sync fails, users need to know *why* and *what to do*. A silent wrong offset is worse than an error. | Multi-level confidence: HIGH (PSR > 3), MEDIUM (PSR 1.5-3), LOW (PSR < 1.5). LOW triggers a UI warning: "Alignment may be inaccurate — verify manually." |
+| **Memory efficiency** | Browser tab memory ceiling (~2-4 GB). Processing 30 tracks of 10-minute audio at 16kHz = ~600MB of PCM data already in memory. | Process pairs sequentially (not all at once). STFT is computed on-the-fly, not stored for all tracks simultaneously. Spectral flatness curves are tiny (~60KB per 10-min track at 100Hz). |
+| **Progressivity** | Users want to see results arriving, not a spinner. | Report per-pair progress. Display intermediate results (coarse offsets) before refinement completes. |
 
-### Future Consideration (v3+)
+### Nice to Have
 
-- [ ] **NLE project export** — FCP XML / Premiere XML with grid layout as multicam sequence
-- [ ] **Per-tile color grading** — exposure/white balance per camera angle before export
-- [ ] **Loop region** — set in/out markers on waveform for looping a clip segment
-- [ ] **WebGPU compositing** — if per-tile GPU effects are needed (milestone adds real complexity)
+| Property | Why It Matters | How to Achieve |
+|----------|---------------|----------------|
+| **Sub-frame accuracy** | 16kHz sample rate = 62.5us resolution. At 30fps, one frame = 33.3ms. Current resolution is already 530x better than frame-level. | Parabolic/Gaussian interpolation on correlation peak. Adds < 0.1ms to computation per pair. |
+| **Partial overlap detection** | Cameras may have started/stopped at different times. Estimating the overlap region improves correlation by ignoring non-overlapping silence. | Use energy envelope to detect signal start/end. Only correlate the overlapping time range. Report overlap percentage as part of confidence. |
+
+---
+
+## Confidence Metric Design
+
+The current confidence metric (`Math.round(Math.abs(correlation) * 100)`) is a raw
+Pearson coefficient scaled to 0-100. This is inadequate because:
+
+1. **Pearson correlation of 0.7 does not mean "70% likely correct"** — it means 70% of variance explained, which is a meaningless concept for sync accuracy.
+2. **Does not distinguish unique vs ambiguous matches** — a score of 65 could be one clear peak or five similarly-sized peaks.
+3. **Does not account for overlap amount** — short overlaps produce high correlation on little evidence.
+
+### Proposed Confidence Model
+
+```
+confidence = clamp(0, 100, w1 * psr_score + w2 * magnitude_score + w3 * overlap_score)
+
+where:
+  psr_score = min(100, (PSR - 1.0) / 4.0 * 100)
+    -- PSR of 1.0 = completely ambiguous (score 0)
+    -- PSR of 5.0+ = unambiguous (score 100)
+
+  magnitude_score = min(100, abs(peak_correlation) * 200)
+    -- GCC-PHAT peaks are typically 0.0-0.5 for real recordings
+    -- Peak of 0.5+ = very strong match (score 100)
+
+  overlap_score = min(100, overlap_fraction * 120)
+    -- 80%+ overlap = full score
+    -- < 50% overlap = penalty
+
+  w1 = 0.5 (PSR is most important — is the match unambiguous?)
+  w2 = 0.3 (magnitude confirms signal similarity)
+  w3 = 0.2 (overlap validates sufficient evidence)
+```
+
+### Confidence Level Thresholds
+
+| Score | Level | UI Treatment | What It Means |
+|-------|-------|-------------|--------------|
+| 80-100 | HIGH | Green indicator | Unambiguous match, strong correlation, good overlap. Trust the offset. |
+| 50-79 | MEDIUM | Yellow indicator | Decent match but with some ambiguity or noise. Likely correct. User should spot-check. |
+| 20-49 | LOW | Orange indicator + warning text | Ambiguous match or weak correlation. "Alignment may be inaccurate — verify manually." |
+| 0-19 | FAILED | Red indicator + error text | No usable match found. "Could not align this track — check that audio overlaps." |
+
+---
+
+## Failure Modes and Graceful Handling
+
+| Failure Mode | Cause | Detection | User-Facing Response |
+|--------------|-------|-----------|---------------------|
+| **No overlapping audio** | Camera started after all others stopped, or recorded a completely different event. | Cross-correlation peak magnitude near noise floor; PSR ~ 1.0. | "Could not align — no matching audio detected. Ensure this camera recorded the same event." |
+| **Multiple equally-good offsets** | Repetitive music with strong beats. Correlation has peaks at every beat interval. | PSR < 1.5 with peak magnitude still reasonable (> 0.1). | "Multiple candidate alignments found — audio is repetitive. Verify sync visually after alignment." Still returns the best offset. |
+| **Clock drift detected** | Cameras with different crystal oscillators accumulate timing error. Over 10 minutes, 50ppm drift = 30ms. | Correlation peak is broad (not sharp). Peak width at half-maximum > 5ms. | "Alignment found but timing may drift over long playback. Consider re-syncing at multiple points for recordings over 30 minutes." |
+| **Clipping distortion** | One camera's mic was overloaded (concert front row). Audio is square-wave clipped. | Detected during feature extraction: > 10% of samples at max amplitude. | "Camera X audio appears clipped — sync may be less accurate." Still attempts sync — GCC-PHAT handles mild clipping acceptably. |
+| **Very short overlap** | Cameras overlap by only a few seconds. | Overlap estimation < 10% of shorter track. | "Only N seconds of audio overlap detected. Confidence is lower due to limited matching data." |
+| **Silent or near-silent audio** | Camera with no external mic, or mic was off. RMS energy near noise floor. | Average RMS < -60 dBFS during feature extraction. | "Camera X has very quiet audio — sync may not be possible. Ensure microphone was active during recording." |
+
+---
+
+## MVP Recommendation
+
+### Must Build for v2.3
+
+1. **GCC-PHAT spectral cross-correlation engine** — The core algorithm replacement. FFT-based cross-correlation with phase-transform whitening. This alone solves device invariance and noise robustness.
+2. **Coarse-to-fine two-stage search** — Spectral flatness or downsampled cross-correlation for coarse offset, narrow-window GCC-PHAT for fine offset. Required for acceptable performance.
+3. **Band-pass filtering (300Hz-5kHz)** — Pre-processing step that eliminates device-specific noise outside the useful band. Trivial to implement, large impact on robustness.
+4. **Peak-to-sidelobe ratio confidence** — The critical differentiator over SynAudio. Flags ambiguous matches from repetitive content instead of silently returning a wrong offset.
+5. **WASM FFT in Web Worker** — Performance foundation. KissFFT or PFFFT compiled to WASM with 128-bit SIMD.
+
+### Should Build for v2.3
+
+6. **Gaussian peak interpolation** — Sub-sample accuracy from 5 lines of math. Improves confidence metric reliability.
+7. **Overlap estimation** — Detect how much audio actually overlaps between pairs. Feeds confidence scoring and user messaging.
+8. **Failure mode detection and user messaging** — Clipping detection, silence detection, overlap warnings. The difference between "sync failed" and "sync failed and here's why."
+
+### Defer to v2.4+
+
+9. **Landmark fingerprint pre-filter** — Only matters for 10+ cameras. Adds significant complexity (Olaf WASM integration or custom peak extraction). Not needed for typical 2-8 camera workflows.
+10. **Multi-pair graph-based offset resolution (MST)** — Elegant but complex. Current reference-vs-all approach works for typical use. MST matters when one pair fails and you need to route through other pairs.
+11. **Adaptive frequency band selection** — Auto-tuning frequency range per scenario. The fixed 300Hz-5kHz band handles 95% of cases. Adaptive selection is a refinement, not a requirement.
 
 ---
 
 ## Feature Prioritization Matrix
 
-| Feature | User Value | Implementation Cost | Priority |
+| Feature | User Impact | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| Synced grid playback with shared transport | HIGH | HIGH | P1 |
-| Waveform-as-scrubbar (click-to-seek) | HIGH | MEDIUM | P1 |
-| Dynamic grid layout algorithm | HIGH | MEDIUM | P1 |
-| Two display modes (letterbox / fill) | MEDIUM | LOW | P1 |
-| Audio mixing (all / solo) | MEDIUM | MEDIUM | P1 |
-| GPU export (WebCodecs + Mediabunny) | HIGH | HIGH | P1 |
-| Resolution presets (720p/1080p/4K) | HIGH | LOW | P1 |
-| Export progress indicator | HIGH | LOW | P1 |
-| Per-tile camera labels | MEDIUM | LOW | P2 |
-| Click-to-fullscreen tile | MEDIUM | MEDIUM | P2 |
-| Keyboard shortcuts | MEDIUM | LOW | P2 |
-| Export bitrate/quality control | LOW | LOW | P3 |
-| NLE project file export | MEDIUM | HIGH | P3 |
+| GCC-PHAT cross-correlation engine | CRITICAL | HIGH | P0 |
+| Coarse-to-fine search strategy | CRITICAL | MEDIUM | P0 |
+| Band-pass pre-filtering | HIGH | LOW | P0 |
+| WASM FFT in Web Worker | CRITICAL (perf) | HIGH | P0 |
+| Peak-to-sidelobe confidence metric | HIGH | LOW | P0 |
+| Same SyncResult interface | HIGH (compat) | LOW | P0 |
+| Gaussian peak interpolation | MEDIUM | TRIVIAL | P1 |
+| Overlap estimation | MEDIUM | LOW | P1 |
+| Failure mode detection + messaging | MEDIUM | MEDIUM | P1 |
+| Confidence breakdown in UI tooltip | LOW | LOW | P2 |
+| Progress reporting per-stage | LOW | LOW | P2 |
+| Landmark fingerprint pre-filter | LOW (< 10 cams) | HIGH | P3 |
+| MST graph-based offset resolution | LOW (< 10 cams) | HIGH | P3 |
+| Adaptive frequency band selection | LOW | MEDIUM | P3 |
 
 **Priority key:**
-- P1: Must have for v2.0 launch
-- P2: Add when core is solid
-- P3: Defer — high effort or unclear demand
+- P0: Core algorithm — must ship for v2.3 to be meaningful
+- P1: Quality improvements — ship in v2.3 if time allows
+- P2: Polish — can ship in a v2.3.x patch
+- P3: Defer — high effort, low impact for typical use cases
 
 ---
 
 ## UX Behavior Expectations
 
-Reference patterns from tools users already know.
-
-### Playback Behavior
-
 | Behavior | Expected | Rationale |
 |----------|----------|-----------|
-| All cameras start at time 0 (sync-adjusted) | Yes | Time 0 = common start point from v1.0 pipeline |
-| Clicking play starts all cameras simultaneously | Yes | Single transport, no per-tile controls |
-| Clicking pause freezes all cameras simultaneously | Yes | Unified transport |
-| Seeking via waveform click updates all cameras | Yes | Waveform is the timeline |
-| Camera audio is heard during playback | Yes | Default: all mixed equally |
-| Scrubbing (drag on waveform) updates all videos | Partial | Update on pointer up only — continuous seek during drag is too expensive for multiple video elements |
-| Drift correction during long playback | Yes (silent) | Check every ~500ms and re-sync any camera that has drifted > 1 frame |
-
-### Grid Layout Behavior
-
-| Behavior | Expected | Rationale |
-|----------|----------|-----------|
-| All cameras visible simultaneously | Yes | Core value of a grid player |
-| Grid reflows when window resizes | Yes | Responsive layout standard |
-| Tile size maximized within available space | Yes | Packing algorithm goal |
-| Black background behind letterboxed videos | Yes | Professional video review standard |
-| Camera labels visible on tiles | Yes (v2.0 P2) | Distinguish angles at a glance |
-
-### Export Behavior
-
-| Behavior | Expected | Rationale |
-|----------|----------|-----------|
-| Output is a single composite MP4 | Yes | Main deliverable — all angles in one file |
-| Same grid layout as playback view | Yes | WYSIWYG — export matches what user saw |
-| H.264 codec, AAC audio | Yes | Universal playback compatibility |
-| Export does not block playback UI | Yes | User should be able to navigate away or cancel |
-| Download triggered automatically when complete | Yes | File lands in browser downloads folder |
-| Export faster than realtime | Yes (silent expectation) | WebCodecs enables 5-10x faster than realtime; 1080p grid of 4 cameras at 30fps should export in < 2 min for 10-min footage |
+| Sync results appear in same UI location as before | Yes | Drop-in replacement. User flow does not change. |
+| Confidence scores are more informative | Yes | Current scores feel arbitrary. New scores should have clear meaning at each threshold. |
+| Sync is at least as fast as before | Yes | SynAudio takes ~5-15s for typical use. New algorithm must not regress. Target: same or faster via coarse-to-fine. |
+| Sync handles concert/music recordings | Yes (improvement) | Current algorithm frequently picks wrong beat offset for music. New algorithm should flag ambiguity instead of silently being wrong. |
+| Sync handles mixed device recordings | Yes (improvement) | Phone + DSLR + GoPro should sync reliably. Current algorithm struggles when frequency responses differ significantly. |
+| Low confidence produces a visible warning | Yes (new) | Users currently see "42%" and don't know what it means. New UI should say "Alignment uncertain — verify manually." |
+| Progress shows more detail during sync | Nice to have | "Aligning camera 3 of 8..." is better than a generic progress bar. |
+| Algorithm parameters are not exposed to users | Yes | Sync should "just work." No FFT size sliders. |
 
 ---
 
@@ -210,32 +304,42 @@ Reference patterns from tools users already know.
 
 | Feature Area | Complexity Driver | Mitigation |
 |--------------|-------------------|------------|
-| Synchronized playback | Browser `<video>` currentTime imprecision; drift over time | `requestVideoFrameCallback()` per video; periodic drift correction loop |
-| Grid packing algorithm | Mixed aspect ratios with 2-30 tiles | Shelf-packing heuristic sufficient; no NP-hard exact solver needed |
-| Web Audio graph teardown | AudioContext nodes leak if not disconnected on reset | Explicit `disconnect()` calls in cleanup; single shared AudioContext lifecycle |
-| WebCodecs export pipeline | `VideoEncoder` queue backpressure; memory pressure from simultaneous decode+encode | `encodeQueueSize` guard; process one frame at a time in worker; `VideoFrame.close()` immediately after encode |
-| Mediabunny (new library) | v1.0 used mp4box.js; Mediabunny is different API; needs evaluation | Read Mediabunny docs carefully before implementation; check `canEncodeVideo()` for H.264 on target browsers |
-| Audio export sync | Mixed audio must be sample-accurate with video | FFmpeg WASM `amix` filter on pre-trimmed files; offset the audio by the same `offsetSeconds` values used for video |
-| OffscreenCanvas transfer | Cannot use DOM video elements in a worker | Use `video.captureStream()` + `MediaStreamTrackProcessor` in main thread, transfer `VideoFrame` to worker via `postMessage` with transfer list |
-| 4K export memory pressure | 4096x2160 canvas framebuffer is 36 MB per frame | Process and immediately encode one frame at a time; never buffer more than 2 frames in memory |
+| WASM FFT integration | Build system complexity: compiling C FFT library to WASM with SIMD, loading in Web Worker, managing memory | Use pre-built WASM binaries (pffft.wasm already exists). Wrap in TypeScript API. Test with existing audio extraction pipeline. |
+| GCC-PHAT implementation | The math is well-documented but subtle: zero-padding for linear correlation, phase normalization avoiding division by zero, IFFT output interpretation | Reference implementations exist in Python (scipy), MATLAB. Port carefully with unit tests against known input/output pairs. |
+| Coarse-to-fine handoff | Coarse stage returns candidate range; fine stage must search the right window. Off-by-one in window boundaries causes missed peak. | Make the fine-stage window generous (e.g., coarse_offset +/- 500ms). Overlap is cheap insurance. |
+| Confidence metric tuning | Weight parameters (w1, w2, w3) need empirical tuning against real multi-camera recordings | Collect test corpus: concert, dialogue, outdoor, mixed devices. Tune weights to maximize correlation between confidence score and actual sync accuracy. |
+| Memory management in Worker | FFT buffers, correlation arrays, STFT frames for 10-minute tracks. Must not exceed Worker memory budget. | Process one pair at a time. Free intermediate buffers aggressively. Spectral flatness is tiny (< 100KB per track). Only the GCC-PHAT refinement window needs full-rate data (1 second = 16K samples = 64KB). |
+| Replacing SynAudio dependency | SynAudio is imported in audioSync.ts and its Worker. Must remove cleanly without breaking the build. | New sync engine is a new file (e.g., spectralSync.ts). audioSync.ts becomes a thin wrapper that calls the new engine. SynAudio dependency removed from package.json after verification. |
 
 ---
 
 ## Sources
 
-- [WebCodecs API — MDN](https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API) — HIGH confidence (official)
-- [Video processing with WebCodecs — Chrome for Developers](https://developer.chrome.com/docs/web-platform/best-practices/webcodecs) — HIGH confidence (official)
-- [Mediabunny — github.com/Vanilagy/mediabunny](https://github.com/Vanilagy/mediabunny) — HIGH confidence (current recommended muxer, successor to mp4-muxer and webm-muxer)
-- [Mediabunny Introduction](https://mediabunny.dev/guide/introduction) — HIGH confidence (official docs)
-- [mp4-muxer deprecated notice](https://github.com/Vanilagy/mp4-muxer) — HIGH confidence (deprecation confirmed in README)
-- [How to save HTML canvas to MP4 using WebCodecs — devtails.xyz](https://devtails.xyz/adam/how-to-save-html-canvas-to-mp4-using-web-codecs-api) — MEDIUM confidence (tutorial, verified against official APIs)
-- [RectanglePacker — github.com/aslamhus/RectanglePacker](https://github.com/aslamhus/RectanglePacker) — MEDIUM confidence (library, same-AR tiles; custom logic needed for mixed ARs)
-- [requestVideoFrameCallback — MDN](https://developer.mozilla.org/en-US/docs/Web/API/HTMLVideoElement/requestVideoFrameCallback) — HIGH confidence (official)
-- [WebCodecs browser support — caniuse.com](https://caniuse.com/webcodecs) — HIGH confidence (Chrome/Edge/Firefox full, Safari 2025+)
-- [HTML5 Video: Synchronizing Playback of Two Videos — Bocoup](https://www.bocoup.com/blog/html5-video-synchronizing-playback-of-two-videos) — MEDIUM confidence (dated but foundational; patterns still apply)
-- [MasterSelects WebGPU compositor — Hacker News](https://news.ycombinator.com/item?id=46959456) — MEDIUM confidence (prior art for GPU video compositor in browser; confirms feasibility)
-- [WebAudio API — MDN](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API) — HIGH confidence (official)
+### High Confidence (Official Documentation, Academic Papers)
+- [GCC-PHAT Cross-Correlation — Xavier Anguera PhD Thesis](https://xavieranguera.com/phdthesis/node92.html) — foundational reference for GCC-PHAT algorithm
+- [Temporal Synchronization of Multiple Audio Signals — Google Research (Kammerl et al., ICASSP 2014)](https://research.google/pubs/temporal-synchronization-of-multiple-audio-signals/) — spectral flatness outperforms ZCR and energy; MST graph approach for multi-pair sync
+- [Robust Matching of Audio Signals Using Spectral Flatness Features — IEEE](https://ieeexplore.ieee.org/document/969559/) — spectral flatness for audio matching robustness
+- [Spectral Flatness — Wikipedia](https://en.wikipedia.org/wiki/Spectral_flatness) — definition and computation
+- [SynAudio — GitHub (eshaz/synaudio)](https://github.com/eshaz/synaudio) — current library being replaced; Pearson correlation, WASM SIMD
+- [Panako Acoustic Fingerprinting — ISMIR 2014 / JOSS](https://github.com/JorenSix/Panako) — spectral peak fingerprinting for audio synchronization
+- [Olaf Acoustic Fingerprinting — ISMIR 2020](https://github.com/JorenSix/Olaf) — lightweight fingerprinting with WASM/Emscripten browser support
+- [PFFFT.wasm — JorenSix](https://github.com/JorenSix/pffft.wasm) — WASM FFT library with SIMD, browser-ready
+- [KissFFT WASM vs fft.js benchmark](https://toughengineer.github.io/demo/dsp/fft-perf/) — WASM FFT 2-10x faster than pure JS across browsers
+- [Bias of Parabolic Peak Interpolation — DSPRelated](https://www.dsprelated.com/freebooks/sasp/Bias_Parabolic_Peak_Interpolation.html) — limitations of parabolic vs Gaussian interpolation
+- [Delay Estimation by FFT — DSPRelated](https://www.dsprelated.com/showarticle/26.php) — practical FFT cross-correlation implementation
+
+### Medium Confidence (Verified Tutorials, Multiple Sources Agree)
+- [Fast Second Screen TV Synchronization — ResearchGate](https://www.researchgate.net/publication/263925127_Fast_second_screen_TV_synchronization_combining_audio_fingerprint_technique_and_generalized_cross_correlation) — combined fingerprint + GCC-PHAT coarse-to-fine approach
+- [Correlation Without Pre-Whitening is Often Misleading — DSPRelated](https://www.dsprelated.com/showarticle/52.php) — importance of whitening for cross-correlation
+- [stream-audio-fingerprint — npm](https://www.npmjs.com/package/stream-audio-fingerprint) — JavaScript Shazam-style landmark fingerprinting
+- [WebAssembly SIMD — V8 Features](https://v8.dev/features/simd) — 128-bit SIMD widely supported in browsers as of 2024
+- [Multiresolution Alignment Using Sequential Monte Carlo — ScienceDirect](https://www.sciencedirect.com/science/article/pii/S235271101730064X) — coarse-to-fine audio alignment approach
+
+### Low Confidence (Single Source, Needs Validation)
+- Effect of audio quality on MFCC and chroma feature robustness — claims MFCC is more robust with homogeneous encoding; needs validation for this specific use case
+- Spectral flatness as sole coarse alignment feature — Google paper validated it, but with different datasets than multi-camera shoots; should be validated empirically
+- Confidence weight parameters (w1=0.5, w2=0.3, w3=0.2) — proposed based on reasoning, not empirical tuning; must be validated against real recordings
 
 ---
-*Feature research for: Synced multi-cam video grid playback and GPU-accelerated composite export (v2.0 milestone)*
-*Researched: 2026-03-02*
+*Feature research for: Robust audio synchronization algorithm (v2.3 milestone)*
+*Researched: 2026-03-28*

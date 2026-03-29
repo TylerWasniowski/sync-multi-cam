@@ -1,206 +1,162 @@
 # Project Research Summary
 
-**Project:** Sync Multi-Cam — v2.0 (Synced Playback & GPU Composite Export)
-**Domain:** Browser-based synced multi-camera video grid playback and composite export
-**Researched:** 2026-03-02
-**Confidence:** HIGH (playback architecture), HIGH (export approach), MEDIUM (WebCodecs browser coverage)
+**Project:** Sync Multi-Cam -- v2.3 Robust Audio Sync (Spectral Cross-Correlation)
+**Domain:** Browser-based audio synchronization algorithm replacement (DSP / signal processing)
+**Researched:** 2026-03-28
+**Confidence:** HIGH
 
 ## Executive Summary
 
-v2.0 adds two major capabilities on top of the shipped v1.0 sync pipeline: a synchronized multi-camera grid player and a GPU-accelerated composite export. Both features are well-understood in the browser media ecosystem, but each has specific failure modes that must be designed around from day one — not patched in afterward. The recommended architecture keeps these two pipelines clearly separated: native `<video>` elements in a CSS grid for playback (browser compositor handles GPU decode efficiently), and a dedicated FFmpeg WASM `xstack` filtergraph for export (reusing the existing singleton, no new dependencies). The stack requires only one new package — `mediabunny` (the maintained successor to the now-deprecated mp4-muxer) — and leverages Web Audio API, HTMLVideoElement, and browser-native layout APIs already available.
+v2.3 replaces the SynAudio Pearson correlation engine with a GCC-PHAT (Generalized Cross-Correlation with Phase Transform) implementation built on fft.js. This is a well-scoped, algorithmically proven upgrade: GCC-PHAT is the standard method for time-delay estimation in acoustics research, and it directly addresses the three failure modes of the current system -- sensitivity to different microphone frequency responses, false matches on repetitive music, and misleading confidence scores. The existing pipeline interface (`syncAudioTracks() -> SyncResult[]`) is preserved exactly, meaning zero UI changes and zero downstream code changes. The entire scope is: remove one npm dependency (synaudio), add one (fft.js, 5 KB), and write approximately 420 lines of new TypeScript across 3 modules plus tests.
 
-The highest-confidence recommendation for v2.0 export is FFmpeg WASM with the `xstack` composite filter rather than a WebCodecs pipeline. WebCodecs VideoEncoder has known H.264 encoder bugs in Firefox 130 and is absent in Safari before v26.0, meaning roughly 30% of browsers require a fallback anyway. FFmpeg WASM already exists in the project as a loaded singleton; adding composite export is a matter of building the filtergraph from the grid layout coordinates and calling `exec()`. This approach trades GPU-accelerated speed for near-universal browser support and dramatically lower integration complexity. WebCodecs-based export is the right long-term upgrade (v3+) once Safari VideoEncoder support is ubiquitous.
+The recommended approach is deliberately simple: a single-stage GCC-PHAT correlation on full-length PCM signals, not a multi-stage spectrogram pipeline. All four research tracks converged on this conclusion. STACK.md rejected WASM FFT libraries, mel spectrograms, and feature extraction libraries as unnecessary complexity. ARCHITECTURE.md designed a clean three-module structure (fftEngine.ts for pure math, spectralSyncWorker.ts for the Web Worker, spectralSync.ts for the main-thread API). FEATURES.md identified a coarse-to-fine two-stage search as a "should have" but confirmed that single-stage GCC-PHAT on the full signal is fast enough (350-650ms per pair) for the typical 2-8 camera workflow. The PITFALLS research validated this by showing that the spectrogram-based alternatives (STFT, MFCC, mel filterbanks) introduce memory blowup risks (1+ GB for 30 tracks) that GCC-PHAT avoids entirely.
 
-The primary architectural risk for the playback feature is sync drift: HTML5 `<video>` elements do not share a clock, and the `timeupdate` event is non-deterministic. The correct mitigation is a shared React state `playheadTime` updated by a single `requestAnimationFrame` / `requestVideoFrameCallback` loop reading the leader video, with follower videos only seeking when drift exceeds ~100ms. This must be the foundational decision — retrofitting the sync architecture after other playback features are built on top of it is a full rewrite. Similarly, the export pipeline's GPU memory management (sequential MEMFS writes, cleanup after exec) must be correct from first implementation because the FFmpeg singleton is shared with the upstream pipeline.
+The key risk is regression on cases that already work well -- dialogue, clap tests, distinctive transients. GCC-PHAT is tuned for robustness across device types and reverberant environments, but it processes phase information differently than Pearson correlation. The mitigation is straightforward: build a regression test suite with synthetic signals at known offsets before writing any algorithm code, then validate against real audio via Edge CDP tests. A secondary risk is memory pressure: GCC-PHAT requires ~275 MB of FFT buffers per pair in the Web Worker, which is acceptable for sequential processing but would be catastrophic if pairs were processed in parallel. The architecture enforces sequential processing with a session-scoped worker that caches the reference FFT and terminates after all comparisons complete.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The v2.0 stack adds exactly one npm package to what v1.0 ships: `mediabunny ^1.34.5`. All other new capabilities — Web Audio API, HTMLVideoElement, OffscreenCanvas, WebCodecs, `requestVideoFrameCallback` — are browser-native with no install step. This keeps the dependency footprint minimal while covering all required functionality. `mediabunny` replaces the deprecated `mp4-muxer` library and is needed only if a WebCodecs export path is implemented in a future phase; for v2.0's FFmpeg WASM export path it is optional but should be installed now to avoid a later migration.
-
-The export approach divides cleanly: FFmpeg WASM handles composite encode for v2.0 (universally supported, already loaded), while WebCodecs + mediabunny is reserved for a future performance upgrade. The two pipelines are independent — FFmpeg WASM's `xstack` filter handles compositing and H.264 encode in one command, while a WebCodecs path would require a separate canvas compositor and muxer chain.
+The only new dependency is **fft.js ^4.0.4** (5 KB, pure JS, MIT, Radix-4 FFT). It replaces **synaudio ^0.4.0** (WASM SIMD Pearson correlation). Net result: bundle size decreases, WASM complexity decreases, browser compatibility increases (WASM SIMD requirement removed).
 
 **Core technologies:**
-- `HTMLVideoElement` (native): per-camera video playback — controlled via shared `playheadTime` React state, `muted` to suppress native audio, sync-corrected via rAF loop
-- Web Audio API (native): audio routing — one `MediaElementAudioSourceNode` per video, `GainNode` per track for solo/mix, single shared `AudioContext`
-- FFmpeg WASM `@ffmpeg/ffmpeg ^0.12.15` (existing): composite export — `xstack` filtergraph from grid layout coordinates, reuse existing loaded singleton
-- `mediabunny ^1.34.5` (new, one npm install): MP4 muxer for future WebCodecs export path — zero dependencies, pure TypeScript, WebCodecs-native, successor to deprecated mp4-muxer
-- WebCodecs VideoEncoder (native): GPU-accelerated H.264 encode — deferred to v3+; Chrome/Edge ready, Firefox buggy, Safari pre-26 absent
+- **fft.js** (^4.0.4): Forward/inverse FFT for GCC-PHAT -- pure JS, works in Web Workers without configuration, 5 KB minified, adequate performance for 3-6 FFTs per sync session
+- **Web Worker** (module type, existing Vite pattern): Offloads 200-500ms FFT computations per pair off the main thread -- same `new Worker(new URL(...), { type: 'module' })` pattern used by the export pipeline
+- **Existing 16kHz mono PCM pipeline**: audioExtractor.ts output is the correct input for GCC-PHAT -- no sample rate or format changes needed
+
+**Rejected alternatives:** KissFFT WASM (marginal speed gain, adds WASM complexity), WebFFT (overkill metalibrary), essentia.js (1.2 MB stale framework), TensorFlow.js (wrong problem domain), pffft.wasm (4096 size cap -- unusable for full-signal correlation).
 
 ### Expected Features
 
-Research identified a clear MVP boundary for v2.0. All P1 features are achievable within the existing architecture with no new external services.
+**Must have (P0 -- core algorithm):**
+- GCC-PHAT spectral cross-correlation engine replacing SynAudio internals
+- Phase-transform normalization for device invariance (different mics, clipping, reverb)
+- Peak-to-noise-floor confidence scoring (replaces meaningless Pearson magnitude)
+- Hann windowing and zero-padding for correct linear correlation
+- Constrained peak search within plausible offset range (+/- 5 minutes)
+- Web Worker execution with Transferable buffer transfers
+- Identical SyncResult interface preserved
 
-**Must have (v2.0 launch):**
-- Synchronized video grid player — all cameras play/pause/seek together, offsets from v1.0 pipeline applied
-- Dynamic aspect-ratio-aware grid layout — shelf-packing heuristic for up to 9 tiles, O(N²) max, negligible runtime
-- Two display modes — Letterbox (`object-fit: contain`) and Fill (`object-fit: cover`), same algorithm drives both playback and export canvas
-- Waveform-as-scrubbar — existing WaveformPanel extended with `playheadTime` prop and `onSeek` callback; bidirectional cursor binding
-- Audio mixing — all tracks mixed equally by default; dropdown to solo one camera's audio via Web Audio API `GainNode`
-- GPU composite export — FFmpeg WASM `xstack` filtergraph → H.264 MP4 download
-- Resolution presets — 720p / 1080p / 4K canvas dimensions passed to export command
-- Export progress — frame-level progress from FFmpeg `progress` event
+**Should have (P1 -- quality improvements):**
+- Parabolic peak interpolation for sub-sample accuracy (5 lines of math, improves confidence reliability)
+- Silence/clipping detection with user-facing warnings
+- Per-pair progress reporting through existing onProgress callback
 
-**Should have (add after v2.0 validation):**
-- Per-tile camera label overlays — filename drawn on tiles and baked into export canvas
-- Click-to-fullscreen single tile — expand any camera angle to fill available space
-- Keyboard shortcuts — space, arrow keys for transport
-- Export bitrate/quality control — expose CRF slider for advanced users
-
-**Defer (v3+):**
-- NLE project file export (FCP XML / Premiere XML)
-- Per-tile color grading (exposure, white balance per camera)
-- Loop region with in/out markers on waveform
-- WebCodecs-based compositing pipeline (GPU-accelerated performance when Safari VideoEncoder coverage is solid)
+**Defer to v2.4+:**
+- Coarse-to-fine two-stage search (only needed if single-stage proves too slow for 30+ cameras)
+- Landmark fingerprint pre-filter (only matters for 10+ cameras)
+- Multi-pair MST graph-based offset resolution (elegant but complex, current reference-vs-all works)
+- Adaptive frequency band selection (fixed 300Hz-8kHz via 16kHz sample rate handles 95% of cases)
+- Confidence breakdown in UI tooltip (polish, not functional)
 
 ### Architecture Approach
 
-v2.0 integrates additively after `stage === 'complete'`. The existing pipeline outputs `DownloadableResult[]` (trimmedData, offsetSeconds, originalFile per camera) and pre-computed waveform peaks — v2.0 consumes these without modifying the pipeline. Four existing components are modified (App.tsx adds playback state, WaveformPanel/WaveformTrack/WaveformCanvas add playhead rendering and seek events), four new components are created (VideoGridPlayer, VideoTile, PlaybackControls, ExportPanel), and two new lib modules are added (`lib/gridPacking.ts`, `lib/exportCompositor.ts`). The build order has a strict dependency chain with the export path parallelizable after grid layout is stable.
+The architecture is a clean three-layer replacement of SynAudio internals. `audioSync.ts` remains the public API (unchanged signature). It delegates to `spectralSync.ts` which manages a session-scoped Web Worker. The worker imports `fftEngine.ts` (pure math: Hann window, GCC-PHAT core, peak finding, confidence scoring) and fft.js. Data flows via Transferable ArrayBuffer transfers -- reference buffer is copied before transfer (needed for all comparisons), comparison buffers are transferred zero-copy (each used once). The worker caches the reference FFT across comparisons and terminates when the session completes, freeing ~275 MB.
 
 **Major components:**
-1. `VideoGridPlayer` — container managing N VideoTile refs, hosts the `usePlaybackSync` rAF/rVFC loop, drives shared `playheadTime` from leader video
-2. `VideoTile` — controlled component: one `<video>` element, seeks only when `|video.currentTime - playheadTime| > 0.1s`, always muted (Web Audio API handles audio), reports aspect ratio and ready state
-3. `PlaybackControls` — play/pause/scrub bar + audio track selector; all callbacks bubble to App.tsx
-4. `lib/gridPacking.ts` — aspect-ratio-aware shelf-packing; same function drives CSS layout (pixels) and export canvas layout (export dimensions)
-5. `lib/exportCompositor.ts` — FFmpeg xstack filtergraph builder; sequential MEMFS writes; reuses `getFFmpeg()` singleton
-6. `WaveformPanel` (modified) — adds `playheadTime` prop for animated cursor line + `onSeek` callback for click-to-seek; bidirectional with playback state
+1. **fftEngine.ts** (~120 lines) -- Pure math: Hann window, GCC-PHAT core (cross-power spectrum with phase transform), peak finding with constrained search, confidence from peak-to-noise-floor ratio
+2. **spectralSyncWorker.ts** (~80 lines) -- Web Worker: receives PCM via Transferable transfer, runs FFT via fft.js, executes GCC-PHAT, posts result back. Protocol: `init-reference` (compute and cache ref FFT) then N x `compare` messages
+3. **spectralSync.ts** (~60 lines) -- Main-thread API: creates worker, manages session lifecycle (init -> compare N times -> terminate), returns Promise per comparison
+4. **audioSync.ts** (modified) -- Replaces `SynAudio.syncWorker()` call with `computeSpectralSync()` call. Same function signature, same return type. Thin wrapper only.
 
 ### Critical Pitfalls
 
-1. **Multi-video sync drift via `timeupdate`** — Never use `timeupdate` for cross-element sync. Use a single rAF/rVFC loop reading the leader video's `currentTime` and writing to shared `playheadTime` React state. Follower videos only seek when drift > 100ms. This architectural decision must be made first.
+1. **Circular correlation without zero-padding produces wrong offsets** -- FFT multiplication computes circular, not linear, correlation. Must zero-pad both signals to nextPowerOf2(len_ref + len_comp). Without this, phantom correlation peaks appear at wraparound positions with high confidence. Prevention is built into the algorithm design: fftSize is always computed as nextPowerOf2 of combined signal lengths.
 
-2. **`requestVideoFrameCallback` unavailable in Firefox** — Feature-detect before use (`'requestVideoFrameCallback' in HTMLVideoElement.prototype`). Fall back to `requestAnimationFrame`. The sync loop must be correct in Firefox from the initial implementation, not added as a later compatibility patch.
+2. **Repetitive music creates multiple equal-height correlation peaks** -- A 4-bar loop at 120 BPM produces peaks every 8 seconds. GCC-PHAT's phase normalization helps (phase is more unique than amplitude for timing) but does not eliminate the problem entirely. The peak-to-noise-floor confidence metric is the primary mitigation: when multiple peaks of similar height exist, the ratio drops, and the result is flagged as ambiguous rather than silently wrong.
 
-3. **WebCodecs H.264 encoder broken in Firefox / absent in Safari pre-26** — `isConfigSupported()` returns false-positive in Firefox 130; Safari VideoEncoder absent until v26.0. Any WebCodecs export path needs a working FFmpeg WASM fallback. For v2.0, use FFmpeg WASM as primary and validate it works correctly in Firefox and Safari before shipping.
+3. **Regression on dialogue/transient content that already works** -- Pearson correlation excels at distinctive time-domain features (claps, speech plosives). GCC-PHAT processes phase information differently. Mitigation: build regression test suite FIRST with synthetic signals at known offsets, then validate with real audio before removing SynAudio.
 
-4. **GPU memory exhaustion with many video elements** — `preload="auto"` on all elements consumes 30–80MB GPU memory each; 10+ cameras can hit 800MB+. Start with `preload="metadata"`, switch per-tile only. Explicitly call `video.src = ''` + `video.load()` when removing tiles. Monitor GPU memory in Chrome Task Manager during development.
+4. **Memory pressure from large FFT buffers** -- Two 5-minute clips require ~275 MB peak worker memory (8M-point complex FFT buffers). Acceptable for sequential pair processing but would crash if attempted in parallel or if buffers leaked between pairs. Prevention: session-scoped worker with explicit buffer reuse and termination after completion.
 
-5. **FFmpeg WASM memory doubling during export** — `syncResults[i].trimmedData` Uint8Arrays are already in JS heap. Writing all to MEMFS simultaneously doubles memory. Write files to MEMFS sequentially, run export command, delete each MEMFS file after. Never initialize a second FFmpeg instance — `getFFmpeg()` returns the singleton.
-
-6. **AudioContext autoplay policy** — `AudioContext` starts suspended. Call `audioContext.resume()` explicitly in every user gesture handler (play button click, seek click on waveform). Track `MediaElementAudioSourceNode` instances in a Map keyed by video element to prevent `InvalidStateError` on component remount.
-
-7. **`VideoFrame.close()` omission in future WebCodecs path** — Any future WebCodecs export path must call `frame.close()` immediately after each `encode()` call, always in a `try/finally`. Omitting this causes non-GC-able GPU memory leaks that compound throughout the export session.
+5. **Transferring buffers you still need** -- postMessage with Transferable detaches the source ArrayBuffer. The reference PCM must be copied before transfer (needed for all comparisons). Comparison buffers can be transferred zero-copy since each is used once and waveform peaks are already computed.
 
 ## Implications for Roadmap
 
-Research reveals a clear dependency chain and two parallelizable workstreams after the foundation is laid. The build order is: object URLs → VideoTile → grid layout → VideoGridPlayer → sync loop → audio + waveform mods (can run in parallel) → export.
+Based on research, suggested phase structure:
 
-### Phase 1: Video Grid Foundation
+### Phase 1: DSP Foundation + Test Suite
 
-**Rationale:** Object URL creation from trimmed data is the prerequisite for everything in v2.0. VideoTile and the grid layout algorithm must exist before any playback or export work is meaningful. No sync loop yet — just rendering videos in a grid with correct aspect ratios and responsive layout.
-**Delivers:** N video tiles rendered in an aspect-ratio-aware CSS grid, responsive to container resize via ResizeObserver, display mode toggle (letterbox/fill). Play/pause state wired to all videos simultaneously.
-**Addresses:** Synced grid player (layout half), dynamic grid layout (P1), two display modes (P1).
-**Avoids:** Anti-pattern of computing layout on every render — memoize on `[containerDimensions, aspectRatios, displayMode]`, not `playheadTime` which updates at 60fps.
+**Rationale:** fftEngine.ts is the foundation -- every other component depends on it. It has zero external dependencies beyond fft.js and is fully unit-testable with synthetic signals. Building and testing this first validates the algorithm before any integration work. The PITFALLS research specifically warns: build the regression test suite FIRST, before any algorithm work.
+**Delivers:** Working GCC-PHAT implementation with Hann windowing, zero-padded linear correlation, constrained peak search, and peak-to-noise-floor confidence scoring. Comprehensive unit tests with synthetic sine waves at known offsets, silence handling, negative offset handling, and numerical stability. TypeScript type declarations for fft.js.
+**Addresses:** GCC-PHAT engine (P0), confidence scoring (P0), parabolic peak interpolation (P1)
+**Avoids:** Circular correlation pitfall (zero-padding built in), numerical instability (epsilon guard in phase transform), regression risk (test suite established first)
 
-### Phase 2: Synchronized Playback + Transport
+### Phase 2: Worker Integration + Pipeline Swap
 
-**Rationale:** Sync architecture must be decided and built correctly before any other playback features are layered on top. Building drift correction after the fact is a rewrite, not a patch.
-**Delivers:** Play/pause/seek transport controlling all cameras simultaneously; rAF/rVFC sync loop with leader-follower pattern; follower videos seeking when drift > 100ms; feature detection for rVFC with rAF fallback.
-**Addresses:** Synchronized playback (table stakes), shared transport (table stakes), play/pause/seek (table stakes).
-**Avoids:** `timeupdate`-based sync (Pitfall 1), missing rVFC fallback for Firefox (Pitfall 2), sync loop doing layout reads or heavy computation (keep callback < 2ms).
-**Needs research-phase:** No — the rAF/rVFC pattern with shared `playheadTime` state is fully documented and ARCHITECTURE.md contains implementation-ready code.
+**Rationale:** With the algorithm proven in unit tests, this phase wraps it in the Web Worker architecture and wires it into the existing pipeline. The worker protocol (init-reference, compare, terminate) and Transferable buffer management are the integration concerns. SynAudio is removed from package.json here.
+**Delivers:** spectralSyncWorker.ts, spectralSync.ts, modified audioSync.ts and constants.ts. Complete pipeline: user clicks Sync -> GCC-PHAT runs in worker -> SyncResult[] returned with new confidence scores. SynAudio dependency removed.
+**Addresses:** Web Worker execution (P0), same SyncResult interface (P0), buffer transfer (P0), silence/clipping detection (P1), per-pair progress (P1)
+**Avoids:** Buffer detachment pitfall (reference copied, comparisons transferred), main-thread blocking (all FFT in worker), memory leaks (session-scoped worker terminated after completion)
 
-### Phase 3: Audio Mixing
+### Phase 3: Validation + Confidence Tuning
 
-**Rationale:** Audio is independent of video layout but depends on video elements existing (Phase 1). Build after basic playback works (Phase 2) so audio selection can be validated against a working player.
-**Delivers:** Web Audio API graph with per-camera GainNode; "all mix" default; dropdown to solo one camera; correct AudioContext lifecycle management.
-**Addresses:** Audio track selection (P1 differentiator), audio heard during playback (table stakes).
-**Avoids:** AudioContext autoplay suspension (Pitfall 6), MediaElementAudioSourceNode deduplication errors on component remount, `video.volume` misuse after connecting to Web Audio graph (control gain via GainNode only).
-
-### Phase 4: Waveform Scrubbar Integration
-
-**Rationale:** WaveformPanel modifications are isolated to prop additions and a canvas draw extension. Depends on Phase 2 (playheadTime state exists) and Phase 1 (waveform component already built). Bidirectional binding (cursor follows playhead; click drives seek) needs care to avoid feedback loops.
-**Delivers:** Animated playhead line on all waveform tracks during playback; click-to-seek from any waveform position; scrub-on-pointer-up (not continuous drag seek, too expensive for multiple video elements).
-**Addresses:** Waveform-as-scrubbar (P1 differentiator), click-to-seek, playhead cursor tracking during playback.
-**Avoids:** Feedback loop between playheadTime writes and rAF reads; triggering full waveform redraws on every rAF tick (use a separate lightweight canvas overlay for the playhead line, not the full waveform redraw).
-**Needs research-phase:** No — existing coordinate math in WaveformCanvas is already documented and required prop changes are specified in ARCHITECTURE.md.
-
-### Phase 5: Composite Export
-
-**Rationale:** Export shares the grid layout algorithm with Phase 1 but is otherwise independent of the playback stack. Build after grid layout is stable so TileLayout coordinates can drive the xstack filtergraph without moving targets. FFmpeg WASM path is primary for v2.0.
-**Delivers:** ExportPanel UI with resolution picker (720p/1080p/4K); FFmpeg xstack composite → H.264 MP4; frame-level progress display; download trigger; export blocked until all video tiles report `readyState >= HAVE_ENOUGH_DATA`.
-**Addresses:** GPU composite export (P1), resolution presets (P1), export progress (P1), export as MP4 (table stakes).
-**Avoids:** Creating a new FFmpeg instance (use `getFFmpeg()` singleton), memory doubling via simultaneous MEMFS writes (sequential write → exec → cleanup pattern), triggering export while sync pipeline is active (check existing `isSyncing` flag).
-**Needs research-phase:** YES — FFmpeg `xstack` filter string generation from arbitrary `TileLayout[]` coordinates (variable x, y, w, h per tile) needs a working spike before full implementation. The architecture file shows the pattern for an equal 2x2 grid but the general case using `x_w` and `y_h` expressions requires validation. Also decide: for "all mix" audio selection at export time, use `amix` filter or pick reference camera track only.
-
-### Phase 6: Polish and P2 Features
-
-**Rationale:** Camera labels, fullscreen tile, and keyboard shortcuts are low-complexity additions that meaningfully improve the experience but do not unblock any core functionality. Add after v2.0 core is validated.
-**Delivers:** Per-tile camera label overlays (DOM overlay + baked into export canvas); click-to-fullscreen single tile; space/arrow keyboard shortcuts.
-**Addresses:** Camera labels (P2), fullscreen tile (P2), keyboard shortcuts (P2).
-**Avoids:** Grid layout thrash during fullscreen toggle — pause all playback before changing grid configuration, rebuild sync loop state, then resume.
+**Rationale:** The algorithm and integration are complete but confidence thresholds need empirical tuning against real multi-camera recordings. This phase uses Edge CDP tests with actual audio files to validate accuracy and calibrate the confidence mapping.
+**Delivers:** Validated sync accuracy across device types (phone, DSLR, GoPro), validated confidence thresholds, regression test results against dialogue/transient content, updated constants if thresholds need adjustment.
+**Addresses:** Device-invariant matching validation, repetitive content handling validation, confidence recalibration, regression prevention
+**Avoids:** Deploying uncalibrated confidence scores that confuse users, regression on previously-working cases
 
 ### Phase Ordering Rationale
 
-- **Foundation before sync:** VideoTile and layout must exist for sync testing to be meaningful. A sync loop tested against placeholder tiles produces false confidence about real video behavior.
-- **Sync before audio:** Audio isolation (solo one camera) only makes sense once playback is working. AudioContext lifecycle (suspend/resume) is easier to validate against a working transport.
-- **Audio before waveform scrubbar:** The full scrubbar integration test requires clicking the waveform, seeing all videos seek, and hearing the correct audio. Audio should be complete before this test is meaningful.
-- **Export after layout is stable:** The xstack filtergraph is generated from `TileLayout[]` coordinates. If the layout algorithm changes after export is built, the filtergraph generator changes too. Stabilize layout in Phase 1, build export in Phase 5.
-- **Polish last:** Labels and keyboard shortcuts have no dependencies on each other or on later phases. They are appropriate for a final validation pass.
+- **Strict dependency chain:** fftEngine.ts must exist before the worker can import it; the worker must exist before spectralSync.ts can use it; the pipeline must be wired before validation can run on real audio.
+- **Test-first approach:** Unit tests in Phase 1 catch algorithm bugs before they compound with integration bugs in Phase 2. The PITFALLS research specifically warns that circular correlation bugs and phase transform numerical issues "look reasonable" in simple tests but fail in production.
+- **Confidence tuning is empirical, not theoretical:** The peak-to-noise-floor ratio mapping `(ratio - 2) / 13` is a starting point. Real audio will reveal whether the thresholds produce useful HIGH/MEDIUM/LOW classifications. This must happen after integration, not during algorithm design.
+- **SynAudio removal in Phase 2, not Phase 1:** Keeps the old algorithm available as a reference point until the new one is integrated and passing tests.
 
 ### Research Flags
 
-Phases needing deeper research during planning:
-- **Phase 5 (Export):** FFmpeg xstack filter string generation from arbitrary TileLayout coordinates needs a working prototype. The filter supports `x_w` and `y_h` position expressions — generating these correctly for non-uniform tile sizes requires validation. Recommend a spike against real footage before full implementation. Also: decide the audio strategy (reference track only vs. `amix` of all tracks) and validate the xstack command produces correctly synchronized A/V output.
+Phases likely needing deeper research during planning:
+- **Phase 3:** MEDIUM risk -- confidence threshold calibration requires empirical testing with a diverse audio corpus. May need multiple tuning iterations. Edge CDP test infrastructure is already established but test audio files need to be sourced or synthesized.
 
-Phases with well-documented patterns (skip research-phase):
-- **Phase 1 (Grid Foundation):** CSS layout from computed pixel coordinates + Blob URL creation are standard browser patterns. Grid packing algorithm is custom but well-specified in ARCHITECTURE.md.
-- **Phase 2 (Playback Sync):** rAF-based sync loop with shared state is fully documented. ARCHITECTURE.md contains implementation-ready TypeScript.
-- **Phase 3 (Audio Mixing):** Web Audio API `MediaElementAudioSourceNode` + `GainNode` pattern is well-documented on MDN with no surprises.
-- **Phase 4 (Waveform Scrubbar):** Isolated prop additions to existing components; coordinate math for pixel → time conversion already in place.
-- **Phase 6 (Polish):** Labels, fullscreen, keyboard shortcuts are straightforward DOM work with no novel research needed.
+Phases with standard patterns (skip research-phase):
+- **Phase 1:** GCC-PHAT algorithm is thoroughly documented in academic literature with Python/MATLAB reference implementations. fft.js API is small and well-documented. No additional research needed.
+- **Phase 2:** Worker integration follows the exact same pattern as the existing export worker. Transferable buffer handling is documented in ARCHITECTURE.md with code examples. No additional research needed.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | One new package (mediabunny), all others native or existing. Package choices verified against official sources and npm. mediabunny v1.34.5 confirmed as active, zero-dependency, mp4-muxer successor. |
-| Features | HIGH (table stakes), MEDIUM (UX patterns) | Table stakes are clear and match user expectations from comparable tools (Zoom, Meet, DaVinci Resolve). Exact UX behaviors for browser-based multi-cam playback have limited direct prior art; patterns inferred from video conferencing tools. |
-| Architecture | HIGH (playback), MEDIUM (export filtergraph) | Playback architecture fully specified with implementation-ready code. FFmpeg WASM `xstack` approach is architecturally correct; specific filter string generation for variable tile layouts needs prototyping. |
-| Pitfalls | HIGH | All pitfalls sourced from official specs, Chromium/Firefox bug trackers, W3C GitHub issues, and MDN. No speculation — every pitfall has a documented failure mode and a verified mitigation. |
+| Stack | HIGH | fft.js is well-established (334 stars, 44 npm dependents, MIT). The only new dependency. All alternatives thoroughly evaluated and rejected with clear rationale. |
+| Features | MEDIUM-HIGH | Core features (GCC-PHAT, confidence scoring) are well-defined. Deferred features clearly separated. One uncertainty: whether single-stage GCC-PHAT is sufficient for 30-camera scenarios or if coarse-to-fine will be needed. |
+| Architecture | HIGH | Clean three-module design with clear boundaries. Follows existing patterns (module Workers, Transferable objects). Memory analysis detailed and feasible. |
+| Pitfalls | HIGH | Comprehensive coverage from DSP literature, BBC implementation analysis, and direct codebase analysis. Circular correlation, repetitive content, and regression risks well-characterized with specific prevention strategies. |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **FFmpeg xstack filter for variable tile layouts:** Architecture doc shows the xstack pattern for a uniform 2x2 grid, but the general case (arbitrary x/y/w/h from TileLayout[]) requires generating correct position expressions. Needs a prototyping spike before Phase 5 implementation begins.
-- **Audio strategy for export:** When the active audio track is "all" at export time, the architecture recommends including audio from the active track selection only, but does not fully specify how to handle the "all mix" case. Options: pick reference camera track only (simpler), or use FFmpeg `amix` filter (more faithful to playback behavior). Decide during Phase 5 planning.
-- **WebCodecs export path timing:** Research recommends deferring WebCodecs-based export to v3+. If Safari 26+ adoption accelerates (it shipped late 2025), revisit before v3 planning based on real-world browser share data.
-- **Sync correction threshold validation:** The 100ms seek threshold for follower video drift correction is a documented starting point. Actual thresholds may need calibration against real footage, especially for mixed-framerate sessions (24fps + 30fps cameras). The "10-minute drift test" checklist item in PITFALLS.md should be a required verification gate before Phase 2 is marked complete.
-- **Export camera count ceiling:** Architecture recommends capping composite export at 8 cameras (memory limit). This cap must be enforced in the ExportPanel UI with a clear explanation, distinct from the existing 30-file upload limit which applies only to the sync pipeline.
+- **Confidence threshold calibration:** The mapping `(ratio - 2) / 13` is theoretical. Real recordings will determine if this produces useful confidence levels. Plan for 1-2 tuning iterations in Phase 3.
+- **30-camera performance at scale:** Single-stage GCC-PHAT is estimated at 10-18s for 30 cameras. If this proves too slow, coarse-to-fine or segment-based correlation may be needed. Monitor during Phase 3 validation.
+- **fft.js Firefox performance:** fft.js is reportedly "several times slower" in Firefox than Chrome for large FFT sizes. For ~3 FFTs per pair this should be acceptable, but Firefox testing in Phase 3 should confirm.
+- **Very long recordings (>30 minutes):** FFT size doubles to 2^24, pushing worker memory to ~550 MB. The architecture handles this but approaches browser limits. Document as a known limitation; chunking optimization is a v2.4 candidate.
+- **fft.js TypeScript declarations:** fft.js does not ship .d.ts files. A small type declaration file must be created in Phase 1.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- [MDN WebCodecs API](https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API) — VideoEncoder API, flush semantics, encodeQueueSize, VideoFrame.close() requirement
-- [MDN HTMLVideoElement.requestVideoFrameCallback](https://developer.mozilla.org/en-US/docs/Web/API/HTMLVideoElement/requestVideoFrameCallback) — best-effort semantics, expectedDisplayTime, browser support
-- [MDN MediaElementAudioSourceNode](https://developer.mozilla.org/en-US/docs/Web/API/MediaElementAudioSourceNode) — Web Audio routing from video elements
-- [MDN OffscreenCanvas](https://developer.mozilla.org/en-US/docs/Web/API/OffscreenCanvas) — transferControlToOffscreen one-way restriction
-- [Can I use: WebCodecs](https://caniuse.com/webcodecs) — 94% global coverage, Safari 26.0 full VideoEncoder support
-- [Can I use: requestVideoFrameCallback](https://caniuse.com/mdn-api_htmlvideoelement_requestvideoframecallback) — Chrome 83+, Safari 15.4+, Firefox 132+
-- [Chrome Developers: Video processing with WebCodecs](https://developer.chrome.com/docs/web-platform/best-practices/webcodecs) — VideoFrame + Canvas, export pipeline patterns
-- [FFmpeg xstack filter docs](https://ffmpeg.org/ffmpeg-filters.html) — xstack layout syntax
-- [mediabunny npm](https://www.npmjs.com/package/mediabunny) — v1.34.5, zero dependencies, WebCodecs-native
-- [mediabunny: Supported formats & codecs](https://mediabunny.dev/guide/supported-formats-and-codecs) — H.264/AVC + MP4 write confirmed
-- [W3C WebCodecs GitHub: encoding h264 issue #394](https://github.com/w3c/webcodecs/issues/394) — Firefox false-positive isConfigSupported for H.264
-- [Mozilla Bugzilla #1918769](https://bugzilla.mozilla.org/show_bug.cgi?id=1918769) — Firefox H.264 VideoEncoder/Decoder bug confirmed
-- [W3C: Media Synchronization on the Web](https://www.w3.org/community/webtiming/files/2018/05/arntzen_mediasync_web_author_edition.pdf) — clock drift across media elements
-- [Chromium Bug #969049](https://bugs.chromium.org/p/chromium/issues/detail?id=969049) — GPU memory not freed after video element replay
-- [Mozilla Bug #1054170](https://bugzilla.mozilla.org/show_bug.cgi?id=1054170) — GPU memory per video element
+- [fft.js GitHub (indutny)](https://github.com/indutny/fft.js/) -- API reference, Radix-4 implementation, MIT license
+- [GCC-PHAT academic reference (Anguera PhD)](https://xavieranguera.com/phdthesis/node92.html) -- Phase normalization foundation
+- [Frequency-Sliding GCC-PHAT (IEEE/ACM)](https://arxiv.org/pdf/1910.08838) -- Confirms GCC-PHAT as predominant TDOA method
+- [Cross-Correlation in Spectral Audio Processing (DSPRelated)](https://www.dsprelated.com/freebooks/sasp/Cross_Correlation.html) -- Circular vs linear correlation, zero-padding
+- [Google Research: Temporal Synchronization of Multiple Audio Signals](https://research.google/pubs/temporal-synchronization-of-multiple-audio-signals/) -- Spectral flatness, MST graph approach
+- [MDN Transferable Objects](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Transferable_objects) -- Zero-copy buffer transfer
+- [Chrome: Transferable Objects Lightning Fast](https://developer.chrome.com/blog/transferable-objects-lightning-fast) -- Transfer performance data
+- [FFT Convolution and Zero-Padding](https://www.matecdev.com/posts/julia-fft-convolution.html) -- M+N-1 padding for linear correlation
+- [Understanding FFTs and Windowing (NI)](https://www.ni.com/en/shop/data-acquisition/measurement-fundamentals/analog-fundamentals/understanding-ffts-and-windowing.html) -- Window function comparison
 
 ### Secondary (MEDIUM confidence)
-- [devtails: Canvas to MP4 via WebCodecs](https://devtails.xyz/adam/how-to-save-html-canvas-to-mp4-using-web-codecs-api) — export pipeline pattern, 10x realtime performance observed
-- [Bocoup: Synchronizing HTML5 Video](https://www.bocoup.com/blog/html5-video-synchronizing-playback-of-two-videos) — timeupdate unreliability; rAF-based drift correction (dated but foundational)
-- [web.dev requestVideoFrameCallback article](https://web.dev/articles/requestvideoframecallback-rvfc) — canvas compositing patterns, expectedDisplayTime usage
-- [Evil Martians: OffscreenCanvas + Web Workers](https://evilmartians.com/chronicles/faster-webgl-three-js-3d-graphics-with-offscreencanvas-and-web-workers) — worker rendering patterns, ImageBitmap transfer memory cost
-- [RectanglePacker — github.com/aslamhus/RectanglePacker](https://github.com/aslamhus/RectanglePacker) — grid packing reference (custom shelf-packing implementation recommended for mixed ARs)
-- [MasterSelects WebGPU compositor — HN](https://news.ycombinator.com/item?id=46959456) — prior art confirming feasibility of GPU video compositor in browser
+- [KISS FFT WASM vs fft.js benchmark](https://toughengineer.github.io/demo/dsp/fft-perf/) -- Performance comparison data
+- [BBC audio-offset-finder](https://github.com/bbc/audio-offset-finder) -- MFCC-based approach, z-score normalization reference
+- [Shazam: Industrial-Strength Audio Search](https://www.ee.columbia.edu/~dpwe/papers/Wang03-shazam.pdf) -- Constellation map fingerprinting context
+- [SpectroMap: Peak Detection for Audio Fingerprinting](https://arxiv.org/pdf/2211.00982) -- Spectral peak robustness
+- [Coarse-to-fine audio sync (ResearchGate)](https://www.researchgate.net/publication/263925127_Fast_second_screen_TV_synchronization_combining_audio_fingerprint_technique_and_generalized_cross_correlation) -- Combined fingerprint + GCC-PHAT approach
+- [postMessage performance (Surma)](https://surma.dev/things/is-postmessage-slow/) -- Typed array transfer costs by size
 
-### Tertiary (referenced for deprecation status)
-- [mp4-muxer GitHub](https://github.com/Vanilagy/mp4-muxer) — deprecated July 2025; mediabunny confirmed as replacement
-- [Remotion: Clearing up WebCodecs misconceptions](https://www.remotion.dev/docs/webcodecs/misconceptions) — WebCodecs vs FFmpeg WASM tradeoff analysis
+### Tertiary (LOW confidence)
+- [WebFFT GitHub (IQEngine)](https://github.com/IQEngine/WebFFT) -- Evaluated, not recommended
+- [essentia.js GitHub (MTG)](https://github.com/mtg/essentia.js/) -- Evaluated, not recommended
+- Confidence weight parameters and threshold calibration -- theoretical, needs empirical validation
 
 ---
-*Research completed: 2026-03-02*
+*Research completed: 2026-03-28*
 *Ready for roadmap: yes*

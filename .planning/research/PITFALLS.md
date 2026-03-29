@@ -1,418 +1,426 @@
-# Pitfalls Research
+# Domain Pitfalls
 
-**Domain:** Browser-based synced multi-cam playback + GPU-accelerated composite video export
-**Researched:** 2026-03-02
-**Confidence:** HIGH (verified across MDN, W3C WebCodecs spec issues, Chromium/Firefox bug trackers, community post-mortems)
+**Domain:** Spectral/frequency-domain audio synchronization for browser-based multi-camera sync
+**Researched:** 2026-03-28
+**Confidence:** HIGH (verified across DSP literature, BBC audio-offset-finder implementation, WebAudio/WebCodecs specs, community post-mortems, and direct analysis of existing SynAudio codebase)
 
-> **Scope:** This document covers v2.0 pitfalls — adding synced video grid playback and GPU-rendered composite export to an existing app. v1.0 pitfalls (FFmpeg WASM memory, COOP/COEP, cross-correlation accuracy, stream-copy performance) are documented in the prior research cycle and already addressed in the shipped codebase.
+> **Scope:** This document covers v2.3 pitfalls -- replacing SynAudio's time-domain Pearson correlation with spectral/frequency-domain audio sync. The existing system works for dialogue and distinctive transients but fails on concerts/music with repetitive content. Prior v2.0 pitfalls (video sync drift, GPU memory, WebCodecs encoding, MP4 muxing) are already addressed in the shipped codebase.
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Video Element Sync Drifts Without Active Correction
+Mistakes that cause incorrect sync results, catastrophic memory blowup, or require architecture-level rewrites.
+
+### Pitfall 1: FFT Window Size Too Small Destroys Low-Frequency Resolution
 
 **What goes wrong:**
-Starting multiple `HTMLVideoElement` instances at the same time via `play()` does not keep them synchronized. Within seconds, visible drift accumulates. The `timeupdate` event fires "every 15 to 250ms, or whenever the MediaController's media controller position changes" — it is not frame-accurate and it is not consistent across elements. Using `timeupdate` to nudge lagging videos creates visible jank without correcting drift reliably.
+The current SynAudio correlation window is 11,025 samples at 16kHz -- 0.69 seconds. If you compute an FFT on this window directly, the frequency resolution is `sampleRate / fftSize`. With a 1024-point FFT at 16kHz, that is 15.6 Hz per bin. With a 512-point FFT (as BBC's audio-offset-finder uses), it is 31.25 Hz per bin. Music fundamentals live in the 80-500 Hz range, so at 31.25 Hz resolution, a bass note at 100 Hz occupies only 3 bins, making spectral comparison unreliable.
 
-The root problem: HTML5 does not impose a shared clock across media elements. Two `<video>` elements playing simultaneously may follow different internal clocks. Over 10+ minutes, they can diverge by several frames — and there is no event that signals this drift is occurring.
+Worse: if you keep the small window from the time-domain approach and just "add FFT," you get the worst of both worlds -- poor frequency resolution AND poor time resolution. The STFT time-frequency tradeoff is fundamental: a 512-sample window at 16kHz gives 32ms time resolution but 31.25 Hz frequency resolution. A 4096-sample window gives 0.25 Hz resolution but 256ms time resolution.
 
 **Why it happens:**
-Developers assume that `video.play()` called on multiple elements simultaneously means they stay in lockstep. They do not. Each element's playback rate is also subject to buffering stalls, decode backpressure, and OS scheduler preemption. Short test clips look fine; long clips drift.
+Developers carry over the correlation sample size from the time-domain implementation (11,025 samples = 0.69s) and treat it as the FFT window, or pick small FFT sizes (256-512) from tutorials optimized for real-time visualization rather than offline correlation accuracy.
 
-**How to avoid:**
-- Do not use `timeupdate` for sync. Use `requestVideoFrameCallback()` or `requestAnimationFrame()` to run a continuous sync loop.
-- Each frame callback: compare all secondary videos' `currentTime` against the primary (master) video. If drift exceeds one frame duration (e.g., 33ms at 30fps), force-correct with `video.currentTime = master.currentTime`.
-- Only correct when drift exceeds threshold — constant micro-corrections cause their own jank. A good threshold is 1–2 frame durations.
-- For seeking (waveform scrubbar click): call `video.currentTime = targetTime` on all elements simultaneously in one synchronous block. Do not use `Promise.all([video.play()])` — the async nature introduces ordering delays.
-- Mute all secondary video elements. Route audio through Web Audio API from a single primary element (or a selected audio source). This removes audio sync as a compounding variable.
+**Consequences:**
+- Spectral features are too coarse to distinguish between similar musical passages
+- Low-frequency content (bass, drums) gets smeared into a few bins, losing the detail that makes concert audio distinguishable
+- The new algorithm performs no better than the old one on music, defeating the purpose of the migration
 
-**Warning signs:**
-- Lips visibly out of sync with audio after 30–60 seconds of playback.
-- Different cameras appear to be at different moments on the same frame.
-- `currentTime` values diverge by > 100ms across elements.
-- Sync looks fine in Chrome but drifts in Firefox (different decode scheduling).
+**Prevention:**
+- Use FFT size of 2048 or 4096 for the STFT. At 16kHz, a 2048-point FFT gives 7.8 Hz/bin frequency resolution with 128ms windows. A 4096-point FFT gives 3.9 Hz/bin with 256ms windows. For music sync, 2048 is the minimum practical size.
+- Use 75% overlap (hop size = FFT/4) to recover time resolution lost from larger windows. With 2048 FFT and 512-sample hop at 16kHz, you get 32ms time resolution AND 7.8 Hz frequency resolution.
+- Do NOT reuse the `CORRELATION_SAMPLE_SIZE = 11025` constant from the current system for FFT sizing. They solve different problems.
 
-**Phase to address:**
-Synced playback phase. This is the foundational constraint — the sync loop architecture must be decided before any other playback work is built on top of it.
+**Detection:**
+- Test with a bass-heavy music clip (electronic music, concert recording). If two clips with the same content at different offsets produce low confidence scores or wrong offsets, the frequency resolution is likely insufficient.
+- Verify the frequency bin count covers at least 20 bins in the 80-500 Hz fundamental range.
+
+**Phase to address:** Algorithm design phase (first phase). FFT parameters are the foundation -- everything else depends on getting this right.
 
 ---
 
-### Pitfall 2: requestVideoFrameCallback Is Best-Effort, Not Guaranteed
+### Pitfall 2: Circular Cross-Correlation Without Zero-Padding Produces Wrong Offsets
 
 **What goes wrong:**
-`requestVideoFrameCallback()` (rVFC) fires "as a best effort" synchronized to video frames. The spec explicitly states it may fire "one vsync late relative to when a video frame was rendered." For a 60Hz display showing 30fps video, that means the callback could fire 16ms after the frame actually appeared on screen.
+FFT-based cross-correlation computes circular (cyclic) cross-correlation, not linear cross-correlation. In circular correlation, the signal wraps around: the end of signal A overlaps with the beginning of signal B. This produces phantom correlation peaks at wraparound positions that do not correspond to real time offsets.
 
-More critically: **rVFC is not available in Firefox as of early 2026** and has inconsistent behavior in Safari. A sync loop built exclusively on rVFC will silently degrade or break in non-Chromium browsers.
-
-Additionally, rVFC runs on the main thread — if any synchronous main-thread work takes >16ms, the callback is delayed, causing missed frames in the sync loop.
+For audio sync, if track A is 60 seconds and track B is 45 seconds, circular correlation might report a high correlation at an offset of 58 seconds -- not because the audio actually aligns there, but because the tail of A wraps around and happens to match the beginning of B.
 
 **Why it happens:**
-The API is elegant and purpose-built for this use case, so developers adopt it without checking the "best effort" caveat or browser support matrix. The fallback to `requestAnimationFrame` is not obvious.
+FFT multiplication in the frequency domain is equivalent to circular convolution in the time domain. This is a fundamental property of the DFT, not a bug. But if you compute `IFFT(FFT(A) * conj(FFT(B)))` without padding, you get circular correlation. Every DSP textbook covers this, but every implementation gets bitten by it at least once because the output "looks reasonable" for short signals where wraparound artifacts are small.
 
-**How to avoid:**
-- Feature-detect rVFC before using it: `if ('requestVideoFrameCallback' in HTMLVideoElement.prototype)`.
-- Fall back to `requestAnimationFrame` for the sync loop when rVFC is unavailable. rAF-based sync is slightly less tight but works everywhere.
-- Never assume rVFC fires in the same vsync as the frame it reports on. Use `metadata.expectedDisplayTime` to detect if the frame is already stale before acting on it.
-- Keep the sync loop callback lightweight (< 2ms). Do not perform layout reads, WebGL operations, or heavy computation inside it.
+**Consequences:**
+- Sync reports completely wrong offsets (off by the full recording length) with high confidence
+- The error is intermittent -- it only manifests when the tail of one signal happens to correlate with the head of another, so it passes simple tests but fails in production
 
-**Warning signs:**
-- App works correctly in Chrome but sync loop does not execute in Firefox.
-- Sync loop fires intermittently under load (main thread is busy).
-- Canvas overlay or waveform cursor visually lags behind video playback.
+**Prevention:**
+- Zero-pad both signals to length `M + N - 1` before FFT, where M and N are the signal lengths. This makes the circular correlation equivalent to linear correlation.
+- Since signals are typically much longer than the maximum expected offset, you can optimize by padding to `max(M, N) + maxExpectedOffset` instead of `M + N - 1`. For multi-camera sync, the maximum offset is typically under 60 seconds, so you pad by `60 * sampleRate` beyond the longer signal.
+- Use power-of-2 FFT sizes for performance: round `M + N - 1` up to the next power of 2.
+- Memory implication: for two 5-minute tracks at 16kHz, `M + N - 1 = 9,600,000 + 1` samples. At Float32 (4 bytes), that is ~38MB per padded signal. For complex FFT output, double that. Total: ~150MB for one correlation. Manageable for modern browsers but requires awareness.
 
-**Phase to address:**
-Synced playback phase. Feature detection must be in the initial implementation, not added as a later compatibility fix.
+**Detection:**
+- Verify that the reported offset is within the plausible range (0 to min(durationA, durationB)). Any offset exceeding the shorter track's duration is a wraparound artifact.
+- Test with recordings where track B starts well after track A begins (large positive offset). Circular artifacts manifest most when the true offset is large relative to signal length.
+
+**Phase to address:** Core algorithm implementation. This must be correct from the first implementation -- it cannot be patched later without changing the fundamental correlation computation.
 
 ---
 
-### Pitfall 3: Multiple Decoded Video Streams Cause GPU Memory Exhaustion
+### Pitfall 3: Repetitive Music Creates Multiple Equal-Height Correlation Peaks
 
 **What goes wrong:**
-Each active `<video>` element with a decoded stream consumes GPU memory for its decoded frame buffer. On Firefox and Chrome, HD video elements with `preload="auto"` consume 30–80MB of GPU-committed memory each. With 10–30 video elements active simultaneously — as this app supports — total GPU memory consumption can reach 300MB–2.4GB before any WebGL compositing textures are allocated.
+Time-domain Pearson correlation already struggles with repetitive content. Spectral cross-correlation can be equally vulnerable if not handled carefully. A 4-bar musical loop at 120 BPM repeats every 8 seconds. The cross-correlation function will show peaks at the true offset AND at offsets shifted by +/-8s, +/-16s, etc. These peaks can have nearly identical heights because the spectral content genuinely is nearly identical at those offsets.
 
-Browsers do not reliably free GPU memory when a video element is paused, muted, or hidden. There are known unfixed Chromium and Firefox bugs where GPU memory from video elements accumulates across a session and is not released until the tab is closed.
-
-Additionally: creating a WebGL texture from a video element (`gl.texImage2D(target, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, videoElement)`) uploads the decoded frame to GPU memory as a texture — but does NOT free the video element's own GPU memory allocation. You now hold two GPU copies.
+This is the core reason the current SynAudio-based system fails on concerts: it picks the highest peak, but all the periodic peaks are approximately equal, so it essentially picks randomly among them.
 
 **Why it happens:**
-Developers think about video elements as lightweight DOM nodes. The `<video>` element itself is lightweight; its decoded frame buffer is not. With many concurrent active video elements, the GPU memory budget is consumed before compositing even starts.
+Cross-correlation (time-domain or spectral) measures similarity at each offset. For periodic signals, the similarity IS high at multiples of the period. This is not a bug in the algorithm -- it is a fundamental property of periodic signals. The Shazam-style fingerprinting approach avoids this by using combinatorial hashing of peak constellations rather than global correlation, but that approach is designed for matching against a database, not for determining a sub-second time offset between two arbitrary recordings.
 
-**How to avoid:**
-- Apply `preload="metadata"` to all video elements initially. Only switch to `preload="auto"` for the subset visible in the current grid layout.
-- Limit simultaneously decoded video streams. For >8 cameras, consider pausing and unloading off-screen videos (those not visible in the current grid page), keeping only the active grid's worth decoding.
-- After uploading a frame to a WebGL texture, do not hold the video element in an active-play state if it is not visible. Use `video.pause()` on off-screen elements.
-- Explicitly call `video.src = ''` and `video.load()` on elements removed from the DOM to release browser resources.
-- Do not use `URL.revokeObjectURL()` until the video element has fully loaded its data — call it in `loadeddata` or `canplay`, not immediately after setting `src`.
+**Consequences:**
+- Sync offset is wrong by a multiple of the musical repetition period (e.g., exactly 8 seconds off, or 16 seconds off)
+- Confidence score is high because the correlation at the wrong peak IS genuinely high
+- The error looks plausible -- the videos are "almost" in sync, just shifted by one musical phrase
+- Hard to detect automatically because the peak height ratio between correct and incorrect peaks can be as low as 1.01:1
 
-**Warning signs:**
-- Chrome Task Manager shows GPU Memory climbing continuously during playback.
-- Browser becomes sluggish or crashes after 5–10 minutes of playback with many cameras.
-- WebGL operations start returning `OUT_OF_MEMORY` errors.
-- Tab crashes without a JavaScript error (silent GPU OOM).
+**Prevention:**
+- **Multi-scale approach:** First do a coarse correlation on full spectrograms to find candidate offsets. Then refine each candidate using a different feature set that is NOT periodic -- for example, transient detection, onset strength, or spectral flux. Transients (claps, cymbal hits, speech plosives) are not periodic and break the ambiguity.
+- **Peak cluster analysis:** Instead of taking the single highest peak, identify all peaks above a threshold and check if they form a periodic pattern. If they do, flag the result as ambiguous and fall back to a secondary method (onset matching, GCC-PHAT on specific transient segments).
+- **Longer analysis windows:** Use the entire recording for correlation, not just a small window. With longer signals, non-repeating elements (crowd noise, between-song patter, applause) break the periodicity and make the true peak distinguishable.
+- **MFCC-based correlation** (BBC approach) is more robust here than raw spectral correlation because MFCCs compress spectral detail into perceptual features, and identical musical notes played at different times do differ slightly in MFCC space due to room acoustics, crowd noise, and performer variation.
 
-**Phase to address:**
-Synced playback phase (initial loading strategy), and grid layout phase (managing which videos are actively decoded based on visible grid).
+**Detection:**
+- After finding the peak, scan for other peaks within 90% of the peak height. If more than 3 such peaks exist at regular intervals, the result is likely ambiguous.
+- Test with a 3-minute electronic music track with a clear 8-bar loop. If the algorithm consistently returns the correct offset, it handles periodicity correctly. If it returns an offset that is a multiple of the loop length, it does not.
+
+**Phase to address:** Algorithm design phase. The multi-scale or multi-feature approach must be architectured, not bolted on after initial implementation.
 
 ---
 
-### Pitfall 4: VideoFrame.close() Omission Causes Unrecoverable GPU Memory Leaks
+### Pitfall 4: Spectrogram Memory Blowup Crashes Browser Tabs
 
 **What goes wrong:**
-When capturing frames from `<video>` elements for WebGL or WebCodecs processing, the `VideoFrame` object (created via `new VideoFrame(videoElement)`) holds actual GPU memory. JavaScript's garbage collector cannot reliably free GPU resources — `VideoFrame` objects must be explicitly closed via `videoFrame.close()`. Missing a single `close()` call in an error path or loop means that GPU memory accumulates permanently for the session.
+A spectrogram is a 2D matrix: frequency bins x time frames. The memory grows with both dimensions. Concrete calculations for the current system:
 
-The same applies to `ImageBitmap` objects created via `createImageBitmap(videoElement)`. Unreleased `ImageBitmap`s are a slower leak but just as real.
+- **Input:** 16kHz mono, 5-minute recording = 4,800,000 samples
+- **FFT size 2048, hop 512 (75% overlap):** 9,375 time frames, 1025 frequency bins (N/2 + 1)
+- **Storage:** 9,375 x 1,025 x 4 bytes (Float32) = **38.4 MB per track**
+- **For 30 tracks (MAX_FILES):** 38.4 MB x 30 = **1,152 MB** just for spectrograms
+
+That is over 1 GB of Float32Array allocations in the main thread (or Web Worker) heap before any correlation computation begins. For longer recordings (30-minute concert), multiply by 6: 6.9 GB for 30 tracks. The browser tab will crash.
+
+The correlation step adds more: for FFT-based cross-correlation, you need padded complex arrays of size `M + N - 1` for each pair comparison. With 30 tracks, that is 29 pairwise comparisons, each needing temporary buffers.
 
 **Why it happens:**
-JavaScript developers are not accustomed to manual resource management. The fact that a JS object must be explicitly `close()`d — and that forgetting to do so causes non-GC-able leaks — is a paradigm from C++, not idiomatic JavaScript. The WebCodecs spec requires it, but the failure mode is silent and delayed.
+Developers compute spectrograms eagerly for all tracks and hold them all in memory simultaneously. They reason: "16kHz mono is already downsampled, so the data is small." But the STFT expansion factor is roughly `(fftSize / hopSize) * (fftSize/2 + 1) / fftSize` per sample, which for 2048/512 overlap is about 4x. Combined with 30 tracks, the small per-sample cost becomes enormous.
 
-**How to avoid:**
-- Treat every `VideoFrame` and `ImageBitmap` like a file handle: open it, use it, close it — always in a try/finally block.
-- Never pass `VideoFrame` objects across async boundaries without tracking ownership. Establish a clear rule: the creator closes it, or ownership is explicitly transferred.
-- In the render loop: create frame → upload to GPU → immediately `frame.close()`. Do not store frames in arrays for later processing.
-- Add a debug counter in development: increment on `new VideoFrame()`, decrement on `.close()`. Log the count at the end of each render loop. Any non-zero count is a leak.
+**Consequences:**
+- Browser tab crashes with OOM on consumer hardware (4-8 GB RAM) with >10 long recordings
+- Performance degrades progressively as GC pressure increases with Float32Array allocations
+- On Safari (which has stricter memory limits), crashes happen with fewer/shorter recordings
 
-**Warning signs:**
-- GPU memory climbs monotonically during export or canvas rendering even when the content is not changing.
-- Export pipeline runs fine for short durations but crashes or slows severely for long exports.
-- `console.memory` heap size is stable but GPU memory (visible in Task Manager) grows continuously.
+**Prevention:**
+- **Streaming spectrogram computation:** Compute spectrograms on-demand per pair, not all at once. When correlating track A vs track B, compute spectrogram of A and B, correlate, then release both before moving to the next pair.
+- **Reduce spectrogram resolution for initial pass:** Use fewer frequency bins (e.g., 64-128 mel bands instead of 1025 linear bins) for the coarse offset search. Only compute full-resolution spectrograms for the refinement step around candidate offsets.
+- **Use MFCC features (26-40 coefficients per frame) instead of full spectrograms** for the correlation step. BBC's audio-offset-finder uses 26 MFCCs, reducing the per-track storage from 38.4 MB to 26 coefficients x 9,375 frames x 4 bytes = **0.98 MB per track**. That is a 39x reduction.
+- **Progressive GC pressure management:** After each pairwise correlation completes, explicitly null the references and consider triggering minor GC via small `setTimeout` delays between pairs.
+- **Memory budget cap:** Calculate memory requirements upfront based on file count and duration. Warn the user before processing if estimated memory exceeds a threshold (e.g., 1 GB). Provide a "lightweight mode" that uses lower FFT resolution.
 
-**Phase to address:**
-GPU compositing and export phases. Must be enforced from first implementation — retrofitting correct `close()` calls into an existing pipeline requires auditing every frame path.
+**Detection:**
+- Log `performance.memory.usedJSHeapSize` (Chrome-only) before and after spectrogram computation. If heap growth exceeds 500 MB, the approach needs optimization.
+- Test with 10 tracks of 10-minute audio each. If the browser becomes sluggish or crashes, memory management is inadequate.
+
+**Phase to address:** Algorithm implementation phase. Memory strategy must be decided before writing the spectrogram computation code. This directly impacts whether you use full spectrograms, MFCCs, or a hybrid approach.
 
 ---
 
-### Pitfall 5: WebCodecs H.264 Encoder Unavailable or Broken in Non-Chrome Browsers
+### Pitfall 5: Normalization Mismatch Between Tracks From Different Devices Causes False Low Confidence
 
 **What goes wrong:**
-The WebCodecs API `VideoEncoder` with H.264 has incomplete and inconsistent support across browsers as of early 2026:
+Audio from different cameras has dramatically different characteristics:
+- **Volume levels:** One camera 10 feet from the stage, another 50 feet back. The closer camera may be clipped while the farther one is -30dB.
+- **Frequency response:** Phone microphones roll off below 100 Hz and above 10 kHz. Dedicated cameras have flatter response down to 50 Hz. Two recordings of the same concert have genuinely different spectral shapes.
+- **Clipping and distortion:** Close microphones at concerts frequently clip. Clipping introduces harmonics that dramatically change the spectrum.
+- **Reverb and room acoustics:** Cameras at different distances have different direct-to-reverberant sound ratios. The reverberant field is decorrelated across positions.
 
-- **Chrome/Edge:** Full support, hardware-accelerated H.264 encoding works reliably.
-- **Firefox:** `VideoEncoder.isConfigSupported()` reports H.264 as supported, but the actual encoder returns "codec not supported" at runtime — a known Firefox bug. This means feature detection produces false positives.
-- **Safari:** `VideoEncoder` (encoding) is not supported as of mid-2025. `VideoDecoder` is supported but `VideoEncoder` is absent.
-
-A pipeline that uses `VideoEncoder` without a fallback silently fails or throws uncaught exceptions in ~30% of browsers.
+If the correlation step compares raw spectrogram magnitudes (or raw MFCCs) without proper normalization, these device differences dominate the similarity measure. Two recordings of the same event from different devices may show lower correlation than two recordings of similar-but-different music from the same device.
 
 **Why it happens:**
-Developers check `VideoEncoder.isConfigSupported()` and trust the result. Firefox's false positive breaks this pattern. Safari is commonly tested for decoding workflows and assumed to have equivalent encoding support.
+Developers test with recordings from the same device (or the same type of device) at similar distances. The algorithm works because the spectral shape is similar. When deployed with real multi-camera setups (phone + DSLR + GoPro at different positions), the device and position differences overwhelm the content similarity.
 
-**How to avoid:**
-- Do not rely solely on `isConfigSupported()`. After configuring the encoder, wrap the first `encode()` call in a try/catch to detect runtime failures.
-- Implement a graceful degradation path: if WebCodecs VideoEncoder fails, fall back to FFmpeg WASM encoding for export (slower but universally available given the app already has it).
-- Show browser compatibility notice before export: "GPU-accelerated export requires Chrome or Edge. Export will use software encoding in your browser."
-- Structure the export pipeline as an interface with two implementations: `WebCodecsExporter` and `FFmpegExporter`. The orchestrator selects based on capability detection.
+**Consequences:**
+- Confidence scores drop to 30-50% for recordings that are actually synchronized, causing the UI to show "low confidence" warnings for correct results
+- In extreme cases, the algorithm picks a wrong offset because device-related spectral differences cause the true offset peak to be lower than a noise peak
+- Users lose trust in the tool even when it returns correct offsets because confidence is reported as low
 
-**Warning signs:**
-- Export works in Chrome but silently fails or produces no output in Firefox/Safari.
-- `VideoEncoder` constructor throws in Safari with no clear error message.
-- `isConfigSupported()` returns `{supported: true}` in Firefox but encoding immediately errors.
+**Prevention:**
+- **Per-track z-score normalization of features:** After computing MFCCs or spectral features, normalize each coefficient to zero mean and unit variance across the time axis. This removes constant spectral coloration from microphone frequency response. BBC's audio-offset-finder does exactly this via `(mfcc - mean) / std` per coefficient.
+- **Use MFCCs rather than raw spectrograms:** MFCCs inherently decorrelate spectral features and are less sensitive to broadband gain differences than linear spectrograms. The mel filterbank compresses differences in frequency response.
+- **Band-pass filter before analysis:** Apply a 200-4000 Hz band-pass filter to the audio before computing spectral features. This removes low-frequency rumble (handling noise, wind) and high-frequency noise (hiss) that differ most between devices, while preserving the mid-range where speech and most musical content lives.
+- **Energy normalization per frame:** Normalize each STFT frame to unit energy before comparison. This removes frame-level volume differences.
+- **GCC-PHAT weighting:** If using FFT-based cross-correlation, apply PHAT (Phase Transform) normalization which divides the cross-power spectrum by its magnitude. This retains only phase information, making the correlation independent of spectral magnitude differences between devices. GCC-PHAT is specifically designed for robustness to different frequency responses and reverberation.
 
-**Phase to address:**
-Export phase. Capability detection and the fallback architecture must be in place before shipping export to users.
+**Detection:**
+- Test with the same audio content recorded on two very different devices (phone internal mic vs. external shotgun mic). If confidence drops below 60% for content that clearly matches audibly, normalization is insufficient.
+- Compare confidence scores for same-device pairs vs. different-device pairs. If there is a >20 percentage point gap, device-dependent spectral features are leaking into the correlation.
+
+**Phase to address:** Feature extraction phase. Normalization must be applied immediately after feature computation, before any correlation step.
 
 ---
 
-### Pitfall 6: WebCodecs Encoder Queue Overflow Corrupts or Drops Frames
+### Pitfall 6: Regression on Previously-Working Cases (Dialogue, Distinctive Audio)
 
 **What goes wrong:**
-`VideoEncoder.encode()` is asynchronous and non-blocking — it queues frames for encoding without waiting for completion. If you encode frames faster than the encoder processes them (e.g., rendering a WebGL composite at 60fps into an encoder targeting 30fps), `encodeQueueSize` grows without bound. When the queue overflows, frames are silently dropped or the encoder enters an error state.
+The current SynAudio system produces correct results with high confidence (>85%) for dialogue, interviews, and recordings with distinctive transients. Replacing it with a spectral method that is tuned for music may break these existing cases. Specific failure modes:
 
-Additionally, calling `encoder.flush()` too frequently — or inside the render loop — forces the encoder to emit a new keyframe after each flush, dramatically increasing file size and reducing quality. The spec states flush "should only be called once all desired work is queued" and "is not intended to force progress at regular intervals."
+- **Dialogue with pauses:** MFCC or spectral features during silence are dominated by noise floor, which is nearly uncorrelated between devices. If the analysis window happens to land on a pause, the correlation drops. The time-domain Pearson approach handles this better because it correlates the overall waveform shape including low-energy regions.
+- **Short transients:** A sharp clap or door slam is a broadband transient that is very distinctive in the time domain but spreads across all frequency bins in the spectral domain, reducing its distinctiveness. Time-domain correlation peaks sharply on transients; spectral correlation may not.
+- **Low-energy speech:** Quiet speech in a large room may have energy concentrated in a narrow band. Mel-scale compression can smear this narrow band across fewer bins, reducing discrimination.
 
 **Why it happens:**
-Developers treat `encode()` like a synchronous write, expecting back-pressure. There is none by default. The `flush()` pattern from streaming contexts (where you flush periodically to get output) is actively harmful here.
+Every algorithm has strengths and weaknesses. The old algorithm is well-suited to content with distinctive time-domain features (dialogue, transients). The new algorithm is being designed for content where time-domain approaches fail (music). Optimizing for one type of content risks degrading the other.
 
-**How to avoid:**
-- Monitor `encoder.encodeQueueSize` before each `encode()` call. If it exceeds a threshold (2–4 frames), drop the current frame rather than encoding it.
-- Never call `flush()` inside the render/export loop. Call it exactly once at the very end of the export, after all frames are queued.
-- Target a fixed output framerate (e.g., 30fps) and render composite frames at exactly that rate — do not render at display refresh rate and encode every frame.
-- Set a reasonable keyframe interval. WebCodecs defaults to 10,000 (effectively keyframe-only-on-first-frame), which produces large P-frame chains that may not seek well. Explicitly force keyframes every 2–5 seconds: `encoder.encode(frame, { keyFrame: frameIndex % (fps * 2) === 0 })`.
+**Consequences:**
+- Users who previously got 95% confidence on interview recordings now get 60% or worse
+- Edge cases that worked with the old algorithm (two cameras recording quiet ambient sound with occasional speech) may fail entirely with the new one
+- Loss of user trust: "the update broke sync for my use case"
 
-**Warning signs:**
-- Exported video has unexpected file size (too large: unnecessary keyframes; too small: frames silently dropped).
-- Export "completes" quickly but the output video is shorter than expected (frames were dropped).
-- Browser becomes unresponsive during export (encode queue is backing up and consuming memory).
-- Encoder enters error state with "EncodingError" after running for several seconds.
+**Prevention:**
+- **Build a regression test suite BEFORE changing the algorithm.** Create a test corpus of audio pairs that currently work correctly with SynAudio, including:
+  - Clear dialogue with pauses
+  - Single sharp transient (clap test)
+  - Ambient with occasional speech
+  - High-energy continuous speech (podcast)
+  - Music with distinctive verses and choruses
+  Record the expected offsets and confidence scores for each pair.
+- **Hybrid/fallback approach:** Run both algorithms (or detect content type and choose). A simple energy variance check can distinguish "mostly silence with speech bursts" (high variance, use time-domain) from "continuous music" (low variance, use spectral). Or run spectral first, and if confidence is below threshold, fall back to time-domain.
+- **A/B validation:** Before replacing SynAudio, run both algorithms on the same inputs and compare results. Deploy the new algorithm only for cases where it produces better results, keeping the old algorithm for cases where it was already correct.
+- **Confidence recalibration:** The new algorithm will produce different raw correlation values than SynAudio. The existing confidence thresholds (high >= 70%, medium >= 40%) may not be appropriate. Recalibrate thresholds on the test corpus.
 
-**Phase to address:**
-Export phase. The encoding loop architecture — rate limiting, queue monitoring, keyframe scheduling — must be designed correctly from the start.
+**Detection:**
+- Run the regression test suite after every algorithm change. Any degradation in offset accuracy or confidence for previously-passing cases is a regression.
+- Log the confidence scores from both algorithms (old and new) during a transition period.
+
+**Phase to address:** This spans ALL phases. The regression test suite must be built in the FIRST phase (before any algorithm work). Every subsequent phase must pass the regression suite.
 
 ---
 
-### Pitfall 7: MP4 Muxer Timestamp Discontinuities Corrupt Playback
+## Moderate Pitfalls
+
+### Pitfall 7: Spectral Leakage From Wrong Window Function Smears Frequency Peaks
 
 **What goes wrong:**
-WebCodecs provides encoded `EncodedVideoChunk` objects but no container muxer. Third-party muxers (mp4-muxer, Mediabunny) must be used to package chunks into a playable MP4. These muxers are strict about timestamp monotonicity and continuity:
+The FFT assumes the input signal is periodic with period equal to the window length. When the window does not contain an integer number of cycles of a given frequency, energy from that frequency "leaks" into adjacent bins. The choice of window function controls this leakage. Using a rectangular window (no windowing) produces the worst leakage. Using the wrong window function for the application can cause frequency peaks to spread across 5-10 bins, reducing the distinctiveness of spectral features.
 
-- Timestamps must be strictly increasing (no duplicate or out-of-order timestamps).
-- The timescale used for encoding must match the timescale configured in the muxer.
-- MP4 works in a timescale (typically 90,000 ticks/second) while WebCodecs works in microseconds. Conversion precision errors produce timestamp jitter that some players (particularly QuickTime) reject.
-- Audio and video timestamps must be synchronized in the muxed container. If audio chunks are muxed at different timestamps than video chunks, A/V sync in the output file is broken.
+**Prevention:**
+- Use a Hann (Hanning) window for the STFT. It is the standard choice for audio analysis, with good sidelobe suppression (-31 dB first sidelobe) and acceptable main lobe width. It satisfies the COLA (Constant Overlap-Add) constraint at 50% and 75% overlap.
+- Do NOT use a rectangular window. Do NOT use a Hamming window for correlation (it does not reach zero at the edges, leaving a discontinuity).
+- Apply the window in the time domain before FFT: `windowedFrame[i] = frame[i] * hannWindow[i]`.
+- Pre-compute the window coefficients once and reuse for all frames.
 
-**Why it happens:**
-Developers compute timestamps as `frameIndex * (1_000_000 / fps)` with integer math, which accumulates rounding error. At 30fps after 1 minute (1800 frames), the accumulated error can be 30+ microseconds — enough to confuse strict muxers.
-
-**Why `mp4-muxer` matters:** As of early 2026, mp4-muxer has been deprecated in favor of Mediabunny. New implementations should use Mediabunny. Projects inheriting mp4-muxer will not receive bug fixes.
-
-**How to avoid:**
-- Use Mediabunny (the maintained successor to mp4-muxer) for new implementations.
-- Compute timestamps using the same formula as the encoder clock to avoid drift: `timestamp = frameIndex * frameDurationMicroseconds` where `frameDurationMicroseconds = Math.round(1_000_000 / fps)`. Compute once, reuse — do not recalculate per frame.
-- Encode audio from the same source that plays during the composite (the selected audio track from the Web Audio API mix) with matching timestamps.
-- Test exported files in QuickTime (macOS), Windows Media Player, and VLC — these three players cover the spectrum from most-strict to most-lenient timestamp handling.
-
-**Warning signs:**
-- Exported MP4 plays in Chrome but fails to open in QuickTime or Windows Media Player.
-- Video plays but audio is offset by a constant duration.
-- Video duration in the exported file is wrong (too long or too short).
-- Muxer throws an error about "timestamp must be greater than previous."
-
-**Phase to address:**
-Export phase. Muxer selection and timestamp computation must be locked in before building the full encoding pipeline.
+**Detection:**
+- Visualize the spectrogram of a known sine wave. The peak should be confined to 2-3 bins with a Hann window. If it spreads across 5+ bins, windowing is wrong or missing.
 
 ---
 
-### Pitfall 8: Canvas 2D drawImage Is Too Slow for 4K Composite at 30fps
+### Pitfall 8: Silence and Noise-Floor Segments Produce Spurious Correlation Peaks
 
 **What goes wrong:**
-`CanvasRenderingContext2D.drawImage(videoElement, ...)` is the naive approach for compositing a video grid. It works for low resolutions or a small number of cameras, but has a hard ceiling:
+When both tracks contain silence or near-silence (noise floor), the spectral features are dominated by uncorrelated background noise. Normalizing these low-energy frames amplifies noise to unit variance, making random noise patterns look like meaningful features. Cross-correlating noise-dominated features produces random peaks that can be higher than the actual signal-aligned peak.
 
-- At 4K (3840×2160) with 4+ camera tiles, each `drawImage` requires a CPU-side pixel blit if the video element is in a different memory space (GPU texture) than the canvas. This round-trip (GPU → CPU → GPU) for each video element costs ~5ms per frame per video on high-end hardware.
-- With 8 cameras at 4K export, Canvas 2D compositing takes 40+ ms per frame — slower than the 33ms budget for 30fps. Export produces <30fps output or falls behind in real time.
+Additionally, if one track has silence where another has content, MFCC normalization (subtract mean, divide by std) on the silence track produces unstable features (dividing near-zero values by near-zero std), causing numerical instability or NaN propagation.
 
-WebGL compositing avoids this by keeping video frames as GPU textures and compositing directly on the GPU, reducing the per-frame cost from ~5ms to ~0.1ms per video at comparable resolutions.
+**Prevention:**
+- **Energy-gated analysis:** Compute frame energy before feature extraction. Skip or down-weight frames below an energy threshold (e.g., -40 dB relative to the track's peak energy). Only correlate features from frames where both tracks have sufficient energy.
+- **Clamp minimum standard deviation** in normalization to prevent division by near-zero: `normalized = (x - mean) / max(std, epsilon)` where epsilon is 1e-6.
+- **Weighted correlation:** Weight each frame's contribution to the correlation by the minimum energy of the two tracks at that frame. This naturally suppresses silence-dominated regions.
 
-**Why it happens:**
-Canvas 2D drawImage is the obvious, documented approach. It works fine in demos and at 1080p with 2-4 cameras. The performance cliff at 4K or with many cameras is not obvious until the export pipeline is built and measured.
-
-**How to avoid:**
-- Use WebGL for the compositing canvas from the start. The API is more complex, but the performance characteristics scale correctly.
-- Specifically: create an `OffscreenCanvas` with a WebGL context, upload each camera's current frame as a texture using `gl.texImage2D(target, ..., videoElement)`, render a full-screen quad for each camera tile, then read the result.
-- Use `OffscreenCanvas` in a Web Worker to move compositing off the main thread, keeping the UI responsive during export.
-- Do not support 4K export with Canvas 2D — explicitly limit Canvas 2D compositing to 1080p or use it only as a fallback when WebGL is unavailable.
-
-**Warning signs:**
-- Canvas compositing takes longer per frame than the target frame duration (measure with `performance.now()` around each drawImage block).
-- Export framerate drops below target (output video is shorter than expected with fewer frames).
-- Main thread is saturated (DevTools profiler shows long tasks blocking user interaction).
-
-**Phase to address:**
-GPU compositing phase. Technology choice must be made before building the compositing layer — retrofitting WebGL onto a Canvas 2D compositing pipeline is effectively a rewrite.
+**Detection:**
+- Test with two recordings where one starts 30 seconds before the other (so one has 30 seconds of silence overlap). If the algorithm reports high confidence for an offset that aligns the silence regions, it is not handling silence correctly.
 
 ---
 
-### Pitfall 9: OffscreenCanvas Cannot Be Transferred Back to Main Thread After Use
+### Pitfall 9: Web Worker Data Transfer Overhead for Spectrograms
 
 **What goes wrong:**
-`OffscreenCanvas` transferred to a Web Worker with `canvas.transferControlToOffscreen()` is **permanently owned by the worker**. It cannot be sent back to the main thread. This seems obvious in hindsight, but common patterns break because of it:
+The current system transfers Float32Array audio data to a Web Worker via postMessage. SynAudio's worker receives raw audio samples -- relatively compact (16kHz mono, 4 bytes/sample). If the new algorithm computes spectrograms in the main thread and transfers them to a worker, the data size increases dramatically.
 
-- You cannot render composited frames on a worker-owned `OffscreenCanvas` and then display them in the main thread by transferring the canvas back.
-- The correct pattern is: render on the worker's `OffscreenCanvas`, use `transferToImageBitmap()` to get an `ImageBitmap`, `postMessage` it to the main thread with transfer ownership, then `drawImage(imageBitmap, ...)` on the visible canvas.
-- Each `ImageBitmap` transfer (even with structured clone) temporarily holds two copies in memory: the worker-side source and the main-thread destination. For a 4K frame at RGBA, that is 33MB per frame transfer. At 30fps, that is 1GB/sec of transfer pressure — likely causing GC pauses and memory spikes.
+A spectrogram for a 5-minute track at 2048 FFT / 512 hop is 38.4 MB (see Pitfall 4). With structured cloning (the default postMessage behavior), transferring 38.4 MB takes ~300ms per track. For 30 tracks, that is 9 seconds of just data transfer overhead, blocking the main thread during each copy.
 
-**Why it happens:**
-The pattern `canvas.transferControlToOffscreen()` → worker → main thread looks like it should round-trip. The spec forbids the return trip and developers discover this only when building the preview/playback feedback loop.
+Using Transferable ArrayBuffers avoids the copy cost (<10ms per transfer regardless of size) but has a catch: the source loses access to the data. If the main thread needs the spectrogram for visualization while the worker needs it for correlation, you must duplicate it before transfer.
 
-**How to avoid:**
-- For export: keep compositing entirely in the worker. The muxer also runs in the worker. The main thread only receives progress updates via `postMessage`.
-- For real-time preview (playback): do not try to move compositing to a worker. Use WebGL on the main thread (or `requestAnimationFrame` with Canvas 2D for lower-resolution preview). The export worker is separate from the preview renderer.
-- If you must transfer frames from worker to main thread for preview: use `ImageBitmap` transfer, but limit preview to 1/4 resolution (960×540) to keep transfer size manageable (~1MB per frame at 30fps = 30MB/sec — acceptable).
+**Prevention:**
+- **Compute spectrograms inside the Web Worker.** Transfer raw audio (compact: 4 bytes/sample) to the worker, compute the STFT there, run correlation there, and return only the result (offset + confidence). This avoids transferring spectrograms across the thread boundary entirely.
+- If spectrograms must be transferred, **use Transferable ArrayBuffers** (not structured clone). Ensure the source no longer needs the data before transferring: `worker.postMessage({ spectrogram: buffer }, [buffer])`.
+- **SharedArrayBuffer** is available in this project (COOP/COEP headers are already configured for FFmpeg WASM). If computing spectrograms in the main thread and consuming in workers, consider using SharedArrayBuffer to avoid any copy. However, SynAudio currently does NOT use shared memory mode (the `shared: false` default is used), so this would be a new pattern.
+- **Batch processing:** Do not send 30 spectrograms at once. Send them one pair at a time, correlate, receive result, then send the next pair. This bounds peak memory to 2 spectrograms + correlation buffers rather than 30 spectrograms.
 
-**Warning signs:**
-- `transferControlToOffscreen()` throws a `DOMException` when called a second time on the same canvas.
-- Main thread canvas shows a blank/black frame after the worker starts rendering (the canvas is in a broken state).
-- Attempting to get a 2D or WebGL context on the main thread after transferring to a worker fails silently.
-
-**Phase to address:**
-GPU compositing phase (architecture decision). The preview vs. export rendering architecture must be decided before any OffscreenCanvas code is written.
+**Detection:**
+- Profile data transfer time using `performance.now()` around postMessage calls. If transfer exceeds 100ms per message, the data volume is too large.
+- Check Chrome DevTools Memory tab for heap spikes during postMessage (indicates structured cloning of large typed arrays).
 
 ---
 
-### Pitfall 10: Audio Track Selection Breaks if Web Audio API Autoplay Policy Blocks Context Resume
+### Pitfall 10: Sub-Sample Accuracy Requires Interpolation of Correlation Peak
 
 **What goes wrong:**
-The Web Audio API's `AudioContext` is suspended by default until a user gesture. When the app creates a MediaElementAudioSourceNode for each video element (to enable the "all tracks mixed / single track selected" audio feature), the AudioContext may be in a suspended state if not properly resumed. The result: video plays but there is no audio, with no error message.
+FFT-based cross-correlation returns a peak at an integer sample offset. At 16kHz, one sample is 62.5 microseconds. For video sync, the required accuracy is typically one frame (33ms at 30fps = 528 samples). So integer-sample accuracy is sufficient for the offset.
 
-Additionally, connecting the same `<video>` element to a `MediaElementAudioSourceNode` takes over its audio output. If you then want the video to also produce its own audio (for the non-Web-Audio path), you cannot — the audio is now fully routed through the AudioContext and the element's `volume` property no longer controls what the user hears.
+However, the correlation VALUE at the peak affects confidence scoring. If the true peak falls between two integer samples, the measured peak is lower than the true peak, and the confidence score underestimates the actual sync quality. This matters most for GCC-PHAT, where the correlation function has a sharp, narrow peak (by design -- PHAT normalization sharpens peaks). If the true peak is at sample 1000.4, the measured values at samples 1000 and 1001 may both be 0.7 when the true peak is 0.95.
 
-A second pitfall: creating a `MediaElementAudioSourceNode` for the same `<video>` element more than once throws an `InvalidStateError`. If the component mounts/unmounts (e.g., grid layout changes), you must track which elements already have a source node.
-
-**Why it happens:**
-Autoplay policies have become stricter over time. The specific rule that `AudioContext` starts suspended is not always handled in tutorials, which show examples where a user click implicitly resumes the context. In a video player, the "play" button click should resume the context — but if play state is set programmatically (e.g., after seeking), no user gesture is recorded.
-
-**How to avoid:**
-- Call `audioContext.resume()` explicitly in the user gesture handler (play button click, seek scrubbar click).
-- Wrap all audio graph operations in a check: `if (audioContext.state === 'suspended') await audioContext.resume()`.
-- Track MediaElementAudioSourceNode instances in a Map keyed by video element. Before creating a new node, check if one already exists for that element.
-- Mute video elements at the HTMLElement level (`video.muted = true`) and manage all volume exclusively through the Web Audio API gain nodes. This avoids dual-control confusion.
-
-**Warning signs:**
-- Video plays but no audio on first load (context suspended).
-- `InvalidStateError: MediaElementAudioSourceNode already created for this element` in console.
-- Switching from "all tracks" to "single track" mode produces no change in audio output.
-- Audio cuts out after navigating away and back to the page (context suspended again on navigation).
-
-**Phase to address:**
-Audio mixing feature within the synced playback phase. Must be implemented with correct AudioContext lifecycle management from the start.
+**Prevention:**
+- For offset accuracy: integer sample resolution is sufficient. Do not over-engineer sub-sample interpolation unless drift compensation requires it (which is out of scope).
+- For confidence accuracy: apply parabolic interpolation around the peak. Fit a parabola through the peak and its two neighbors: `peakValue = y[peak] - (y[peak-1] - y[peak+1])^2 / (8 * (y[peak-1] - 2*y[peak] + y[peak+1]))`. This gives a better estimate of the true peak height.
+- Do not use the raw integer-sample peak height for confidence scoring with GCC-PHAT -- it will systematically underestimate confidence, causing false "low confidence" warnings.
 
 ---
 
-## Technical Debt Patterns
+### Pitfall 11: Choosing Mel Scale When Linear Scale Is Needed (or Vice Versa)
 
-| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
-|----------|-------------------|----------------|-----------------|
-| Canvas 2D drawImage for compositing | Simple API, works immediately | Hard performance ceiling at 4K/8+ cameras; requires rewrite to use WebGL | Only for 1080p playback preview; never for 4K export |
-| No VideoFrame.close() calls in happy path | Less boilerplate | Silent GPU memory leak that grows throughout session; catastrophic during long export | Never |
-| timeupdate for multi-video sync | Event-driven, reactive | Drift accumulates; jitter causes visible desync; misses frames | Never — use rAF/rVFC sync loop |
-| Single VideoEncoder path without FFmpeg fallback | Simpler export code | Export broken in Firefox and Safari; ~30% of browser market | Never for public release |
-| mp4-muxer instead of Mediabunny | Familiar library, pre-existing docs | Unmaintained, no bug fixes, will fall behind browser changes | Only if migrating from an existing mp4-muxer codebase with known-good behavior |
-| preload="auto" for all video elements | Faster initial play | 30–80MB GPU memory per element; 30 cameras = 900MB–2.4GB before compositing | Acceptable for ≤4 cameras; never for large grids |
-| Export audio directly from Web Audio context | Avoids separate audio pipeline | Web Audio context output is difficult to capture as raw PCM for muxing | Avoid — use MediaStreamAudioDestinationNode or encode audio separately via WebCodecs AudioEncoder |
+**What goes wrong:**
+Mel-scale spectrograms compress higher frequencies and expand lower frequencies, mimicking human perception. This is excellent for speech recognition and music genre classification. However, for time-delay estimation via cross-correlation, mel compression can REDUCE discrimination:
+
+- Two signals that differ in high-frequency content (cymbals, sibilants, room reflections) look nearly identical after mel compression because the high-frequency differences are compressed into fewer bins.
+- For GCC-PHAT, the mel scale is inappropriate because PHAT normalization assumes uniform frequency resolution across all bins. Applying PHAT to mel-scaled features produces incorrect phase estimates.
+
+Conversely, using a linear spectrogram for MFCC-style correlation wastes resolution on high frequencies where human-audible differences (and microphone differences) are largest and least useful for sync.
+
+**Prevention:**
+- **For MFCC-based correlation (BBC approach):** Use mel scale. MFCCs are defined on the mel scale and the approach is proven for audio offset finding.
+- **For GCC-PHAT cross-correlation:** Use linear scale (standard FFT bins). Do not apply mel filterbank before PHAT normalization.
+- **For hybrid approaches:** Compute features on the appropriate scale for each stage. Coarse search can use MFCCs (mel), fine refinement can use linear-scale GCC-PHAT.
+- Do not mix scales within a single correlation step.
+
+---
+
+## Minor Pitfalls
+
+### Pitfall 12: FFT Size Not Power of 2 Degrades Performance
+
+**What goes wrong:**
+Modern FFT implementations (including browser-native and WASM) are optimized for power-of-2 sizes. A 2000-point FFT may be 3-10x slower than a 2048-point FFT. A 3000-point FFT may fall back to O(N^2) DFT.
+
+**Prevention:**
+- Always use power-of-2 FFT sizes: 512, 1024, 2048, 4096.
+- When zero-padding signals for cross-correlation, round up to the next power of 2.
+
+---
+
+### Pitfall 13: Forgetting to Take Magnitude of Complex FFT Output
+
+**What goes wrong:**
+The FFT outputs complex numbers (real + imaginary parts). The spectrogram uses the magnitude (`sqrt(real^2 + imag^2)`) or power (`real^2 + imag^2`), not the raw complex values. If you accidentally use only the real part, you lose half the spectral information and the features become unreliable.
+
+For cross-correlation in the frequency domain, you multiply `FFT(A) * conj(FFT(B))` -- this requires proper complex conjugate multiplication, not element-wise real multiplication.
+
+**Prevention:**
+- Implement complex multiplication explicitly: `(a_re * b_re + a_im * b_im) + j*(a_im * b_re - a_re * b_im)` for conjugate multiplication.
+- For spectrograms, always compute magnitude: `Math.sqrt(re*re + im*im)` or use log-power: `10 * Math.log10(re*re + im*im + epsilon)`.
+- Add unit tests that verify FFT output matches known analytical results (e.g., FFT of a single sine wave should produce a peak at the expected bin).
+
+---
+
+### Pitfall 14: Not Handling the DC and Nyquist Bins Correctly
+
+**What goes wrong:**
+For a real-valued input of length N, the FFT produces N/2 + 1 unique frequency bins (from DC to Nyquist). The DC bin (index 0) and Nyquist bin (index N/2) are purely real. Some FFT libraries pack these differently. If you process N/2 bins instead of N/2 + 1, you silently lose the Nyquist bin. If you treat the DC bin as complex, you introduce a spurious imaginary component.
+
+**Prevention:**
+- Know your FFT library's output format. JavaScript's common FFT libraries (fft.js, KissFFT WASM) use different packing conventions.
+- For STFT computation, extract `N/2 + 1` magnitude values per frame (0 through Nyquist inclusive).
+- The DC bin is rarely useful for audio correlation (it represents the constant offset). Consider zeroing it before correlation.
+
+---
+
+## Phase-Specific Warnings
+
+| Phase Topic | Likely Pitfall | Mitigation |
+|-------------|---------------|------------|
+| FFT parameter selection | Too-small FFT window (Pitfall 1), non-power-of-2 (Pitfall 12) | Start with 2048 FFT, 512 hop, Hann window. Benchmark before changing. |
+| Feature extraction | Raw spectrogram memory blowup (Pitfall 4), wrong scale (Pitfall 11) | Use MFCCs (26-40 coefficients) with mel scale for compact, perceptually-weighted features. Budget <2 MB per track. |
+| Normalization | Device differences cause false low confidence (Pitfall 5), silence instability (Pitfall 8) | Z-score normalize per coefficient, energy-gate silent frames, clamp minimum std to 1e-6. |
+| Cross-correlation | Circular correlation wraparound (Pitfall 2), repetitive music ambiguity (Pitfall 3) | Zero-pad to M+N-1 for linear correlation. Implement peak cluster analysis for periodicity detection. |
+| Web Worker integration | Spectrogram transfer overhead (Pitfall 9) | Compute STFT inside the worker. Transfer raw audio (compact), not spectrograms (large). |
+| Confidence scoring | Sub-sample peak underestimate (Pitfall 10), recalibration needed (Pitfall 6) | Parabolic interpolation of peak. Recalibrate thresholds on test corpus. |
+| Regression testing | Breaking existing working cases (Pitfall 6) | Build regression suite FIRST. Run both old and new algorithms during transition. |
+| Production rollout | Edge cases with silence, short clips, extreme offsets | Test with <5s clips, >30 min clips, clips with 90% silence, clips with mono tone |
 
 ## Integration Gotchas
 
-| Integration | Common Mistake | Correct Approach |
-|-------------|----------------|------------------|
-| FFmpeg WASM + WebCodecs | Using FFmpeg WASM for the export encode step (re-encodes the composite) | Use WebGL for compositing + WebCodecs VideoEncoder for GPU-accelerated H.264 encoding. FFmpeg WASM remains for upstream pipeline (extraction, trim) only. |
-| Web Audio API + video elements | Calling `video.volume = 0` expecting silence after connecting to Web Audio graph | Once connected to a MediaElementAudioSourceNode, the element's audio is routed through the graph. Control gain via GainNode only; `volume` has no effect. |
-| WebGL texture from video | Calling `gl.texImage2D` with a video element that is not currently decoded | If the video is paused on the first frame or still loading, texImage2D uploads a black or corrupt frame. Always check `video.readyState >= HAVE_CURRENT_DATA` before texture upload. |
-| WebCodecs encoder + muxer | Passing `EncodedVideoChunk` directly to muxer without checking chunk type | Only `key` chunks can appear at the start of a segment. If the first chunk is a `delta`, the muxer or player will reject it. Force `keyFrame: true` on the first encoded frame. |
-| OffscreenCanvas + React | Creating OffscreenCanvas inside a React component's render/effect cycle | OffscreenCanvas must be created once and transferred exactly once. React's strict mode and HMR can cause double-mount, double-transfer errors. Create outside React lifecycle or protect with a ref guard. |
-| Blob URLs + video elements | Calling `URL.revokeObjectURL(url)` immediately after setting `video.src = url` | The browser has not loaded the resource yet. Revoke only after `video.loadeddata` or `video.canplay` fires. Premature revoke causes a network error loading the video. |
+| Integration Point | Common Mistake | Correct Approach |
+|-------------------|----------------|------------------|
+| Replacing SynAudio | Removing SynAudio entirely before new algorithm is validated | Keep SynAudio as fallback. New algorithm returns result + confidence; if confidence < threshold, automatically retry with SynAudio. |
+| FFmpeg WASM audio extraction | Changing sample rate or format to accommodate new algorithm | Keep 16kHz mono PCM Float32Array output. The new algorithm must consume the same AudioData format. Do not change the extraction pipeline. |
+| Confidence score interface | New algorithm produces different scale (e.g., 0-1 standard score vs 0-100 percentage) | Normalize to the existing 0-100 confidence scale. Recalibrate thresholds but maintain the same SyncResult interface. |
+| Web Worker architecture | Creating a new worker architecture alongside SynAudio's | Replace SynAudio's worker, not add a parallel one. One sync entry point in audioSync.ts that dispatches to the new implementation. |
+| Progress reporting | New algorithm has different phases (spectrogram, correlation, refinement) not reflected in UI | Map internal algorithm phases to the existing PipelineProgress 'correlating' stage. Use fine-grained progress within that stage. |
+| Constants file | Adding many new constants (FFT size, hop, bands, etc.) without organization | Group new constants under a clear namespace (e.g., `SPECTRAL_SYNC_*` prefix) in constants.ts. |
 
 ## Performance Traps
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Canvas 2D drawImage at 4K | Export framerate drops below 30fps; main thread saturated | Use WebGL compositing; measure compositing time per frame during development | Any resolution above 1080p with >4 cameras, or >8 cameras at any resolution |
-| Uploading video texture on every rAF tick | GPU memory bandwidth saturated; frame drops | Upload texture only when `video.currentTime` has changed (check via rVFC metadata or comparison) | Immediately with 8+ cameras at HD resolution |
-| Encoding at display framerate into muxer | Encoder queue grows unbounded; eventual OOM or encoder error | Tick export at fixed output framerate; drop frames when encoder queue is backed up | Any export longer than ~10 seconds |
-| Allocating new ImageBitmap per frame for preview | GC pauses every few seconds (10–30ms pause per large ImageBitmap allocation) | Reuse a fixed-size canvas for preview; avoid ImageBitmap allocation in the hot path | As soon as export or real-time preview is enabled |
-| Holding all video Blob URLs simultaneously | Memory holds all original video files (could be gigabytes) plus decoded GPU buffers | Revoke Blob URLs for videos not currently being played if under memory pressure | >10 cameras with >200MB files each |
+| Full spectrogram in memory for all tracks | Browser tab crashes or freezes; heap > 1 GB | Stream spectrograms per pair; use MFCCs instead (39x smaller) | >10 tracks of >5 minutes each |
+| FFT computed in main thread | UI freezes during correlation; unresponsive for seconds | Compute all FFTs in Web Worker | Any recording longer than ~30 seconds |
+| Structured clone of large typed arrays | 300ms+ delays per postMessage; visible UI stutters | Use Transferable ArrayBuffers or compute in worker | Any spectrogram transfer > 5 MB |
+| GCC-PHAT on very long signals | Single FFT of full signal (e.g., 30 min = 28.8M points) uses ~230 MB per complex array | Segment-and-average: compute GCC-PHAT on overlapping 30-60s segments, average results | Recordings > 5 minutes |
+| Repeated FFT computation | Computing STFT for the same track multiple times (once per pair comparison) | Cache STFT/MFCC features keyed by fileId; compute once, reuse across comparisons | >5 tracks (quadratic pairwise comparisons) |
+| Large zero-padded FFT | Padding two 30-min tracks to M+N-1 at 16kHz = 57.6M samples; 460 MB per complex array | Use segment-based correlation instead of full-length FFT correlation | Two tracks totaling > 10 minutes |
 
-## Security Mistakes
+## Memory Budget Reference
 
-This project runs entirely client-side with no server. The relevant concerns are user-experience trust, not data exfiltration.
+| Component | Per-Track Size (5 min @ 16kHz) | 10 Tracks | 30 Tracks |
+|-----------|-------------------------------|-----------|-----------|
+| Raw audio (Float32) | 19.2 MB | 192 MB | 576 MB |
+| Full spectrogram (2048 FFT, 512 hop) | 38.4 MB | 384 MB | 1,152 MB |
+| MFCC features (26 coeff, 512 hop) | 0.98 MB | 9.8 MB | 29.4 MB |
+| Mel spectrogram (64 bands, 512 hop) | 2.4 MB | 24 MB | 72 MB |
+| Cross-correlation buffer (1 pair, padded) | ~77 MB | N/A | N/A |
+| GCC-PHAT buffer (1 pair, padded complex) | ~154 MB | N/A | N/A |
 
-| Mistake | Risk | Prevention |
-|---------|------|------------|
-| Exporting to a user-specified filename without sanitization | Malformed filename causes a broken download or unexpected browser behavior | Use `encodeURIComponent` on user-supplied filenames. Validate the export filename against a safe character set. |
-| WebGL errors surfaced to users verbatim | GL error codes are confusing and may reveal browser/GPU information | Catch WebGL errors in the compositing loop; surface as "Compositing failed — try a lower resolution." |
-| Allowing export at extremely high resolutions without a cap | Could cause OOM or GPU driver crash | Enforce a maximum export resolution (e.g., 4K = 3840×2160). Reject or downsample beyond that limit. |
+**Guidance:** Target total memory under 500 MB for the sync pipeline. This means: (1) do not hold full spectrograms for all tracks simultaneously, (2) use MFCCs or mel spectrograms for the main correlation, (3) process pairs sequentially and release buffers between pairs.
 
-## UX Pitfalls
+## Testing Strategy to Prevent Regression
 
-| Pitfall | User Impact | Better Approach |
-|---------|-------------|-----------------|
-| No progress feedback during export | A 30-second 4K export feels like a hang; user closes tab | Show per-frame progress: "Encoding frame 450 of 900 (50%)" with time remaining estimate. |
-| Export button active before videos are buffered | User exports immediately; first N frames are black or corrupted (video not yet decoded) | Disable export until all grid videos report `readyState >= HAVE_ENOUGH_DATA`. Show loading indicator per camera tile. |
-| Grid layout changes during playback without pausing | Removing/adding video elements while the sync loop is running causes race conditions | Pause all playback before changing grid configuration; rebuild sync loop state; then resume. |
-| Audio selection dropdown with no perceptible change | User selects "Camera 3 audio" but still hears all cameras because AudioContext is suspended | Visually confirm audio selection with a VU meter or peak indicator. Resume AudioContext on dropdown interaction. |
-| Export produces a file the user cannot play | WebCodecs may produce H.264 Baseline when user expects Main or High profile | Document the export codec/profile. Consider offering "compatible" (Baseline) vs. "quality" (High) profile options. |
-| No way to abort a running export | User starts a 4K export, waits 2 minutes, realizes they chose wrong settings — no cancel | Implement export cancellation. Track the export worker's state; `postMessage({ type: 'cancel' })` and terminate the encoder cleanly. |
+### Build This Test Corpus FIRST
 
-## "Looks Done But Isn't" Checklist
+| Test Case | Content Type | Expected Behavior | Why It Matters |
+|-----------|-------------|-------------------|----------------|
+| Two cameras, clear dialogue, 5s offset | Speech | Offset within +/-1 sample, confidence > 90% | Baseline: must not regress |
+| Two cameras, sharp clap test, 2s offset | Transient | Offset within +/-1 sample, confidence > 95% | Most distinctive signal; any algorithm must handle this |
+| Two cameras, quiet ambient + occasional speech | Low-energy speech | Offset within +/-5 samples, confidence > 60% | Edge case for energy-gated approaches |
+| Two cameras, concert music, 10s offset | Repetitive music | Correct offset (not shifted by loop length), confidence > 50% | The core motivating use case for v2.3 |
+| Phone mic + DSLR mic, same content, 3s offset | Device mismatch | Correct offset, confidence > 50% | Device normalization validation |
+| Two cameras, 30-minute recording, 5s offset | Long duration | Correct offset, memory < 500 MB, time < 30s | Performance and memory validation |
+| Two cameras, one starts 45s before the other | Large offset | Correct offset, no wraparound artifacts | Circular correlation guard |
+| Two cameras, pure silence | Silence | Low confidence (< 30%), no crash | Graceful degradation |
+| Two cameras, 3s recording only | Very short | Offset within +/-2 samples, or low confidence (not crash) | Edge case for small windows |
 
-- [ ] **Video sync loop:** Often missing drift correction threshold — verify that a 10-minute playback session results in < 1 frame of drift across all cameras (check `Math.max(...videos.map(v => Math.abs(v.currentTime - master.currentTime)))` at 10-min mark).
-- [ ] **requestVideoFrameCallback fallback:** Often missing — verify the sync loop runs correctly in Firefox (where rVFC is absent) using requestAnimationFrame fallback.
-- [ ] **VideoFrame.close() completeness:** Often missing in error paths — verify no GPU memory leak by running export, cancelling partway through, and confirming GPU memory returns to baseline in Chrome Task Manager.
-- [ ] **WebCodecs encoder fallback:** Often missing for Firefox/Safari — verify the app offers working export (FFmpeg WASM) in Firefox and Safari, not a broken or missing export button.
-- [ ] **First frame keyframe enforcement:** Often missing — verify the exported MP4 opens correctly in QuickTime by confirming the first encoded chunk is a `key` chunk.
-- [ ] **MP4 timestamp monotonicity:** Often broken by re-renders — verify the exported MP4 has correct duration (`videoElement.duration === expected`) and plays back at the correct speed.
-- [ ] **AudioContext resume on play:** Often missing — verify audio plays immediately when the play button is clicked (not just after a second click or user interaction).
-- [ ] **MediaElementAudioSourceNode dedup:** Often missing — verify that mounting/unmounting the grid (or resizing it) does not throw `InvalidStateError` about duplicate source nodes.
-- [ ] **Blob URL revocation timing:** Often wrong — verify that `URL.revokeObjectURL()` is called after `loadeddata`, not immediately after `video.src = url`.
-- [ ] **GPU memory ceiling:** Often discovered too late — verify the app runs for 20+ minutes with 8+ cameras without the tab crashing (Chrome Task Manager GPU memory should plateau, not climb).
-
-## Recovery Strategies
-
-| Pitfall | Recovery Cost | Recovery Steps |
-|---------|---------------|----------------|
-| Video sync drift (timeupdate-based) | HIGH | Rewrite sync loop to use rAF/rVFC. Cannot be patched incrementally — the sync architecture must change. |
-| VideoFrame.close() memory leak | MEDIUM | Audit every VideoFrame allocation site. Wrap in try/finally. Run Chrome Task Manager during export to confirm memory stabilizes. |
-| Canvas 2D performance ceiling | HIGH | Rewrite compositing layer to use WebGL. This is a significant effort if Canvas 2D is already integrated with export. |
-| WebCodecs unsupported in browser | LOW | Add FFmpeg WASM fallback exporter. The FFmpeg pipeline already exists; wrapping it as an export path is low effort. |
-| MP4 timestamp corruption | MEDIUM | Audit timestamp computation formula. Replace float arithmetic with integer microsecond arithmetic. Re-test with QuickTime. |
-| Encoder queue overflow / frame drops | MEDIUM | Add `encodeQueueSize` check before each `encode()` call. Implement frame drop logic. Adjust render loop rate to match encoder throughput. |
-| AudioContext suspended silently | LOW | Add `audioContext.resume()` call to all user gesture handlers. One-line fix per gesture handler. |
-
-## Pitfall-to-Phase Mapping
-
-| Pitfall | Prevention Phase | Verification |
-|---------|------------------|--------------|
-| Multi-video sync drift | Synced playback phase | Play 8 cameras for 10 minutes; measure max `currentTime` divergence < 33ms |
-| rVFC unavailability in Firefox | Synced playback phase | Run sync loop in Firefox; confirm no broken behavior; check console for errors |
-| GPU memory from many video elements | Synced playback + grid layout phases | Open Chrome Task Manager; load 10+ cameras; GPU memory should plateau under 1GB |
-| VideoFrame.close() leaks | GPU compositing + export phases | Export 60-second composite; confirm GPU memory returns to baseline after export completes |
-| WebCodecs H.264 unavailable in Firefox/Safari | Export phase | Attempt export in Firefox and Safari; confirm fallback path activates with clear UX |
-| Encoder queue overflow | Export phase | Export 5-minute composite; confirm framerate of output matches target fps with no dropped frames |
-| MP4 timestamp discontinuities | Export phase | Open exported MP4 in QuickTime; confirm correct duration and smooth playback |
-| Canvas 2D performance at 4K | GPU compositing phase | Measure compositing time per frame at 4K with 4 cameras; must be <10ms per frame |
-| OffscreenCanvas transfer semantics | GPU compositing phase | Confirm preview canvas remains interactive while export worker runs |
-| AudioContext autoplay block | Audio mixing feature | Click play on first load; confirm audio starts immediately without second interaction required |
+### Dual-Run Validation
+During the transition phase, run BOTH algorithms on every input and compare:
+- If both agree on offset (+/- 5 samples): high confidence, use new algorithm's confidence score
+- If they disagree: flag for manual review, prefer the result with higher confidence
+- If new algorithm has lower confidence on a case that old algorithm handled well: regression detected
 
 ## Sources
 
-- [MDN: HTMLVideoElement.requestVideoFrameCallback()](https://developer.mozilla.org/en-US/docs/Web/API/HTMLVideoElement/requestVideoFrameCallback) — best-effort semantics, vsync timing caveat (HIGH confidence)
-- [web.dev: requestVideoFrameCallback](https://web.dev/articles/requestvideoframecallback-rvfc) — use cases and expectedDisplayTime comparison pattern (HIGH confidence)
-- [Bocoup: HTML5 Video Synchronizing Playback of Two Videos](https://www.bocoup.com/blog/html5-video-synchronizing-playback-of-two-videos) — timeupdate unreliability; rAF-based continuous correction (HIGH confidence)
-- [W3C: Frame accurate seeking issue](https://github.com/w3c/media-and-entertainment/issues/4) — currentTime precision limitations (HIGH confidence)
-- [W3C: Media Synchronization on the Web (PDF)](https://www.w3.org/community/webtiming/files/2018/05/arntzen_mediasync_web_author_edition.pdf) — clock drift across media elements (HIGH confidence)
-- [MDN: WebCodecs API](https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API) — flush() semantics, encodeQueueSize, close() requirement (HIGH confidence)
-- [W3C WebCodecs GitHub: Add GOP length to VideoEncoderConfig #444](https://github.com/w3c/webcodecs/issues/444) — keyframe interval limitations (HIGH confidence)
-- [W3C WebCodecs GitHub: encoding h264 issue #394](https://github.com/w3c/webcodecs/issues/394) — H.264 Firefox false-positive isConfigSupported (HIGH confidence)
-- [Mozilla Bugzilla: WebCodecs VideoDecoder fails on H.264 #1918769](https://bugzilla.mozilla.org/show_bug.cgi?id=1918769) — Firefox H.264 encoder/decoder bugs (HIGH confidence)
-- [caniuse: WebCodecs API](https://caniuse.com/webcodecs) — browser support matrix (HIGH confidence)
-- [Chromium Bug: HTML5 video memory leak #969049](https://bugs.chromium.org/p/chromium/issues/detail?id=969049) — GPU memory not freed after video replay (HIGH confidence)
-- [Mozilla Bug: HTML5 video memory too aggressive #1054170](https://bugzilla.mozilla.org/show_bug.cgi?id=1054170) — GPU memory per video element (HIGH confidence)
-- [Three.js GitHub: Texture from video leaks memory #9440](https://github.com/mrdoob/three.js/issues/9440) — WebGL texture + video element double GPU allocation (HIGH confidence)
-- [webrtcHacks: Video Frame Processing on the Web](https://webrtchacks.com/video-frame-processing-on-the-web-webassembly-webgpu-webgl-webcodecs-webnn-and-webtransport/) — GPU copy costs, WebCodecs memory opacity (HIGH confidence)
-- [Remotion: Clearing up WebCodecs misconceptions](https://www.remotion.dev/docs/webcodecs/misconceptions) — WebCodecs vs WebAssembly vs FFmpeg clarifications (HIGH confidence)
-- [Vanilagy/mp4-muxer → Mediabunny migration guide](https://vanilagy.github.io/mp4-muxer/MIGRATION-GUIDE.html) — mp4-muxer deprecation status (HIGH confidence)
-- [MDN: OffscreenCanvas](https://developer.mozilla.org/en-US/docs/Web/API/OffscreenCanvas) — transferControlToOffscreen one-way transfer restriction (HIGH confidence)
-- [Evil Martians: OffscreenCanvas + Web Workers](https://evilmartians.com/chronicles/faster-webgl-three-js-3d-graphics-with-offscreencanvas-and-web-workers) — worker rendering patterns; ImageBitmap transfer memory cost (MEDIUM confidence)
-- [W3C WebCodecs GitHub: VideoFrame from WebGPU #83](https://github.com/w3c/webcodecs/issues/83) — GPU texture integration complexity (MEDIUM confidence)
-- [MDN: HTMLMediaElement preload](https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/preload) — preload=auto memory implications (HIGH confidence)
+- [BBC audio-offset-finder](https://github.com/bbc/audio-offset-finder) -- MFCC-based cross-correlation with standard score confidence; 26 MFCCs, 512 FFT, 128 hop, z-score normalization (HIGH confidence, direct code analysis)
+- [GCC-PHAT: Generalized Cross Correlation with Phase Transform](https://xavieranguera.com/phdthesis/node92.html) -- Phase normalization for robustness to reverberation and frequency response differences (HIGH confidence, academic source)
+- [Shazam: An Industrial-Strength Audio Search Algorithm](https://www.ee.columbia.edu/~dpwe/papers/Wang03-shazam.pdf) -- Constellation map fingerprinting, peak detection in spectrograms (HIGH confidence, foundational paper)
+- [SpectroMap: Peak detection algorithm for audio fingerprinting](https://arxiv.org/pdf/2211.00982) -- Spectrogram peak parameters: minimum distance, relative threshold (HIGH confidence, peer-reviewed)
+- [Cross-Correlation and Spectral Audio Signal Processing](https://www.dsprelated.com/freebooks/sasp/Cross_Correlation.html) -- Circular vs linear correlation, zero-padding requirements (HIGH confidence, DSP textbook)
+- [FFT Convolution and Zero-Padding](https://www.matecdev.com/posts/julia-fft-convolution.html) -- M+N-1 padding for linear correlation from circular FFT (HIGH confidence)
+- [Understanding FFTs and Windowing](https://www.ni.com/en/shop/data-acquisition/measurement-fundamentals/analog-fundamentals/understanding-ffts-and-windowing.html) -- Hann vs Hamming vs Blackman window comparison (HIGH confidence, NI documentation)
+- [KISS FFT WASM vs fft.js performance](https://toughengineer.github.io/demo/dsp/fft-perf/) -- Browser FFT performance: WASM competitive with JS, data copy overhead (MEDIUM confidence, community benchmark)
+- [Web Worker Transferable Objects](https://developer.chrome.com/blog/transferable-objects-lightning-fast) -- Zero-copy transfer <10ms vs structured clone 302ms for 32MB (HIGH confidence, Chrome docs)
+- [postMessage performance benchmarks](https://surma.dev/things/is-postmessage-slow/) -- Typed array transfer costs by size (HIGH confidence)
+- [Performance issue of massive transferable objects](https://joji.me/en-us/blog/performance-issue-of-using-massive-transferable-objects-in-web-worker/) -- Chrome parsing overhead with many Transferable Objects (MEDIUM confidence, community analysis)
+- [Web Audio API performance notes](https://padenot.github.io/web-audio-perf/) -- Float32Array reuse, typed array allocator overhead (HIGH confidence, Mozilla developer)
+- [Selecting appropriate spectrogram parameters](https://avisoft.com/tutorials/selecting-appropriate-spectrogram-parameters/) -- FFT size vs frequency/time resolution tradeoff (HIGH confidence)
+- [Audio Deep Learning: Why Mel Spectrograms perform better](https://towardsdatascience.com/audio-deep-learning-made-simple-part-2-why-mel-spectrograms-perform-better-aad889a93505/) -- Mel vs linear scale for audio features (MEDIUM confidence)
+- [Digital spectrographic cross-correlation: tests of sensitivity](https://www.bioacoustics.info/article/digital-spectrographic-cross-correlation-tests-sensitivity) -- SPCC validation methodology with known-good references (MEDIUM confidence)
 
 ---
-*Pitfalls research for: Browser synced multi-cam playback + GPU composite video export (v2.0)*
-*Researched: 2026-03-02*
+*Pitfalls research for: Spectral audio synchronization algorithm (v2.3)*
+*Researched: 2026-03-28*
