@@ -9,11 +9,11 @@ Requirements for robust audio sync milestone. Each maps to roadmap phases.
 
 ### Algorithm
 
-- [ ] **ALG-01**: App uses GCC-PHAT (phase-normalized frequency-domain cross-correlation) instead of SynAudio Pearson correlation to compute sync offsets
-- [ ] **ALG-02**: Sync algorithm is robust to different recording devices (phone, DSLR, GoPro) producing different frequency responses of the same audio
-- [ ] **ALG-03**: Sync algorithm handles repetitive audio content (concerts, music) without silently locking onto the wrong beat
-- [ ] **ALG-04**: Sync algorithm uses Hann windowing and zero-padding for correct linear (not circular) cross-correlation
-- [ ] **ALG-05**: Sync algorithm uses parabolic peak interpolation for sub-sample offset accuracy
+- [x] **ALG-01**: App uses GCC-PHAT (phase-normalized frequency-domain cross-correlation) instead of SynAudio Pearson correlation to compute sync offsets
+- [x] **ALG-02**: Sync algorithm is robust to different recording devices (phone, DSLR, GoPro) producing different frequency responses of the same audio
+- [x] **ALG-03**: Sync algorithm handles repetitive audio content (concerts, music) without silently locking onto the wrong beat
+- [x] **ALG-04**: Sync algorithm uses Hann windowing and zero-padding for correct linear (not circular) cross-correlation
+- [x] **ALG-05**: Sync algorithm uses parabolic peak interpolation for sub-sample offset accuracy
 
 ### Pipeline
 
@@ -24,7 +24,7 @@ Requirements for robust audio sync milestone. Each maps to roadmap phases.
 
 ### Confidence
 
-- [ ] **CONF-01**: Confidence score is based on peak-to-noise-floor ratio, not raw correlation magnitude — distinguishes "clear unique match" from "multiple ambiguous peaks"
+- [x] **CONF-01**: Confidence score is based on peak-to-noise-floor ratio, not raw correlation magnitude — distinguishes "clear unique match" from "multiple ambiguous peaks"
 - [ ] **CONF-02**: Low confidence results produce a visible warning in the UI indicating sync may be inaccurate
 - [ ] **CONF-03**: Silence or near-silent audio is detected and surfaced as a warning to the user
 - [ ] **CONF-04**: Clipping distortion is detected and surfaced as a warning to the user
@@ -68,12 +68,12 @@ Deferred to v2.4+. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ALG-01 | Phase 14 | Pending |
-| ALG-02 | Phase 14 | Pending |
-| ALG-03 | Phase 14 | Pending |
-| ALG-04 | Phase 14 | Pending |
-| ALG-05 | Phase 14 | Pending |
-| CONF-01 | Phase 14 | Pending |
+| ALG-01 | Phase 14 | Complete |
+| ALG-02 | Phase 14 | Complete |
+| ALG-03 | Phase 14 | Complete |
+| ALG-04 | Phase 14 | Complete |
+| ALG-05 | Phase 14 | Complete |
+| CONF-01 | Phase 14 | Complete |
 | PIPE-01 | Phase 15 | Pending |
 | PIPE-02 | Phase 15 | Pending |
 | PIPE-03 | Phase 15 | Pending |
