@@ -40,6 +40,8 @@ Accurately sync multiple camera angles by audio so users get aligned video files
 
 ### Active
 
+- ✓ GCC-PHAT algorithm engine computes time-delay offsets and confidence scores, proven by 17 unit tests against synthetic signals — v2.3 Phase 14
+
 ## Current Milestone: v2.3 Robust Audio Sync
 
 **Goal:** Replace raw waveform Pearson correlation with a spectral/frequency-domain sync algorithm that works reliably across diverse audio scenarios — concerts, dialogue, ambient, different devices and positions.
@@ -109,4 +111,4 @@ Accurately sync multiple camera angles by audio so users get aligned video files
 | Widen label column w-32 → w-36 | Fit 3-line offset display (filename, ms offset, NLE timecode) | ✓ Good |
 
 ---
-*Last updated: 2026-03-28 after v2.3 milestone started*
+*Last updated: 2026-03-29 after Phase 14 (DSP Foundation) complete*
