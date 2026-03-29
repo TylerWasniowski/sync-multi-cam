@@ -9,20 +9,20 @@ Requirements for SEO milestone. Each maps to roadmap phases.
 
 ### Search Engine Meta Tags
 
-- [ ] **META-01**: Page has descriptive `<title>` replacing the "sync-multi-cam" slug (under 60 chars)
-- [ ] **META-02**: Page has `<meta name="description">` with 150-160 char value prop
-- [ ] **META-03**: Page has `<link rel="canonical">` pointing to production URL
-- [ ] **META-04**: Page has `<meta name="theme-color">` matching the dark app theme
+- [x] **META-01**: Page has descriptive `<title>` replacing the "sync-multi-cam" slug (under 60 chars)
+- [x] **META-02**: Page has `<meta name="description">` with 150-160 char value prop
+- [x] **META-03**: Page has `<link rel="canonical">` pointing to production URL
+- [x] **META-04**: Page has `<meta name="theme-color">` matching the dark app theme
 
 ### Social Sharing
 
-- [ ] **SOCIAL-01**: Page has Open Graph tags (og:title, og:description, og:type, og:url, og:image) in static HTML
-- [ ] **SOCIAL-02**: Page has `twitter:card` meta tag set to `summary_large_image`
+- [x] **SOCIAL-01**: Page has Open Graph tags (og:title, og:description, og:type, og:url, og:image) in static HTML
+- [x] **SOCIAL-02**: Page has `twitter:card` meta tag set to `summary_large_image`
 - [ ] **SOCIAL-03**: OG preview image placeholder (1200x630px) exists at a known public path with absolute HTTPS URL in og:image
 
 ### Structured Data
 
-- [ ] **SCHEMA-01**: Page has Schema.org WebApplication JSON-LD with name, description, applicationCategory, offers (price: 0), and browserRequirements
+- [x] **SCHEMA-01**: Page has Schema.org WebApplication JSON-LD with name, description, applicationCategory, offers (price: 0), and browserRequirements
 
 ### Crawler Infrastructure
 
@@ -66,14 +66,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| META-01 | Phase 17 | Pending |
-| META-02 | Phase 17 | Pending |
-| META-03 | Phase 17 | Pending |
-| META-04 | Phase 17 | Pending |
-| SOCIAL-01 | Phase 17 | Pending |
-| SOCIAL-02 | Phase 17 | Pending |
+| META-01 | Phase 17 | Complete |
+| META-02 | Phase 17 | Complete |
+| META-03 | Phase 17 | Complete |
+| META-04 | Phase 17 | Complete |
+| SOCIAL-01 | Phase 17 | Complete |
+| SOCIAL-02 | Phase 17 | Complete |
 | SOCIAL-03 | Phase 17 | Pending |
-| SCHEMA-01 | Phase 17 | Pending |
+| SCHEMA-01 | Phase 17 | Complete |
 | CRAWL-01 | Phase 17 | Pending |
 | CRAWL-02 | Phase 17 | Pending |
 | CRAWL-03 | Phase 17 | Pending |
