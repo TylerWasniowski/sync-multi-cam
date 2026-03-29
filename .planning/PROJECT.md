@@ -46,6 +46,23 @@ Accurately sync multiple camera angles by audio so users get aligned video files
 
 ### Active
 
+- [ ] HTML meta tags (title, description, keywords) for search engine indexing
+- [ ] Open Graph & Twitter Card meta tags for social sharing previews
+- [ ] Schema.org structured data (SoftwareApplication) for rich search results
+- [ ] robots.txt, sitemap.xml, and canonical URL for crawler discoverability
+- [ ] Proper `<head>` structure optimized for crawlers
+
+## Current Milestone: v2.4 SEO
+
+**Goal:** Make the app discoverable via search engines and shareable on social platforms.
+
+**Target features:**
+- HTML meta tags (title, description, keywords)
+- Open Graph & Twitter Card meta tags for social sharing previews
+- Schema.org structured data (SoftwareApplication)
+- robots.txt, sitemap.xml, canonical URL
+- Proper `<head>` structure for crawlers
+
 ### Out of Scope
 
 - Server-side processing — everything runs in-browser via WASM
@@ -108,4 +125,22 @@ Accurately sync multiple camera angles by audio so users get aligned video files
 | Widen label column w-32 → w-36 | Fit 3-line offset display (filename, ms offset, NLE timecode) | ✓ Good |
 
 ---
-*Last updated: 2026-03-29 after v2.3 Robust Audio Sync milestone shipped*
+## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd:transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd:complete-milestone`):
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state
+
+---
+*Last updated: 2026-03-29 after milestone v2.4 SEO started*
