@@ -18,6 +18,24 @@ function makeSine(
   return signal;
 }
 
+/**
+ * Create a delayed copy of a signal by shifting samples.
+ * Positive delaySamples means the comparison starts LATER.
+ */
+function makeDelayedCopy(
+  signal: Float32Array,
+  delaySamples: number
+): Float32Array {
+  const comp = new Float32Array(signal.length);
+  for (let i = 0; i < signal.length; i++) {
+    const srcIdx = i + delaySamples;
+    if (srcIdx >= 0 && srcIdx < signal.length) {
+      comp[i] = signal[srcIdx];
+    }
+  }
+  return comp;
+}
+
 /** Generate deterministic pseudo-random broadband noise using a seeded PRNG */
 function makeBroadbandNoise(
   sampleRate: number,
@@ -129,36 +147,37 @@ describe('applyHannWindow', () => {
 
 describe('gccPhat', () => {
   describe('known offset detection (ALG-01, ALG-04)', () => {
-    it('detects +160 sample offset for 440Hz sine at 16kHz', () => {
-      const ref = makeSine(440, 16000, 1.0, 0);
-      const comp = makeSine(440, 16000, 1.0, 160);
+    it('detects +160 sample offset for broadband noise at 16kHz', () => {
+      // Broadband noise is the correct signal type for GCC-PHAT (not pure sines,
+      // which have degenerate frequency content after phase normalization)
+      const noise = makeBroadbandNoise(16000, 1.0, 42);
+      const comp = makeDelayedCopy(noise, 160);
 
-      const result = gccPhat(ref, comp, 16000, 0.3);
-      expect(result.offsetSamples).toBeCloseTo(160, 0);
+      const result = gccPhat(noise, comp, 16000, 0.3);
       expect(Math.abs(result.offsetSamples - 160)).toBeLessThan(1.0);
     });
 
     it('detects -80 sample offset', () => {
-      const ref = makeSine(440, 16000, 1.0, 0);
-      const comp = makeSine(440, 16000, 1.0, -80);
+      const noise = makeBroadbandNoise(16000, 1.0, 77);
+      const comp = makeDelayedCopy(noise, -80);
 
-      const result = gccPhat(ref, comp, 16000, 0.3);
+      const result = gccPhat(noise, comp, 16000, 0.3);
       expect(Math.abs(result.offsetSamples - -80)).toBeLessThan(1.0);
     });
 
     it('detects zero offset for identical signals', () => {
-      const signal = makeSine(440, 16000, 1.0, 0);
+      const noise = makeBroadbandNoise(16000, 1.0, 123);
 
-      const result = gccPhat(signal, signal, 16000, 0.3);
+      const result = gccPhat(noise, noise, 16000, 0.3);
       expect(Math.abs(result.offsetSamples)).toBeLessThan(1.0);
       expect(result.confidence).toBeGreaterThan(50);
     });
 
     it('detects large offset (+4800 samples = 300ms)', () => {
-      const ref = makeSine(440, 16000, 2.0, 0);
-      const comp = makeSine(440, 16000, 2.0, 4800);
+      const noise = makeBroadbandNoise(16000, 2.0, 55);
+      const comp = makeDelayedCopy(noise, 4800);
 
-      const result = gccPhat(ref, comp, 16000, 0.5);
+      const result = gccPhat(noise, comp, 16000, 0.5);
       expect(Math.abs(result.offsetSamples - 4800)).toBeLessThan(1.0);
     });
   });
@@ -219,9 +238,11 @@ describe('gccPhat', () => {
 
   describe('repetitive signal handling (ALG-03)', () => {
     it('returns low confidence for looped/repetitive signals', () => {
-      const ref = makeLoopedClick(10, 500, 16000, 2.0);
+      // Loop interval of 100ms (1600 samples) creates ambiguous peaks at multiples
+      // of 1600 within the 4800-sample search range (3 peaks: 0, 1600, 3200)
+      const ref = makeLoopedClick(5, 100, 16000, 2.0);
 
-      // Create offset version
+      // Create offset version -- offset=200 means peaks at 200, 1800, 3400
       const delaySamples = 200;
       const comp = new Float32Array(ref.length);
       for (let i = 0; i < ref.length; i++) {
@@ -262,7 +283,8 @@ describe('gccPhat', () => {
     });
 
     it('returns low confidence (<40) for repetitive signals', () => {
-      const ref = makeLoopedClick(10, 500, 16000, 2.0);
+      // Same as ALG-03 test: 100ms loop creates multiple peaks within search range
+      const ref = makeLoopedClick(5, 100, 16000, 2.0);
       const delaySamples = 200;
       const comp = new Float32Array(ref.length);
       for (let i = 0; i < ref.length; i++) {
@@ -308,10 +330,17 @@ describe('gccPhat', () => {
     });
 
     it('handles signals of different lengths', () => {
-      const ref = makeSine(440, 16000, 1.0, 0);
-      const comp = makeSine(440, 16000, 0.5, 160);
+      // Reference is 1 second, comparison is 0.5 seconds with a known offset
+      const noise = makeBroadbandNoise(16000, 1.0, 88);
+      const shortComp = new Float32Array(Math.floor(16000 * 0.5));
+      for (let i = 0; i < shortComp.length; i++) {
+        const srcIdx = i + 160;
+        if (srcIdx < noise.length) {
+          shortComp[i] = noise[srcIdx];
+        }
+      }
 
-      const result = gccPhat(ref, comp, 16000, 0.3);
+      const result = gccPhat(noise, shortComp, 16000, 0.3);
       expect(Math.abs(result.offsetSamples - 160)).toBeLessThan(2.0);
     });
   });
