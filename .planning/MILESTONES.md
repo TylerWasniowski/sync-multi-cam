@@ -1,5 +1,25 @@
 # Milestones
 
+## v2.2 Cursor Fixes & UI Cleanup (Shipped: 2026-03-29)
+
+**Delivered:** Fixed waveform cursor/playback position bugs and replaced the standalone Sync Results panel with professional-grade inline offset display (milliseconds + NLE timecode) on waveform tracks. Removed entire trimming/ZIP pipeline as composite export covers the use case.
+
+**Phases completed:** 2 phases, 2 plans, 5 tasks
+**Timeline:** 20 days (2026-03-08 → 2026-03-28)
+**Codebase:** 5,791 LOC TypeScript
+**Requirements:** 4/4 shipped
+
+**Key accomplishments:**
+1. Fixed cursor/playhead position mismatch via dynamic label offset measurement
+2. Fixed play-from-beginning bug — playback starts from cursor position or sync start point
+3. Removed SyncResults download area and entire trimming/ZIP pipeline (-649 lines, 5 files deleted)
+4. Added NLE timecode offset display on waveform tracks (`+1.234s`, `00:00:01:07 @ 30fps`)
+5. Simplified sync pipeline: extract audio → correlate → done (no trimming/ZIP stages)
+
+**Archive:** `milestones/v2.2-ROADMAP.md`, `milestones/v2.2-REQUIREMENTS.md`
+
+---
+
 ## v2.1 UI Polish (Shipped: 2026-03-08)
 
 **Delivered:** Visual polish for muted track feedback, privacy messaging, and export controls redesign. Clearer visual hierarchy and better UX flow.

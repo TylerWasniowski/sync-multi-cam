@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A browser-based tool that synchronizes multiple video files by analyzing their audio tracks, then lets users preview all angles in a synced grid player and export a single composited MP4. Users drop in up to 30 video files from a multi-camera shoot, the app finds sync points via audio cross-correlation, trims videos to aligned start points (preserving original codecs including HEVC/HDR), and provides both individual downloads and a GPU-accelerated composite export. Runs entirely client-side, hosted statically on Cloudflare Pages.
+A browser-based tool that synchronizes multiple video files by analyzing their audio tracks, then lets users preview all angles in a synced grid player and export a single composited MP4. Users drop in up to 30 video files from a multi-camera shoot, the app finds sync points via audio cross-correlation, displays precise offsets (ms + NLE timecode) on waveform tracks, and provides GPU-accelerated composite export. Runs entirely client-side, hosted statically on Cloudflare Pages.
 
 ## Core Value
 
@@ -15,11 +15,11 @@ Accurately sync multiple camera angles by audio so users get aligned video files
 - ✓ User can drag-and-drop or browse to add up to 30 video files (MP4, MOV, MKV, WebM) — v1.0
 - ✓ App extracts audio tracks from uploaded videos using FFmpeg WASM — v1.0
 - ✓ App cross-correlates audio waveforms to determine time offsets with confidence scoring — v1.0
-- ✓ App trims videos to aligned start points via keyframe-aware stream-copy (no re-encode) — v1.0
-- ✓ UI displays timecode offsets and confidence scores for each video after sync — v1.0
-- ✓ App provides ZIP of all synced/trimmed video files with per-file and full-ZIP download buttons — v1.0
+- ✓ App trims videos to aligned start points via keyframe-aware stream-copy (no re-encode) — v1.0 (trimming pipeline removed in v2.2; composite export replaces individual file downloads)
+- ✓ UI displays timecode offsets and confidence scores for each video after sync — v1.0 (enhanced to NLE timecode in v2.2)
+- ✓ App provides ZIP of all synced/trimmed video files with per-file and full-ZIP download buttons — v1.0 (removed in v2.2; composite export covers use case)
 - ✓ App renders interactive audio waveforms with sync markers, linked zoom/pan/cursor — v1.0
-- ✓ Multi-stage progress indicator shows pipeline status (extracting, analyzing, trimming, zipping) — v1.0
+- ✓ Multi-stage progress indicator shows pipeline status (extracting, analyzing) — v1.0 (simplified in v2.2)
 - ✓ Entire app runs client-side with no server dependencies — v1.0
 - ✓ App deployed as static site on Cloudflare Pages with COOP/COEP headers — v1.0
 - ✓ Synced multi-cam video grid playback with dynamic aspect-ratio-aware packing — v2.0
@@ -33,17 +33,12 @@ Accurately sync multiple camera angles by audio so users get aligned video files
 - ✓ Muted waveform track visual — dim/gray the entire waveform row when muted — v2.1
 - ✓ Privacy messaging prominence — shield icon and message in drop zone — v2.1
 - ✓ Export controls redesign — centered bar, enlarged button, persistent completion state — v2.1
+- ✓ Cursor state matches cursor preview position 1:1 in audio tracks — v2.2
+- ✓ Play starts from cursor position or sync start point (not beginning) — v2.2
+- ✓ Sync Results download area removed; trimming/ZIP pipeline removed — v2.2
+- ✓ Waveform tracks display offset with ms precision and NLE timecode format — v2.2
 
 ### Active
-
-## Current Milestone: v2.2 Cursor Fixes & UI Cleanup
-
-**Goal:** Fix waveform cursor/playback bugs and remove redundant sync results UI, improving offset display precision for NLE users.
-
-**Target features:**
-- Fix cursor state not matching cursor preview in audio tracks
-- Fix play starting from beginning instead of cursor/sync start position
-- Remove Sync Results download area, show precise offsets (ms + timecode) on waveform tracks
 
 ### Out of Scope
 
@@ -58,8 +53,8 @@ Accurately sync multiple camera angles by audio so users get aligned video files
 
 ## Context
 
-- **Shipped v2.1** with 6,664 LOC TypeScript across 11 phases (4 v1.0 + 5 v2.0 + 2 v2.1) over 7 days
-- **Tech stack:** Vite + React 19 + Tailwind CSS v4 + FFmpeg WASM + SynAudio WASM SIMD + mp4box.js + fflate + Mediabunny (WebCodecs) + Web Audio API
+- **Shipped v2.2** with 5,791 LOC TypeScript across 13 phases (4 v1.0 + 5 v2.0 + 2 v2.1 + 2 v2.2) over 27 days
+- **Tech stack:** Vite + React 19 + Tailwind CSS v4 + FFmpeg WASM + SynAudio WASM SIMD + mp4box.js + Mediabunny (WebCodecs) + Web Audio API
 - **Deployed at:** https://sync-multi-cam.pages.dev
 - Target users: people doing multi-camera shoots (events, podcasts, interviews) who need a quick way to align angles, preview sync, and export a composite
 - **Known limitation:** Mixed aspect ratio videos use first video's AR for all export cells (future work)
@@ -70,7 +65,7 @@ Accurately sync multiple camera angles by audio so users get aligned video files
 - **Processing**: All video/audio work must happen in-browser via WASM/WebCodecs
 - **File size**: Limited by browser memory — practical limit around moderate-length videos
 - **Browser support**: Modern browsers with WASM, SharedArrayBuffer, and WebCodecs support
-- **Trim precision**: Stream-copy trims at keyframe boundaries only (sub-GOP alignment handled by NLEs)
+- **Trim precision**: Stream-copy trimming removed in v2.2 (composite export replaced individual file downloads)
 - **Export codec**: H.264 only (WebCodecs hardware encoder availability)
 
 ## Key Decisions
@@ -96,6 +91,11 @@ Accurately sync multiple camera angles by audio so users get aligned video files
 | Persistent export completion state | User feedback: auto-reset was confusing, prefer explicit "Export Another" reset | ✓ Good — clearer UX |
 | Mute button outside dim container | Structural isolation preserves full clickability vs CSS counter-opacity | ✓ Good |
 | Inline styles for dim transitions | Tailwind transition-all doesn't reliably cover CSS filter property | ✓ Good |
+| Dynamic label offset measurement | querySelector + getBoundingClientRect for layout-dependent cursor offsets | ✓ Good — accurate cursor alignment |
+| engine.seek(maxOffset) after creation | Set initial timeline position without modifying constructor API | ✓ Good — simple, non-invasive |
+| Remove trimming/ZIP pipeline entirely | Composite export replaces individual file downloads; clean break over dead code | ✓ Good — -649 lines, simpler pipeline |
+| 30fps NLE timecode default | NTSC standard, most common NLE timeline rate | ✓ Good — professional standard |
+| Widen label column w-32 → w-36 | Fit 3-line offset display (filename, ms offset, NLE timecode) | ✓ Good |
 
 ---
-*Last updated: 2026-03-08 after v2.2 milestone started*
+*Last updated: 2026-03-29 after v2.2 milestone complete*
