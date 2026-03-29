@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Robust Audio Sync
 status: executing
-stopped_at: Phase 16 context gathered
-last_updated: "2026-03-29T08:24:00.463Z"
+stopped_at: Completed 16-01-PLAN.md
+last_updated: "2026-03-29T08:43:55Z"
 last_activity: 2026-03-29
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 4
-  completed_plans: 4
-  percent: 33
+  completed_plans: 5
+  percent: 50
 ---
 
 # Project State
@@ -21,24 +21,24 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** Accurately sync multiple camera angles by audio so users get aligned video files without installing any software
-**Current focus:** Phase 15 — worker-integration-pipeline-swap
+**Current focus:** Phase 16 — validation-confidence-tuning
 
 ## Current Position
 
 Phase: 16
-Plan: Not started
-Status: Ready to execute
+Plan: 1 of 2 complete
+Status: Executing
 Last activity: 2026-03-29
 
-Progress: [███░░░░░░░] 33%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 1 (v2.3)
-- Average duration: 4min
-- Total execution time: 4min
+- Total plans completed: 2 (v2.3)
+- Average duration: 3.5min
+- Total execution time: 7min
 
 **By Phase:**
 
@@ -48,6 +48,7 @@ Progress: [███░░░░░░░] 33%
 
 *Updated after each plan completion*
 | Phase 15 P03 | 3min | 3 tasks | 4 files |
+| Phase 16 P01 | 3min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -61,6 +62,9 @@ v1.0, v2.0, v2.1, and v2.2 decisions archived in respective milestone files.
 - [15-02] try/finally guarantees worker.terminate() even on error paths
 - [Phase 15]: Warnings stored as parallel Map<fileId, AudioWarning[]> separate from SyncResult
 - [Phase 15]: Warning display in WaveformTrack label column, visible for both reference and non-reference tracks
+- [16-01] Excluded tests/ directory from vitest (Playwright specs were causing import failures)
+- [16-01] Discovery offset constants set to 0, to be calibrated after first Edge CDP run
+- [16-01] Hardcoded %20 for subdirectory spaces, encodeURIComponent per filename segment
 
 ### Pending Todos
 
@@ -72,6 +76,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-29T08:24:00.443Z
-Stopped at: Phase 16 context gathered
-Resume file: .planning/phases/16-validation-confidence-tuning/16-CONTEXT.md
+Last session: 2026-03-29T08:43:55Z
+Stopped at: Completed 16-01-PLAN.md
+Resume file: None

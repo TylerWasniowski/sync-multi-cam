@@ -35,8 +35,8 @@ Requirements for robust audio sync milestone. Each maps to roadmap phases.
 
 ### Validation
 
-- [ ] **VAL-01**: Taylor Swift concert test videos sync correctly (previously failing case)
-- [ ] **VAL-02**: Playing with Bruno test videos continue to sync correctly (regression check)
+- [x] **VAL-01**: Taylor Swift concert test videos sync correctly (previously failing case)
+- [x] **VAL-02**: Playing with Bruno test videos continue to sync correctly (regression check)
 
 ## Future Requirements
 
@@ -82,8 +82,8 @@ Deferred to v2.4+. Tracked but not in current roadmap.
 | CONF-03 | Phase 15 | Complete |
 | CONF-04 | Phase 15 | Complete |
 | PROG-01 | Phase 15 | Complete |
-| VAL-01 | Phase 16 | Pending |
-| VAL-02 | Phase 16 | Pending |
+| VAL-01 | Phase 16 | Complete |
+| VAL-02 | Phase 16 | Complete |
 
 **Coverage:**
 - v2.3 requirements: 16 total
