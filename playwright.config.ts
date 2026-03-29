@@ -22,7 +22,7 @@ export default defineConfig({
     },
     {
       name: 'edge-cdp',
-      testMatch: /edge-cdp-test/,
+      testMatch: /edge-cdp-test|sync-validation/,
       use: {
         // connectOverCDP handled in test file itself
         browserName: 'chromium',
