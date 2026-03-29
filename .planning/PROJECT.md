@@ -41,6 +41,7 @@ Accurately sync multiple camera angles by audio so users get aligned video files
 ### Active
 
 - ✓ GCC-PHAT algorithm engine computes time-delay offsets and confidence scores, proven by 17 unit tests against synthetic signals — v2.3 Phase 14
+- ✓ GCC-PHAT runs in Web Worker, SynAudio removed, per-pair progress reporting, audio quality warnings (silence/clipping/low confidence) — v2.3 Phase 15
 
 ## Current Milestone: v2.3 Robust Audio Sync
 
@@ -111,4 +112,4 @@ Accurately sync multiple camera angles by audio so users get aligned video files
 | Widen label column w-32 → w-36 | Fit 3-line offset display (filename, ms offset, NLE timecode) | ✓ Good |
 
 ---
-*Last updated: 2026-03-29 after Phase 14 (DSP Foundation) complete*
+*Last updated: 2026-03-29 after Phase 15 (Worker Integration + Pipeline Swap) complete*
