@@ -70,10 +70,10 @@
   2. Unit tests pass for signals recorded through different simulated frequency responses (high-pass, low-pass filtered versions of the same signal) and the offset is still correct
   3. Unit tests pass for repetitive signals (looped waveforms) and confidence score drops to reflect ambiguity rather than silently returning a wrong offset
   4. Confidence score clearly distinguishes a single sharp correlation peak (high confidence) from multiple similar-height peaks or flat noise floor (low confidence)
-**Plans**: TBD
+**Plans:** 1 plan
 
 Plans:
-- [ ] 14-01: TBD
+- [ ] 14-01-PLAN.md — GCC-PHAT algorithm TDD: test suite + fftEngine.ts implementation
 
 ### Phase 15: Worker Integration + Pipeline Swap
 **Goal**: Users click Sync and get results from the new GCC-PHAT engine running in a Web Worker, with per-pair progress reporting, audio quality warnings, and the exact same SyncResult interface — SynAudio dependency fully removed
@@ -123,6 +123,6 @@ Phases execute in numeric order: 14 → 15 → 16
 | 11. Export Bar Redesign | v2.1 | 1/1 | Complete | 2026-03-07 |
 | 12. Playback Cursor Fixes | v2.2 | 1/1 | Complete | 2026-03-09 |
 | 13. UI Cleanup | v2.2 | 1/1 | Complete | 2026-03-29 |
-| 14. DSP Foundation | v2.3 | 0/? | Not started | - |
+| 14. DSP Foundation | v2.3 | 0/1 | Not started | - |
 | 15. Worker Integration + Pipeline Swap | v2.3 | 0/? | Not started | - |
 | 16. Validation + Confidence Tuning | v2.3 | 0/? | Not started | - |
