@@ -1,342 +1,292 @@
-# Technology Stack
+# Stack Research
 
-**Project:** Sync Multi-Cam -- v2.3 Robust Audio Sync (Spectral Cross-Correlation)
-**Researched:** 2026-03-28
-**Confidence:** HIGH (core algorithm approach and library choice), MEDIUM (confidence scoring calibration)
+**Domain:** SEO for Vite React SPA on Cloudflare Pages
+**Researched:** 2026-03-29
+**Confidence:** HIGH
 
----
+## Recommended Stack
 
-## Context: What the Existing Stack Already Covers
+### Core Approach: Zero New Dependencies
 
-The following are already in place and do NOT need to change for v2.3:
+This is a single-page app with one URL and no client-side routing. Every SEO asset can be implemented with static files and direct HTML edits. No libraries needed.
 
-| Capability | Covered By |
-|------------|-----------|
-| Audio extraction (mono 16kHz PCM WAV) | @ffmpeg/ffmpeg ^0.12.15 via `audioExtractor.ts` |
-| Build, bundling, dev server | Vite ^7.3.1 (module Workers supported) |
-| UI components and state | React ^19.2.0 + TypeScript ~5.9.3 |
-| Styling | Tailwind CSS ^4.2.1 |
-| Export pipeline | WebCodecs + mediabunny ^1.35.1 |
-| Audio mixing | Web Audio API GainNode graph |
-| Container operations | mp4box ^2.3.0 |
-| COOP/COEP headers (SharedArrayBuffer/WASM SIMD) | Cloudflare Pages _headers + vite.config.ts |
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| Static `index.html` meta tags | N/A | SEO meta, OG tags, Twitter Cards | Crawlers (Google, Facebook, Twitter/X, Discord, LinkedIn) read raw HTML before JS executes. For a single-URL SPA, hardcoded tags in `index.html` are the most reliable approach. No JS library can improve on what's already in the static HTML. |
+| JSON-LD `<script>` block | Schema.org | Structured data (WebApplication) | Inline JSON-LD in `index.html` is Google's recommended format for structured data. No library needed -- it's a static JSON blob in a `<script type="application/ld+json">` tag. |
+| Static `robots.txt` | N/A | Crawler directives | Plain text file in `public/` directory. Vite copies `public/` to `dist/` automatically during build. |
+| Static `sitemap.xml` | N/A | URL discovery for crawlers | Single-URL sitemap is a static XML file. No generator needed for one page. |
+| Static OG image (PNG) | N/A | Social sharing preview image | 1200x630px PNG in `public/`. Referenced by `og:image` meta tag with absolute URL. |
 
-**What IS changing:** `synaudio ^0.4.0` (Pearson correlation on raw waveforms) is being replaced with a custom GCC-PHAT spectral cross-correlation engine.
+### Supporting Libraries
 
----
+**None required.** This is the key finding.
 
-## Why Replace SynAudio
+A single-page app with one URL and static content needs zero SEO libraries. All meta tags go directly in `index.html`. All discoverable assets (`robots.txt`, `sitemap.xml`, OG image) go in `public/`.
 
-SynAudio uses the **Pearson correlation coefficient** on raw time-domain audio samples -- a waveform-matching approach that compares amplitude values sample-by-sample. Its weaknesses for multi-camera sync:
+### Development/Validation Tools
 
-1. **Sensitive to frequency response differences** -- Different microphones (phone vs. DSLR vs. lav) produce different spectral profiles for the same sound event. Pearson correlation on raw samples sees these as "different signals."
-2. **Fooled by repetitive content** -- Music with repeating beats produces multiple high-correlation peaks at beat intervals, not just the true sync point.
-3. **Weak with reverb/room acoustics** -- Different distances from a sound source cause different reverb characteristics that alter the raw waveform shape.
-4. **Confidence scores are misleading** -- A Pearson coefficient of 0.6 on raw waveforms might mean "good sync, different mics" or "bad sync, similar mics." There is no way to distinguish.
-
-**Frequency-domain processing (GCC-PHAT) solves these problems** by normalizing magnitude and retaining only phase information. Two recordings of the same concert from different positions will have very different waveforms but identical phase relationships at the correct time delay.
+| Tool | Purpose | Notes |
+|------|---------|-------|
+| [Google Rich Results Test](https://search.google.com/test/rich-results) | Validate JSON-LD structured data produces rich results | Test after deploy. Accepts URL or code snippet. Required properties: `name`, `offers.price`, and either `aggregateRating` or `review`. |
+| [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/) | Validate OG tags render correctly for Facebook/LinkedIn | Scrapes URL and shows preview. Use to clear Facebook cache after updates. |
+| [Twitter Card Validator](https://cards-dev.twitter.com/validator) | Validate Twitter/X Card tags | Twitter/X falls back to OG tags if `twitter:` tags are missing. |
+| [Schema.org Validator](https://validator.schema.org/) | Validate structured data JSON-LD syntax | Catches JSON-LD errors before deploy. |
+| [opengraph.xyz](https://www.opengraph.xyz/) | Preview OG appearance across platforms | Quick visual check without needing platform accounts. |
 
 ---
 
-## Recommended Stack Addition for v2.3
+## What Goes Where
 
-### Core: FFT Library
+### 1. `index.html` `<head>` Section
 
-| Technology | Version | Purpose | Why | Confidence |
-|------------|---------|---------|-----|------------|
-| **fft.js** | ^4.0.4 | Fast Fourier Transform (forward and inverse) for GCC-PHAT | Pure JS, zero dependencies, 5 KB minified, MIT license. Radix-4/Radix-2 implementation -- the fastest pure-JS FFT available. Works in Web Workers without any configuration (no WASM instantiation, no SharedArrayBuffer requirements beyond what we already have). 44 dependents on npm including major audio libraries. For our use case (one large FFT per audio pair for cross-correlation), pure JS performance is adequate -- the FFT is not the bottleneck. | HIGH |
+The `<head>` currently has only `<meta charset>`, favicon, viewport, and a bare `<title>`. All SEO tags go here as static HTML:
 
-**This is the only new npm dependency for v2.3.**
+```html
+<!-- Basic SEO -->
+<title>Sync Multi-Cam -- Free Browser-Based Multi-Camera Video Sync Tool</title>
+<meta name="description" content="Synchronize multiple camera angles by audio in your browser. Drop video files, auto-detect sync points, preview in a synced grid, and export a composited MP4. Free, private, no upload required." />
+<link rel="canonical" href="https://sync-multi-cam.pages.dev/" />
+<meta name="robots" content="index, follow" />
 
-### Why fft.js Over Alternatives
+<!-- Open Graph (Facebook, LinkedIn, Discord, Slack, iMessage) -->
+<meta property="og:title" content="Sync Multi-Cam -- Free Multi-Camera Video Sync" />
+<meta property="og:description" content="Synchronize multiple camera angles by audio in your browser. Free, private, no upload." />
+<meta property="og:image" content="https://sync-multi-cam.pages.dev/og-image.png" />
+<meta property="og:url" content="https://sync-multi-cam.pages.dev/" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Sync Multi-Cam" />
+<meta property="og:locale" content="en_US" />
 
-| Alternative | Why Not |
-|-------------|---------|
-| KissFFT WASM (kissfft-js, PulseFFT) | WASM adds complexity: async instantiation, memory management, data copying overhead between JS and WASM linear memory. At our FFT sizes (millions of points, done once per pair), the WASM copying overhead is significant. We already have FFmpeg WASM -- adding another WASM module increases bundle size and complexity for marginal speed gain on a non-bottleneck operation. fft.js is only ~1.5x slower at large sizes in Chrome, and performs comparably or faster in Firefox. |
-| WebFFT (metalibrary) | Pulls in multiple FFT implementations (~50+ KB), auto-benchmarks them at runtime. Overkill -- we need one FFT implementation for one algorithm. The v0.1.58 release (Jan 2024) had community concerns about memory management in heap-allocated objects. |
-| pffft.wasm | Window size capped at 4096 samples. GCC-PHAT needs FFT size equal to next-power-of-2 of the combined signal lengths (potentially millions of points). The 4096 cap makes pffft.wasm unusable for our core algorithm. |
-| essentia.js | Full music analysis framework (1.2 MB WASM binary). Includes hundreds of algorithms we never use. Last npm publish was 4+ years ago (v0.1.3). Overkill for a single cross-correlation algorithm. |
-| Web Audio API AnalyserNode | Only works in real-time with AudioContext. Cannot process offline Float32Array buffers directly. Returns only magnitude (no phase information, no complex spectrum). Not suitable for GCC-PHAT which requires full complex FFT output. |
+<!-- Twitter/X Card -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Sync Multi-Cam -- Free Multi-Camera Video Sync" />
+<meta name="twitter:description" content="Synchronize multiple camera angles by audio in your browser. Free, private, no upload." />
+<meta name="twitter:image" content="https://sync-multi-cam.pages.dev/og-image.png" />
 
-### Performance Evidence
-
-From the [KISS FFT vs fft.js benchmark comparison](https://toughengineer.github.io/demo/dsp/fft-perf/):
-- At small sizes (128-512): fft.js matches or beats WASM in Chrome
-- At large sizes (8192+): KISS FFT zero-copy WASM is ~2-5x faster, but fft.js still achieves tens of thousands of transforms/second
-- Key insight: "fft.js has great performance in Chrome" but performs "several times slower" in Firefox. KISS FFT WASM "provides better performance across browsers." However, for our use case we run ~3-6 FFTs per sync session (not thousands), so even the slower Firefox performance of fft.js completes in seconds.
-- fft.js is 5 KB vs KISS FFT WASM at 55 KB -- 11x smaller footprint
-
----
-
-## Algorithm: GCC-PHAT (Custom Implementation)
-
-The algorithm itself is NOT a library -- it is ~150 lines of TypeScript built on top of fft.js. GCC-PHAT (Generalized Cross-Correlation with Phase Transform) is the standard algorithm for Time Delay of Arrival (TDOA) estimation in acoustics research.
-
-### Why GCC-PHAT
-
-| Property | Pearson (current) | GCC-PHAT (new) |
-|----------|-------------------|----------------|
-| Operates on | Raw waveform amplitudes | Phase information (magnitude normalized away) |
-| Different mic responses | Confused (different spectral shape = low correlation) | Robust (magnitude differences normalized out) |
-| Reverb/room effects | Confused (echo alters waveform shape) | Robust (phase weighting suppresses reverb peaks) |
-| Repetitive content | Multiple equally-high peaks at beat intervals | Better peak discrimination (phase is more unique than amplitude for timing) |
-| Precision | Sample-level | Sub-sample (via parabolic interpolation on peak) |
-| Speed | Fast (WASM SIMD) | Comparable (3 FFTs per pair in JS) |
-
-### Algorithm Steps
-
-```
-Input: reference PCM (Float32Array), comparison PCM (Float32Array)
-Output: { offsetSamples: number, confidence: number }
-
-1. Apply Hann window to both signals
-2. Zero-pad both to fftSize = nextPowerOf2(len_ref + len_comp)
-3. FFT(ref) and FFT(comp) using fft.js realTransform
-4. Cross-power spectrum: G(f) = FFT(ref) * conj(FFT(comp))
-5. Phase transform: W(f) = G(f) / |G(f)|  (normalize magnitude to 1)
-6. IFFT(W) -> gcc_phat correlation function
-7. Find peak within plausible offset range (+/- MAX_SYNC_OFFSET_SECONDS)
-8. Compute confidence from peak-to-noise-floor ratio
+<!-- Structured Data: WebApplication (Schema.org via JSON-LD) -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Sync Multi-Cam",
+  "url": "https://sync-multi-cam.pages.dev/",
+  "description": "Synchronize multiple camera angles by audio in your browser. Drop video files, auto-detect sync points, preview in a synced grid, and export a composited MP4. Free, private, no upload required.",
+  "applicationCategory": "MultimediaApplication",
+  "operatingSystem": "Any",
+  "browserRequirements": "Modern browser with WebAssembly and SharedArrayBuffer support (Chrome, Edge, Firefox, Safari 16.4+)",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  }
+}
+</script>
 ```
 
-This is approximately 150 lines of TypeScript total across 3 files (window functions, GCC-PHAT core, peak finding).
+**Notes on tag choices:**
+- `og:type` is `website` (not `product` or `article`) -- the Open Graph spec says `website` requires no additional properties beyond the four required tags
+- `og:image` uses absolute URL -- required by OG spec, relative paths do not work
+- Twitter/X `twitter:card` set to `summary_large_image` for the prominent preview format
+- Twitter/X falls back to OG tags, but explicit `twitter:*` tags ensure control over the preview
+- JSON-LD uses `WebApplication` (subtype of `SoftwareApplication`) -- Google supports this for rich results and it has the `browserRequirements` property specific to web apps
+- Google requires `name` + `offers.price` + (`aggregateRating` OR `review`) for rich result eligibility. Without user reviews/ratings, the structured data still helps understanding but won't generate star ratings in search. This is fine -- adding fake reviews would violate Google guidelines.
 
-### Why NOT a Full Spectrogram Approach
+### 2. `public/robots.txt`
 
-The ARCHITECTURE.md for this milestone identifies full spectrogram computation (STFT with sliding windows + mel filterbank + spectrogram cross-correlation) as an **anti-pattern** for time-delay estimation:
+```
+User-agent: *
+Allow: /
 
-- **Slower**: STFT requires thousands of small FFTs (one per hop); GCC-PHAT requires 3 large FFTs total
-- **Less precise**: Spectrogram resolution is quantized to the hop size (~32ms); GCC-PHAT gives sub-sample precision (~62 microseconds at 16kHz)
-- **More memory**: Full spectrogram for 5 minutes of audio is large; GCC-PHAT operates on the same PCM data already in memory
-- **More code**: STFT + mel filterbank + spectrogram correlation is ~300 lines; GCC-PHAT core is ~150 lines
-
-GCC-PHAT on the full signal is both faster and more accurate for finding a single time offset between two recordings of the same event.
-
-### Confidence Scoring: Peak Sharpness
-
-Replace `Math.abs(correlation) * 100` with peak-to-noise-floor ratio:
-
-```typescript
-// Peak of GCC-PHAT output vs. mean of correlation values (excluding peak neighborhood)
-// Sharp spike = high confidence (unambiguous offset)
-// Flat or multi-peaked = low confidence (ambiguous -- repetitive content or weak signal)
-ratio = peakValue / meanNoiseFloor;
-confidence = clamp((ratio - 2) / 13, 0, 1);  // Maps ratio 2-15 to 0-1
+Sitemap: https://sync-multi-cam.pages.dev/sitemap.xml
 ```
 
-This produces interpretable scores: high confidence means "one clear peak," low confidence means "ambiguous -- multiple candidate offsets or no strong correlation."
+Simple and permissive. The `Allow: /` is technically redundant (crawlers assume allowed by default) but makes intent explicit. The `Sitemap:` directive helps crawlers discover the sitemap without needing Google Search Console submission.
 
----
+### 3. `public/sitemap.xml`
 
-## What NOT to Add
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://sync-multi-cam.pages.dev/</loc>
+    <lastmod>2026-03-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>
+```
 
-| Do Not Add | Why | What Handles It Instead |
-|------------|-----|------------------------|
-| essentia.js | 1.2 MB WASM binary. Hundreds of unused algorithms. Stale npm (4+ years). | ~150 lines of custom GCC-PHAT using fft.js |
-| Chromaprint / AcoustID | Audio fingerprinting for music identification -- wrong problem. We need time-delay estimation, not content matching. No maintained browser WASM build. | GCC-PHAT cross-correlation |
-| WebFFT | Metalibrary overkill. Multiple FFT implementations and runtime benchmarking. We need one algorithm run a handful of times. | fft.js (5 KB, proven) |
-| TensorFlow.js | ML-based audio analysis is unnecessary. Classical DSP (GCC-PHAT) is the optimal solution for TDOA. TF.js adds 300+ KB and model files. | Custom DSP with fft.js |
-| Superpowered Web Audio SDK | Commercial SDK for real-time audio effects. Wrong domain -- we need offline analysis. | Custom analysis pipeline |
-| KissFFT WASM variants | Additional WASM module. Marginal speed gain does not justify complexity for ~3 FFTs per sync pair. Removing SynAudio WASM and not adding new WASM reduces project complexity. | fft.js (pure JS, zero overhead) |
-| Meyda | Feature extraction library. We do not need MFCC, spectral centroid, or other features. GCC-PHAT operates directly on raw PCM -- no feature extraction step needed. | Direct PCM processing |
-| Full STFT / mel spectrogram pipeline | Slower, less precise, more code than direct GCC-PHAT for time-delay estimation. An anti-pattern for this specific problem. | Single full-signal GCC-PHAT |
+A single-URL sitemap. Update `<lastmod>` when deploying content changes. `<changefreq>` and `<priority>` are advisory hints to crawlers (Google says it largely ignores them, but they cost nothing to include).
 
----
+### 4. `public/og-image.png`
 
-## Integration Points with Existing Code
+| Property | Value | Rationale |
+|----------|-------|-----------|
+| Dimensions | 1200 x 630 px | Universal standard. Works on Facebook, LinkedIn, Twitter/X, Discord, Slack, iMessage. |
+| Format | PNG | Sharp text and UI elements render better in PNG than JPEG. |
+| File size | Under 300 KB | Faster loading. Max allowed is 5 MB (Twitter) / 8 MB (Facebook), but smaller is better. |
+| Safe zone | 60-80 px padding on all sides | Platforms crop differently. Keep text/logos away from edges. |
+| Content | App name + tagline + visual of multi-cam grid | Should communicate what the tool does at a glance. |
+| Twitter crop note | Twitter/X uses 2:1 ratio (crops ~15px top and bottom from 1200x630) | Keep critical content in the center 1200x600 area. |
 
-### What Changes
+### 5. `public/_headers` Update (CRITICAL)
 
-| File | Change | Scope |
-|------|--------|-------|
-| `src/lib/audioSync.ts` | Replace SynAudio calls with new GCC-PHAT engine | Rewrite internals of `syncAudioTracks()`. **Same function signature and return type preserved.** |
-| `src/lib/constants.ts` | Add GCC-PHAT parameters, remove SynAudio-specific ones | Replace `CORRELATION_SAMPLE_SIZE` and `INITIAL_GRANULARITY` with `MAX_SYNC_OFFSET_SECONDS` and `GCC_CONFIDENCE_THRESHOLD` |
-| `package.json` | Remove `synaudio`, add `fft.js` | Net reduction in WASM footprint, bundle size decreases |
+The existing `_headers` applies `Cross-Origin-Embedder-Policy: require-corp` to ALL paths (`/*`). Social media crawlers are NOT browsers -- they do not negotiate CORP/CORS. The COEP header on the OG image response may cause social crawlers to fail fetching the image, resulting in link previews with no image.
 
-### What Does NOT Change
+**Update `_headers` to unset COOP/COEP on static SEO assets:**
 
-| File | Why Unchanged |
-|------|---------------|
-| `src/lib/audioExtractor.ts` | Still produces `AudioData { channelData: Float32Array[], samplesDecoded, sampleRate }` at 16kHz mono. GCC-PHAT consumes Float32Array identically. |
-| `src/types/index.ts` | `SyncResult` interface unchanged: `{ fileId, fileName, offsetSeconds, offsetSamples, confidence, isReference }`. Confidence scoring changes internally but the 0-100 range is preserved. |
-| `src/lib/audioSync.ts` (public API) | `syncAudioTracks()` signature unchanged: `(tracks, onProgress?) => Promise<SyncResult[]>`. All UI code sees no API change. |
-| All UI components | Zero changes. Pipeline is fully encapsulated behind `syncAudioTracks()`. |
-| `src/lib/waveformPeaks.ts` | Operates on raw PCM, independent of sync algorithm. |
-| Export pipeline | Consumes `SyncResult[]` offsets. Unchanged. |
+```
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
 
-### New Files
+/og-image.png
+  ! Cross-Origin-Embedder-Policy
+  ! Cross-Origin-Opener-Policy
+  Access-Control-Allow-Origin: *
 
-| File | Purpose | Lines (est.) |
-|------|---------|-------------|
-| `src/lib/spectralSync.ts` | Main-thread API: creates worker, transfers buffers, returns Promise | ~60 |
-| `src/lib/spectralSyncWorker.ts` | Web Worker: receives PCM, runs FFT + GCC-PHAT, posts result | ~80 |
-| `src/lib/fftEngine.ts` | Pure math: Hann window, GCC-PHAT core, peak finding, confidence | ~120 |
-| `src/lib/__tests__/fftEngine.test.ts` | Unit tests with synthetic signals at known offsets | ~100 |
-| `src/lib/__tests__/spectralSync.test.ts` | Integration tests for worker-based sync | ~60 |
+/robots.txt
+  ! Cross-Origin-Embedder-Policy
+  ! Cross-Origin-Opener-Policy
 
-**Total new code: ~420 lines** (including tests). This replaces the SynAudio WASM dependency entirely.
+/sitemap.xml
+  ! Cross-Origin-Embedder-Policy
+  ! Cross-Origin-Opener-Policy
+```
+
+The `!` syntax in Cloudflare Pages `_headers` unsets a previously set header. `Access-Control-Allow-Origin: *` on the OG image allows any origin to fetch it (the image is public by design). COOP/COEP remain on all other paths (HTML, JS, WASM) to preserve SharedArrayBuffer support.
 
 ---
 
 ## Installation
 
 ```bash
-# Add new FFT library
-npm install fft.js
-
-# Remove old correlation library
-npm uninstall synaudio
+# No packages to install.
+# All changes are static file edits:
+#
+#   1. Edit index.html <head> section (add meta tags + JSON-LD)
+#   2. Create public/robots.txt (4 lines)
+#   3. Create public/sitemap.xml (8 lines)
+#   4. Create/place public/og-image.png (design asset, 1200x630px)
+#   5. Update public/_headers (unset COOP/COEP on SEO assets)
+#   6. Optionally update public/vite.svg -> proper favicon
 ```
-
-Net dependency change: **-1 WASM module (~50+ KB), +1 pure JS library (~5 KB)**. Bundle size decreases.
-
-**TypeScript types:** fft.js does not ship TypeScript declarations. A small `.d.ts` file is needed:
-
-```typescript
-// src/types/fft.js.d.ts
-declare module 'fft.js' {
-  export default class FFT {
-    constructor(size: number);
-    size: number;
-    createComplexArray(): Float32Array;
-    toComplexArray(input: Float32Array, storage?: Float32Array): Float32Array;
-    fromComplexArray(complex: Float32Array, storage?: Float32Array): Float32Array;
-    realTransform(output: Float32Array, input: Float32Array): void;
-    completeSpectrum(spectrum: Float32Array): void;
-    transform(output: Float32Array, input: Float32Array): void;
-    inverseTransform(output: Float32Array, input: Float32Array): void;
-  }
-}
-```
-
----
-
-## Key Parameters
-
-| Parameter | Value | Rationale |
-|-----------|-------|-----------|
-| Sample rate | 16000 Hz (existing) | Adequate for sync. Captures up to 8kHz (Nyquist), covering all transients and percussive content. No change needed. |
-| FFT size | nextPowerOf2(ref.length + comp.length) | Must accommodate both signals for linear (non-circular) cross-correlation. For two 5-minute clips: 2^23 = 8,388,608. |
-| Window function | Hann | Standard for FFT-based cross-correlation. Smooth taper prevents spectral leakage at signal boundaries. |
-| Max offset search | 300 seconds (5 minutes) | Maximum plausible start-time difference between cameras at same event. Limits peak search range. |
-| Confidence threshold | 0.15 (GCC-PHAT peak sharpness) | Below this, sync is unreliable. Maps to ~25 on the 0-100 scale shown to users. |
-| Epsilon for phase transform | 1e-10 | Prevents division by zero when |G(f)| is near-zero. Bins below epsilon are set to zero. |
-
----
-
-## Web Worker Architecture
-
-The project already uses Vite module Workers (`new Worker(new URL('./exportWorker.ts', import.meta.url), { type: 'module' })`). The same pattern applies here. fft.js is pure JavaScript with no DOM dependencies -- it imports cleanly in a module Worker.
-
-### Worker Lifecycle
-
-- **Create** when `syncAudioTracks()` is called
-- **Init**: Send reference track, worker computes and caches reference FFT (computed once, reused for all comparisons)
-- **Compare**: For each comparison track, send its PCM data, worker runs GCC-PHAT against cached reference FFT
-- **Terminate** after all comparisons complete, freeing ~275 MB of FFT buffers
-
-### Data Transfer
-
-- **Reference buffer**: Must be **copied** before transfer (original needed for all comparisons; transfer detaches the buffer)
-- **Comparison buffers**: Can be **transferred** (zero-copy) since each is used only once and peaks are already computed by the time sync runs
-
----
-
-## Browser Requirements (v2.3 additions)
-
-**No new browser requirements.** The spectral sync engine uses only:
-
-- `Float32Array` -- universal
-- `Web Worker` with `type: 'module'` -- Chrome 80+, Firefox 114+, Safari 15+ (already required by existing export Worker)
-- Basic math operations -- universal
-
-The removal of SynAudio actually **reduces** browser requirements by removing one WASM SIMD dependency. Browsers that support WASM but not WASM SIMD (some older mobile browsers) gain compatibility.
-
----
-
-## Performance Estimates
-
-### Per-Pair Timing (5-minute clips at 16kHz)
-
-| Step | Estimated Time | Notes |
-|------|---------------|-------|
-| Hann window (2x) | ~5 ms | Simple multiply loop on 4.8M floats |
-| Zero-pad to FFT size | ~2 ms | TypedArray allocation + copy |
-| FFT reference | ~100-200 ms | 8M-point real FFT via fft.js |
-| FFT comparison | ~100-200 ms | Same |
-| Cross-power + phase transform | ~30 ms | Element-wise complex multiply + normalize |
-| IFFT | ~100-200 ms | 8M-point inverse FFT |
-| Peak finding | ~5 ms | Linear scan of constrained range |
-| **Total per pair** | **~350-650 ms** | |
-
-### Full Sync Session
-
-| Scenario | Pairs | Estimated Total | Notes |
-|----------|-------|----------------|-------|
-| 2 cameras, 5 min | 1 | ~0.5-0.7 s | Reference FFT + 1 comparison |
-| 4 cameras, 5 min | 3 | ~1.0-1.5 s | Reference FFT computed once, reused |
-| 8 cameras, 5 min | 7 | ~2.5-4.0 s | |
-| 30 cameras, 5 min | 29 | ~10-18 s | Dominated by comparison FFTs |
-
-Comparable to current SynAudio performance. The trade-off is not speed -- it is **accuracy and robustness**. GCC-PHAT produces correct results in scenarios where Pearson correlation fails entirely.
-
-### Memory Per Pair (in Web Worker)
-
-| Data | Size | Notes |
-|------|------|-------|
-| Reference PCM | 19.2 MB | 5 * 60 * 16000 * 4 bytes |
-| Comparison PCM | 19.2 MB | Same |
-| Reference FFT (complex) | 67.1 MB | fftSize * 2 * 4 bytes |
-| Cross-power spectrum | 67.1 MB | Same shape |
-| Correlation output | 33.6 MB | fftSize * 4 bytes |
-| **Peak worker memory** | **~275 MB** | All arrays simultaneously |
-
-Feasible in a Web Worker. Reference FFT persists across comparisons (computed once). Sequential pair processing means only one comparison's buffers exist at a time.
 
 ---
 
 ## Alternatives Considered
 
-| Recommended | Alternative | When Alternative Makes Sense |
-|-------------|-------------|-------------------------------|
-| fft.js (pure JS, 5 KB) | KissFFT WASM (55 KB) | Only if processing hours of audio where the ~2-5x WASM speed advantage matters. For 3-5 minute multi-cam recordings, pure JS is fast enough and dramatically simpler. |
-| GCC-PHAT (single-stage) | Two-stage: mel spectrogram coarse + GCC-PHAT fine | If GCC-PHAT alone proves insufficient for extremely repetitive music content. The mel spectrogram layer adds a perceptual pre-filter. Reserve as enhancement if needed -- start simple. |
-| GCC-PHAT (single-stage) | Meyda MFCC feature extraction | If we discover that the algorithm needs additional perceptual features. MFCC adds ~30 KB dependency. Not needed for TDOA. |
-| Custom ~150 lines | Full audio fingerprinting (Shazam-style) | If we needed to match audio across entirely different recordings (cover songs, remixes). For multi-cam sync of the same event, GCC-PHAT is simpler and more appropriate. |
-| Peak sharpness confidence | Pearson magnitude confidence | Never -- Pearson magnitude is not interpretable for cross-device recordings. Peak sharpness directly measures "how unambiguous is this offset?" |
-| Custom ~150 lines | essentia.js (1.2 MB WASM) | Never for this project. essentia.js solves a different class of problems (music information retrieval, chord detection, BPM). Massive dependency for zero benefit. |
+| Recommended | Alternative | When to Use Alternative |
+|-------------|-------------|-------------------------|
+| Static `index.html` meta tags | `react-helmet-async` | Only if you add client-side routing with multiple "pages" that need different meta per route. For a single-URL app, it adds ~8 KB of JS to manage tags that crawlers already see in static HTML. Provides zero SEO benefit for this use case. |
+| Static `index.html` meta tags | `vite-plugin-html` / `vite-plugin-meta-tags` | Only if you need environment-variable injection into meta tags at build time (e.g., different OG URLs for staging vs. production). Not needed when the canonical URL is fixed. |
+| Static `index.html` meta tags | `vite-plugin-react-meta-map` | Only if you have multiple HTML entry points. This app has one page. |
+| Hand-written JSON-LD | `schema-dts` (TypeScript types for Schema.org) | Only if generating complex, dynamic structured data programmatically. A static 15-line JSON block is written once and validated with Google's tool. |
+| Static `robots.txt` / `sitemap.xml` | `vite-plugin-sitemap` | Only if you have dynamic routes to enumerate at build time. Single-URL sitemap is 8 lines of XML. |
+| Static OG image (designed manually) | `@vercel/og` / dynamic OG image generation | Only if you need per-page dynamic images. This app has one page and one static image. |
+| Do nothing (current state) | Full SSR migration (Next.js/Remix) | Never for this app. SharedArrayBuffer requires COOP/COEP headers, which complicate SSR. WASM processing is inherently client-side. SSR adds server cost for zero benefit -- the tool has no server-rendered content. |
+
+---
+
+## What NOT to Use
+
+| Avoid | Why | Use Instead |
+|-------|-----|-------------|
+| `react-helmet` (original, deprecated) | Unmaintained. Not safe with React 19 concurrent rendering. Last significant update was years ago. | Static HTML meta tags (no library needed for single page) |
+| `react-helmet-async` | Adds runtime JS to dynamically manage `<head>` for what is a static, single-page app. Social crawlers and Googlebot read raw HTML -- they do not execute React. The tags must be in the static HTML regardless, making the library redundant. | Static meta tags in `index.html` |
+| `<meta name="keywords">` | Google officially stopped using keywords meta tag in 2009. Bing may treat it as a spam signal. Wastes bytes and signals outdated SEO practices. | Omit entirely. Focus on title, description, and structured data. |
+| Any SSR/SSG framework (Next.js, Remix, Astro) | Massive architectural change. SharedArrayBuffer + COOP/COEP headers required for WASM make SSR impractical. Adds server-side compute costs (breaks Cloudflare Pages static hosting). The app's value is 100% client-side processing. | Static meta tags + JSON-LD. Google crawls JS-rendered content (just slower), and the static HTML provides everything crawlers need. |
+| `prerender.io` / `react-snap` | Pre-rendering services that generate static HTML snapshots for crawlers. Unnecessary because the `index.html` already IS the static HTML -- there is no dynamic content that needs pre-rendering for SEO. The app content (video sync) is user-generated at runtime, not indexable content. | Direct `index.html` edits |
+| `next-seo` | Next.js-specific library. Not compatible with Vite + React. | Static meta tags |
+| Vite meta tag generator plugins | Add build-time dependency for tags that never change. Static text does not need a build plugin. Adds fragility (plugin version bumps, breaking changes) for zero benefit. | Hand-written meta tags in `index.html` |
+| `llms.txt` | Emerging AI crawling standard, but no major AI platform has confirmed reading it. Unratified community proposal. Not relevant for a tool app (no content library for LLMs to index). | Not applicable -- skip entirely |
+
+---
+
+## Cloudflare Pages Integration
+
+### How Static Files Deploy
+
+Vite's `public/` directory is copied to `dist/` root as-is during build. Cloudflare Pages serves everything in `dist/`. This means:
+
+- `public/robots.txt` -> `dist/robots.txt` -> `https://sync-multi-cam.pages.dev/robots.txt`
+- `public/sitemap.xml` -> `dist/sitemap.xml` -> `https://sync-multi-cam.pages.dev/sitemap.xml`
+- `public/og-image.png` -> `dist/og-image.png` -> `https://sync-multi-cam.pages.dev/og-image.png`
+- `public/_headers` -> `dist/_headers` (Cloudflare reads this for header rules)
+
+### Configuration Changes
+
+| Config File | Change Needed | Why |
+|-------------|---------------|-----|
+| `vite.config.ts` | None | Static files in `public/` are handled by default Vite behavior |
+| `package.json` | None | No new dependencies. Build/deploy scripts unchanged. |
+| `public/_headers` | **YES** -- unset COOP/COEP on SEO asset paths | Social crawlers cannot negotiate CORP/CORS. COEP `require-corp` on OG image may block crawlers from fetching it. See `_headers` update section above. |
+| Deploy command | None | `npm run build && npx wrangler pages deploy dist` still works |
+
+### OG Image Absolute URL Requirement
+
+The `og:image` tag MUST use an absolute URL with protocol:
+```html
+<!-- CORRECT -->
+<meta property="og:image" content="https://sync-multi-cam.pages.dev/og-image.png" />
+
+<!-- WRONG - will not work for social crawlers -->
+<meta property="og:image" content="/og-image.png" />
+```
+
+This is per the Open Graph protocol specification. Relative URLs are not resolved by social media crawlers.
+
+---
+
+## Version Compatibility
+
+No new packages means no compatibility concerns:
+
+| Existing Package | Impact | Notes |
+|------------------|--------|-------|
+| Vite ^7.3.1 | None | `public/` directory copy behavior unchanged since Vite 2.x |
+| React ^19.2.0 | None | No React-level SEO library added |
+| TypeScript ~5.9.3 | None | No type definitions needed |
+| Cloudflare Pages | None | Static files deploy alongside `_headers` with no special config |
+| `@tailwindcss/vite` ^4.2.1 | None | CSS processing unaffected |
+
+---
+
+## Summary: Total Scope of Changes
+
+| Change | Type | Lines (est.) |
+|--------|------|-------------|
+| `index.html` `<head>` additions | Edit existing file | ~30 lines added |
+| `public/robots.txt` | New static file | 4 lines |
+| `public/sitemap.xml` | New static file | 8 lines |
+| `public/og-image.png` | New design asset | 1 file (1200x630px) |
+| `public/_headers` update | Edit existing file | ~12 lines added (path-specific COOP/COEP unset) |
+| Favicon update (optional) | Replace `public/vite.svg` | 1 file |
+
+**Total: ~54 lines of code/config + 1-2 image assets. Zero new npm dependencies.**
 
 ---
 
 ## Sources
 
-### PRIMARY (HIGH confidence -- verified against official documentation or peer-reviewed research)
+### HIGH Confidence (official specifications and documentation)
 
-- [fft.js GitHub (indutny)](https://github.com/indutny/fft.js/) -- API reference: `realTransform()`, `completeSpectrum()`, `inverseTransform()`. Radix-4 implementation. MIT license. 334 stars, 44 npm dependents.
-- [KISS FFT WASM vs fft.js benchmark](https://toughengineer.github.io/demo/dsp/fft-perf/) -- Measured performance: fft.js at 35K ops/sec for size 2048; WASM 2-5x faster at large sizes but copying overhead narrows the gap. fft.js is 5 KB vs 55 KB.
-- [GCC-PHAT academic reference](https://xavieranguera.com/phdthesis/node92.html) -- PHAT weighting normalizes magnitude, retaining only phase. Standard for TDOA estimation.
-- [Frequency-Sliding GCC-PHAT (IEEE/ACM)](https://arxiv.org/pdf/1910.08838) -- Sub-band GCC-PHAT for improved robustness in reverberant environments. Confirms GCC-PHAT as predominant method for acoustic source localization.
-- [Delay Estimation by FFT (dsprelated.com)](https://www.dsprelated.com/showarticle/26.php) -- FFT cross-correlation with phase-slope sub-sample accuracy. Zero-padding for linear correlation.
-- [SynAudio GitHub (eshaz)](https://github.com/eshaz/synaudio) -- Pearson correlation on raw samples. 104 commits. Comparison clips must be subsets of base clip. Being replaced.
-- [MDN AnalyserNode](https://developer.mozilla.org/en-US/docs/Web/API/AnalyserNode) -- Only real-time, no offline, no phase data. Confirmed unsuitable.
-- [ES modules in Web Workers (web.dev)](https://web.dev/es-modules-in-sw/) -- `{ type: 'module' }` Workers supported in Chrome 80+, Safari 15+, Firefox 114+.
+- [Open Graph Protocol (ogp.me)](https://ogp.me/) -- Required OG tags: `og:title`, `og:type`, `og:image`, `og:url`. `og:type: website` needs no additional properties.
+- [Google SoftwareApplication Structured Data](https://developers.google.com/search/docs/appearance/structured-data/software-app) -- Required JSON-LD properties: `name`, `offers.price`, and `aggregateRating` or `review`. Google supports `WebApplication` type.
+- [Schema.org WebApplication](https://schema.org/WebApplication) -- Subtype of SoftwareApplication. Unique property: `browserRequirements` (Text).
+- [Twitter/X Cards Markup Docs](https://developer.twitter.com/en/docs/twitter-for-websites/cards/overview/markup) -- `twitter:card` is the only required tag. Falls back to OG tags for title/description/image.
+- [Vite Static Asset Handling](https://vite.dev/guide/assets) -- `public/` directory contents copied to `dist/` root as-is during build. Default behavior, no config needed.
+- [Cloudflare Pages Headers](https://developers.cloudflare.com/pages/configuration/headers/) -- Path-specific header rules, `!` unset syntax for removing inherited headers.
 
-### SECONDARY (MEDIUM confidence -- credible sources, cross-referenced)
+### MEDIUM Confidence (community sources, cross-verified)
 
-- [Audio Event Detection via Spectral Cross-Correlation (Springer)](https://link.springer.com/chapter/10.1007/978-3-031-45651-0_19) -- Mel spectrogram band selection for cross-correlation. Confirms approach viability.
-- [SpectroMap: Peak Detection for Audio Fingerprinting](https://arxiv.org/pdf/2211.00982) -- Spectral peak robustness: "magnitudes are no longer used -- only time and frequency stamps." Informs constellation-map as future enhancement.
-- [Mel-frequency cepstrum (Wikipedia)](https://en.wikipedia.org/wiki/Mel-frequency_cepstrum) -- Mel scale formula, filterbank construction reference.
-- [Meyda GitHub](https://github.com/meyda/meyda) -- v5.6.3, 1.6k stars, offline `extract()` API. Potential fallback library if additional features needed.
-- [How Shazam works (cameronmacleod.com)](https://www.cameronmacleod.com/blog/how-does-shazam-work) -- Spectral peak / constellation map approach. Background context for fingerprinting vs. TDOA.
-- [Chroma features (Wikipedia)](https://en.wikipedia.org/wiki/Chroma_feature) -- Chroma representations. Considered but not needed for time-delay estimation.
-- [pffft.wasm GitHub](https://github.com/JorenSix/pffft.wasm) -- WASM FFT alternative. 4096 size cap confirmed -- rules out for full-signal cross-correlation.
-
-### TERTIARY (LOW confidence -- noted for completeness, not relied upon)
-
-- [WebFFT GitHub (IQEngine)](https://github.com/IQEngine/WebFFT) -- v0.1.58. Community concerns about memory management. Not recommended.
-- [essentia.js GitHub (MTG)](https://github.com/mtg/essentia.js/) -- npm v0.1.3, last published 4+ years ago. Not recommended for new projects.
+- [OG Image Dimensions Guide (og-image.org)](https://og-image.org/learn/og-image-size) -- 1200x630px universal standard. Twitter crops to 2:1.
+- [Cloudflare Pages robots.txt Community Thread](https://community.cloudflare.com/t/robots-txt-cloudflare-page/636861) -- Confirmed: files in `public/` deploy and serve correctly on Cloudflare Pages.
+- [DEV Community: SEO for React + Vite](https://dev.to/ali_dz/optimizing-seo-in-a-react-vite-project-the-ultimate-guide-3mbh) -- General best practices for SPA SEO. Confirms static HTML approach.
+- [DigitalOcean: Twitter Card and Open Graph](https://www.digitalocean.com/community/tutorials/how-to-add-twitter-card-and-open-graph-social-metadata-to-your-webpage-with-html) -- Practical implementation guide for OG + Twitter meta tags.
+- [Google: Keywords meta tag not used since 2009](https://developers.google.com/search/blog/2009/09/google-does-not-use-keywords-meta-tag) -- Official confirmation.
 
 ---
-
-*Stack research for: spectral/frequency-domain audio cross-correlation engine replacing SynAudio Pearson correlation*
-*Researched: 2026-03-28*
+*Stack research for: v2.4 SEO milestone (meta tags, Open Graph, structured data, sitemap, robots.txt)*
+*Researched: 2026-03-29*
