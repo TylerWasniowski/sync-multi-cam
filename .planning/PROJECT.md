@@ -40,6 +40,17 @@ Accurately sync multiple camera angles by audio so users get aligned video files
 
 ### Active
 
+## Current Milestone: v2.3 Robust Audio Sync
+
+**Goal:** Replace raw waveform Pearson correlation with a spectral/frequency-domain sync algorithm that works reliably across diverse audio scenarios — concerts, dialogue, ambient, different devices and positions.
+
+**Target features:**
+- Spectral cross-correlation sync engine replacing SynAudio waveform correlation
+- Robust to device differences (mic frequency response, clipping, reverb, distance)
+- Robust to repetitive content (music, rhythmic audio)
+- Meaningful confidence scoring that reflects actual sync reliability
+- Same pipeline interface: video files in → time offsets + confidence out
+
 ### Out of Scope
 
 - Server-side processing — everything runs in-browser via WASM
@@ -98,4 +109,4 @@ Accurately sync multiple camera angles by audio so users get aligned video files
 | Widen label column w-32 → w-36 | Fit 3-line offset display (filename, ms offset, NLE timecode) | ✓ Good |
 
 ---
-*Last updated: 2026-03-29 after v2.2 milestone complete*
+*Last updated: 2026-03-28 after v2.3 milestone started*
