@@ -105,13 +105,12 @@ export default function App() {
         message: 'Analyzing audio for sync points...',
       });
 
-      const results = await syncAudioTracks(audioTracks, (progress) => {
-        const completed = Math.round((progress / 100) * (files.length - 1));
+      const results = await syncAudioTracks(audioTracks, ({ current, total }) => {
         setSyncProgress({
           stage: 'correlating',
-          current: completed,
-          total: files.length - 1,
-          message: `Correlating track ${completed} of ${files.length - 1}...`,
+          current,
+          total,
+          message: `Aligning camera ${current} of ${total}...`,
         });
       });
 
