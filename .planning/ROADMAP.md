@@ -7,7 +7,6 @@
 - ✅ **v2.1 UI Polish** — Phases 10-11 (shipped 2026-03-08)
 - ✅ **v2.2 Cursor Fixes & UI Cleanup** — Phases 12-13 (shipped 2026-03-29)
 - ✅ **v2.3 Robust Audio Sync** — Phases 14-16 (shipped 2026-03-29)
-- 🚧 **v2.4 SEO** — Phase 17 (in progress)
 
 ## Phases
 
@@ -61,34 +60,7 @@
 
 </details>
 
-### v2.4 SEO (In Progress)
-
-**Milestone Goal:** Make the app discoverable via search engines and shareable on social platforms.
-
-- [ ] **Phase 17: Search Discoverability & Social Sharing** - Add all SEO meta tags, social sharing tags, structured data, crawler files, and branded assets to static HTML and public directory
-
-## Phase Details
-
-### Phase 17: Search Discoverability & Social Sharing
-**Goal**: The app is fully discoverable by search engines, renders rich link previews on all social platforms, and presents a professional branded identity
-**Depends on**: Phase 16
-**Requirements**: META-01, META-02, META-03, META-04, SOCIAL-01, SOCIAL-02, SOCIAL-03, SCHEMA-01, CRAWL-01, CRAWL-02, CRAWL-03, BRAND-01
-**Success Criteria** (what must be TRUE):
-  1. Sharing the app URL on any social platform (Facebook, Twitter/X, LinkedIn, Discord, Slack) shows a rich preview with title, description, and image rather than a bare link
-  2. Viewing the page source shows a descriptive title, meta description, canonical URL, and theme-color in the `<head>` -- no Vite defaults remain
-  3. Visiting `/robots.txt` and `/sitemap.xml` in a browser returns valid crawler files (not the SPA fallback HTML)
-  4. The browser tab shows a custom app favicon, not the Vite default icon
-  5. Google's Rich Results Test accepts the page's JSON-LD as valid WebApplication structured data
-**Plans:** 2 plans
-
-Plans:
-- [ ] 17-01-PLAN.md — Create static SEO assets (robots.txt, sitemap.xml, og-image, favicons) and update _headers
-- [ ] 17-02-PLAN.md — Rewrite index.html with all SEO tags and create validation test suite
-
 ## Progress
-
-**Execution Order:**
-Phases execute in numeric order.
 
 | Phase | Milestone | Plans | Status | Completed |
 |-------|-----------|-------|--------|-----------|
@@ -108,4 +80,4 @@ Phases execute in numeric order.
 | 14. DSP Foundation | v2.3 | 1/1 | Complete | 2026-03-29 |
 | 15. Worker Integration + Pipeline Swap | v2.3 | 3/3 | Complete | 2026-03-29 |
 | 16. Validation + Confidence Tuning | v2.3 | 2/2 | Complete | 2026-03-29 |
-| 17. Search Discoverability & Social Sharing | v2.4 | 0/2 | Not started | - |
+| 17. Search Discoverability & Social Sharing | v3.0 | 1/2 | In Progress | - |

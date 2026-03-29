@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://sync-multi-cam.pages.dev/sitemap.xml

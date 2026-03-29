@@ -1,50 +1,77 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.4
-milestone_name: SEO
-status: planning
-stopped_at: Phase 17 context gathered
-last_updated: "2026-03-29T19:18:32.483Z"
-last_activity: 2026-03-29 — Roadmap created for v2.4 SEO milestone
+milestone: v1.0
+milestone_name: milestone
+status: executing
+stopped_at: Completed 17-01-PLAN.md
+last_updated: "2026-03-29T19:39:17.775Z"
+last_activity: 2026-03-29
 progress:
-  total_phases: 1
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_phases: 4
+  completed_phases: 3
+  total_plans: 6
+  completed_plans: 7
+  percent: 50
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-29)
+See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** Accurately sync multiple camera angles by audio so users get aligned video files without installing any software
-**Current focus:** Phase 17 - Search Discoverability & Social Sharing
+**Current focus:** Phase 17 — search-discoverability-social-sharing
 
 ## Current Position
 
-Phase: 17 (Search Discoverability & Social Sharing) — 1 phase in v2.4
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-03-29 — Roadmap created for v2.4 SEO milestone
+Phase: 17
+Plan: 01 complete, 02 pending
+Status: Executing
+Last activity: 2026-03-29
 
-Progress: [░░░░░░░░░░] 0% (v2.4: 0/1 phases)
+Progress: [██████████] 100%
+
+## Performance Metrics
+
+**Velocity:**
+
+- Total plans completed: 2 (v2.3)
+- Average duration: 3.5min
+- Total execution time: 7min
+
+**By Phase:**
+
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| 15-worker-integration-pipeline-swap | 1/3 | 4min | 4min |
+
+*Updated after each plan completion*
+| Phase 15 P03 | 3min | 3 tasks | 4 files |
+| Phase 16 P01 | 3min | 2 tasks | 5 files |
+| Phase 16-02 P02 | 3min | 3 tasks | 1 files |
+| Phase 17-01 P01 | 3min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
 ### Decisions
 
 Full decision log in PROJECT.md Key Decisions table.
-v1.0-v2.3 decisions archived in respective milestone files.
+v1.0, v2.0, v2.1, and v2.2 decisions archived in respective milestone files.
 
-Recent decisions affecting current work:
-
-- [v2.4]: All SEO tags hardcoded in index.html -- social crawlers do not execute JS
-- [v2.4]: _headers must unset COOP/COEP on SEO asset paths -- social crawlers cannot negotiate CORP/CORS
-- [v2.4]: og:image requires absolute HTTPS URL -- relative paths silently fail on all social platforms
-- [v2.4]: No `<meta name="keywords">` -- Google ignores since 2009
+- [15-02] workerRPC() uses addEventListener/removeEventListener for one-shot promise resolution
+- [15-02] Reference buffer copied via .slice() then transferred; comparison buffers transferred zero-copy
+- [15-02] try/finally guarantees worker.terminate() even on error paths
+- [Phase 15]: Warnings stored as parallel Map<fileId, AudioWarning[]> separate from SyncResult
+- [Phase 15]: Warning display in WaveformTrack label column, visible for both reference and non-reference tracks
+- [16-01] Excluded tests/ directory from vitest (Playwright specs were causing import failures)
+- [16-01] Discovery offset constants set to 0, to be calibrated after first Edge CDP run
+- [16-01] Hardcoded %20 for subdirectory spaces, encodeURIComponent per filename segment
+- [Phase 16-02]: Offset constants remain at 0 pending manual Edge CDP discovery run
+- [Phase 16-02]: No confidence formula tuning without empirical data from real audio discovery run
+- [17-01] Programmatic PNG/ICO generation with Node.js zlib - zero external dependencies
+- [17-01] PNG-in-ICO format for favicon.ico (modern approach vs BMP-in-ICO)
+- [17-01] 2x2 blue grid on dark background for favicon design representing multi-camera concept
 
 ### Pending Todos
 
@@ -52,10 +79,10 @@ Recent decisions affecting current work:
 
 ### Blockers/Concerns
 
-- OG image (1200x630px) is a design asset requiring creative input -- only non-code work item
+None.
 
 ## Session Continuity
 
-Last session: 2026-03-29T19:18:32.467Z
-Stopped at: Phase 17 context gathered
-Resume file: .planning/phases/17-search-discoverability-social-sharing/17-CONTEXT.md
+Last session: 2026-03-29T19:38:29Z
+Stopped at: Completed 17-01-PLAN.md
+Resume file: None
