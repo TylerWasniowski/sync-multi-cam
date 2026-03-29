@@ -1,3 +1,28 @@
 /*
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Embedder-Policy: require-corp
+
+/og-image.png
+  ! Cross-Origin-Opener-Policy
+  ! Cross-Origin-Embedder-Policy
+  Access-Control-Allow-Origin: *
+
+/robots.txt
+  ! Cross-Origin-Opener-Policy
+  ! Cross-Origin-Embedder-Policy
+
+/sitemap.xml
+  ! Cross-Origin-Opener-Policy
+  ! Cross-Origin-Embedder-Policy
+
+/favicon.ico
+  ! Cross-Origin-Opener-Policy
+  ! Cross-Origin-Embedder-Policy
+
+/apple-touch-icon.png
+  ! Cross-Origin-Opener-Policy
+  ! Cross-Origin-Embedder-Policy
+
+/favicon.svg
+  ! Cross-Origin-Opener-Policy
+  ! Cross-Origin-Embedder-Policy
