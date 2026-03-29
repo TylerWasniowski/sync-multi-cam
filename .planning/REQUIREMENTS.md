@@ -68,28 +68,28 @@ Deferred to v2.4+. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ALG-01 | — | Pending |
-| ALG-02 | — | Pending |
-| ALG-03 | — | Pending |
-| ALG-04 | — | Pending |
-| ALG-05 | — | Pending |
-| PIPE-01 | — | Pending |
-| PIPE-02 | — | Pending |
-| PIPE-03 | — | Pending |
-| PIPE-04 | — | Pending |
-| CONF-01 | — | Pending |
-| CONF-02 | — | Pending |
-| CONF-03 | — | Pending |
-| CONF-04 | — | Pending |
-| PROG-01 | — | Pending |
-| VAL-01 | — | Pending |
-| VAL-02 | — | Pending |
+| ALG-01 | Phase 14 | Pending |
+| ALG-02 | Phase 14 | Pending |
+| ALG-03 | Phase 14 | Pending |
+| ALG-04 | Phase 14 | Pending |
+| ALG-05 | Phase 14 | Pending |
+| CONF-01 | Phase 14 | Pending |
+| PIPE-01 | Phase 15 | Pending |
+| PIPE-02 | Phase 15 | Pending |
+| PIPE-03 | Phase 15 | Pending |
+| PIPE-04 | Phase 15 | Pending |
+| CONF-02 | Phase 15 | Pending |
+| CONF-03 | Phase 15 | Pending |
+| CONF-04 | Phase 15 | Pending |
+| PROG-01 | Phase 15 | Pending |
+| VAL-01 | Phase 16 | Pending |
+| VAL-02 | Phase 16 | Pending |
 
 **Coverage:**
 - v2.3 requirements: 16 total
-- Mapped to phases: 0
-- Unmapped: 16 ⚠️
+- Mapped to phases: 16
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-28*
-*Last updated: 2026-03-28 after initial definition*
+*Last updated: 2026-03-28 after roadmap creation*

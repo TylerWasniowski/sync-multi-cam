@@ -6,6 +6,7 @@
 - ✅ **v2.0 Synced Playback & Export** — Phases 5-9 (shipped 2026-03-04)
 - ✅ **v2.1 UI Polish** — Phases 10-11 (shipped 2026-03-08)
 - ✅ **v2.2 Cursor Fixes & UI Cleanup** — Phases 12-13 (shipped 2026-03-29)
+- 🚧 **v2.3 Robust Audio Sync** — Phases 14-16 (in progress)
 
 ## Phases
 
@@ -50,7 +51,62 @@
 
 </details>
 
+### 🚧 v2.3 Robust Audio Sync (In Progress)
+
+**Milestone Goal:** Replace SynAudio waveform correlation with GCC-PHAT spectral cross-correlation for robust sync across diverse audio scenarios.
+
+- [ ] **Phase 14: DSP Foundation** — GCC-PHAT algorithm engine with unit tests on synthetic signals
+- [ ] **Phase 15: Worker Integration + Pipeline Swap** — Web Worker wrapping, pipeline wiring, SynAudio removal, user-facing warnings and progress
+- [ ] **Phase 16: Validation + Confidence Tuning** — Real-world audio validation via Edge CDP tests, confidence threshold calibration
+
+## Phase Details
+
+### Phase 14: DSP Foundation
+**Goal**: The GCC-PHAT algorithm correctly computes time-delay offsets and confidence scores, proven by unit tests against synthetic signals at known offsets
+**Depends on**: Nothing (first phase of v2.3)
+**Requirements**: ALG-01, ALG-02, ALG-03, ALG-04, ALG-05, CONF-01
+**Success Criteria** (what must be TRUE):
+  1. Unit tests pass for synthetic sine waves with known offsets (positive, negative, zero) and the computed offset matches within sub-sample accuracy
+  2. Unit tests pass for signals recorded through different simulated frequency responses (high-pass, low-pass filtered versions of the same signal) and the offset is still correct
+  3. Unit tests pass for repetitive signals (looped waveforms) and confidence score drops to reflect ambiguity rather than silently returning a wrong offset
+  4. Confidence score clearly distinguishes a single sharp correlation peak (high confidence) from multiple similar-height peaks or flat noise floor (low confidence)
+**Plans**: TBD
+
+Plans:
+- [ ] 14-01: TBD
+
+### Phase 15: Worker Integration + Pipeline Swap
+**Goal**: Users click Sync and get results from the new GCC-PHAT engine running in a Web Worker, with per-pair progress reporting, audio quality warnings, and the exact same SyncResult interface — SynAudio dependency fully removed
+**Depends on**: Phase 14
+**Requirements**: PIPE-01, PIPE-02, PIPE-03, PIPE-04, CONF-02, CONF-03, CONF-04, PROG-01
+**Success Criteria** (what must be TRUE):
+  1. User clicks Sync and the UI remains responsive throughout the entire sync computation (no freezing or jank)
+  2. During sync, the progress indicator shows which camera pair is being processed (e.g., "Aligning camera 3 of 8")
+  3. After sync completes, SyncResult objects contain offsetSeconds, offsetSamples, confidence, and isReference — all downstream features (waveform offsets, NLE timecodes, playback alignment, export) work without any code changes
+  4. If a video has silent or near-silent audio, a visible warning appears indicating sync may be unreliable for that file
+  5. If a video has clipped/distorted audio, a visible warning appears indicating sync may be affected
+**Plans**: TBD
+
+Plans:
+- [ ] 15-01: TBD
+
+### Phase 16: Validation + Confidence Tuning
+**Goal**: The new sync engine produces correct offsets for real multi-camera recordings that previously failed, without regressing on recordings that already worked
+**Depends on**: Phase 15
+**Requirements**: VAL-01, VAL-02
+**Success Criteria** (what must be TRUE):
+  1. Taylor Swift concert test videos (previously failing case with repetitive music) sync to the correct offset as verified by visual/audible alignment in the grid player
+  2. Playing with Bruno test videos (dialogue/ambient content that already worked) continue to sync correctly — no regression from the algorithm change
+  3. Confidence scores for both test cases are meaningful: high confidence for clear matches, lower confidence with warnings for ambiguous matches
+**Plans**: TBD
+
+Plans:
+- [ ] 16-01: TBD
+
 ## Progress
+
+**Execution Order:**
+Phases execute in numeric order: 14 → 15 → 16
 
 | Phase | Milestone | Plans | Status | Completed |
 |-------|-----------|-------|--------|-----------|
@@ -67,3 +123,6 @@
 | 11. Export Bar Redesign | v2.1 | 1/1 | Complete | 2026-03-07 |
 | 12. Playback Cursor Fixes | v2.2 | 1/1 | Complete | 2026-03-09 |
 | 13. UI Cleanup | v2.2 | 1/1 | Complete | 2026-03-29 |
+| 14. DSP Foundation | v2.3 | 0/? | Not started | - |
+| 15. Worker Integration + Pipeline Swap | v2.3 | 0/? | Not started | - |
+| 16. Validation + Confidence Tuning | v2.3 | 0/? | Not started | - |
