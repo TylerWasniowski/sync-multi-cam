@@ -61,7 +61,7 @@
 
 </details>
 
-### 🚧 v2.4 SEO (In Progress)
+### v2.4 SEO (In Progress)
 
 **Milestone Goal:** Make the app discoverable via search engines and shareable on social platforms.
 
@@ -79,7 +79,11 @@
   3. Visiting `/robots.txt` and `/sitemap.xml` in a browser returns valid crawler files (not the SPA fallback HTML)
   4. The browser tab shows a custom app favicon, not the Vite default icon
   5. Google's Rich Results Test accepts the page's JSON-LD as valid WebApplication structured data
-**Plans**: TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 17-01-PLAN.md — Create static SEO assets (robots.txt, sitemap.xml, og-image, favicons) and update _headers
+- [ ] 17-02-PLAN.md — Rewrite index.html with all SEO tags and create validation test suite
 
 ## Progress
 
@@ -104,4 +108,4 @@ Phases execute in numeric order.
 | 14. DSP Foundation | v2.3 | 1/1 | Complete | 2026-03-29 |
 | 15. Worker Integration + Pipeline Swap | v2.3 | 3/3 | Complete | 2026-03-29 |
 | 16. Validation + Confidence Tuning | v2.3 | 2/2 | Complete | 2026-03-29 |
-| 17. Search Discoverability & Social Sharing | v2.4 | 0/TBD | Not started | - |
+| 17. Search Discoverability & Social Sharing | v2.4 | 0/2 | Not started | - |
