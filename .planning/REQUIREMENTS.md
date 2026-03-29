@@ -66,24 +66,24 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| META-01 | — | Pending |
-| META-02 | — | Pending |
-| META-03 | — | Pending |
-| META-04 | — | Pending |
-| SOCIAL-01 | — | Pending |
-| SOCIAL-02 | — | Pending |
-| SOCIAL-03 | — | Pending |
-| SCHEMA-01 | — | Pending |
-| CRAWL-01 | — | Pending |
-| CRAWL-02 | — | Pending |
-| CRAWL-03 | — | Pending |
-| BRAND-01 | — | Pending |
+| META-01 | Phase 17 | Pending |
+| META-02 | Phase 17 | Pending |
+| META-03 | Phase 17 | Pending |
+| META-04 | Phase 17 | Pending |
+| SOCIAL-01 | Phase 17 | Pending |
+| SOCIAL-02 | Phase 17 | Pending |
+| SOCIAL-03 | Phase 17 | Pending |
+| SCHEMA-01 | Phase 17 | Pending |
+| CRAWL-01 | Phase 17 | Pending |
+| CRAWL-02 | Phase 17 | Pending |
+| CRAWL-03 | Phase 17 | Pending |
+| BRAND-01 | Phase 17 | Pending |
 
 **Coverage:**
 - v2.4 requirements: 12 total
-- Mapped to phases: 0
-- Unmapped: 12 ⚠️
+- Mapped to phases: 12
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-29*
-*Last updated: 2026-03-29 after initial definition*
+*Last updated: 2026-03-29 after roadmap creation*
