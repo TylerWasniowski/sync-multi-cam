@@ -25,9 +25,9 @@ Requirements for robust audio sync milestone. Each maps to roadmap phases.
 ### Confidence
 
 - [x] **CONF-01**: Confidence score is based on peak-to-noise-floor ratio, not raw correlation magnitude — distinguishes "clear unique match" from "multiple ambiguous peaks"
-- [ ] **CONF-02**: Low confidence results produce a visible warning in the UI indicating sync may be inaccurate
-- [ ] **CONF-03**: Silence or near-silent audio is detected and surfaced as a warning to the user
-- [ ] **CONF-04**: Clipping distortion is detected and surfaced as a warning to the user
+- [x] **CONF-02**: Low confidence results produce a visible warning in the UI indicating sync may be inaccurate
+- [x] **CONF-03**: Silence or near-silent audio is detected and surfaced as a warning to the user
+- [x] **CONF-04**: Clipping distortion is detected and surfaced as a warning to the user
 
 ### Progress
 
@@ -78,9 +78,9 @@ Deferred to v2.4+. Tracked but not in current roadmap.
 | PIPE-02 | Phase 15 | Complete |
 | PIPE-03 | Phase 15 | Complete |
 | PIPE-04 | Phase 15 | Complete |
-| CONF-02 | Phase 15 | Pending |
-| CONF-03 | Phase 15 | Pending |
-| CONF-04 | Phase 15 | Pending |
+| CONF-02 | Phase 15 | Complete |
+| CONF-03 | Phase 15 | Complete |
+| CONF-04 | Phase 15 | Complete |
 | PROG-01 | Phase 15 | Complete |
 | VAL-01 | Phase 16 | Pending |
 | VAL-02 | Phase 16 | Pending |

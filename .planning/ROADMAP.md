@@ -56,7 +56,7 @@
 **Milestone Goal:** Replace SynAudio waveform correlation with GCC-PHAT spectral cross-correlation for robust sync across diverse audio scenarios.
 
 - [x] **Phase 14: DSP Foundation** — GCC-PHAT algorithm engine with unit tests on synthetic signals (completed 2026-03-29)
-- [ ] **Phase 15: Worker Integration + Pipeline Swap** — Web Worker wrapping, pipeline wiring, SynAudio removal, user-facing warnings and progress
+- [x] **Phase 15: Worker Integration + Pipeline Swap** — Web Worker wrapping, pipeline wiring, SynAudio removal, user-facing warnings and progress (completed 2026-03-29)
 - [ ] **Phase 16: Validation + Confidence Tuning** — Real-world audio validation via Edge CDP tests, confidence threshold calibration
 
 ## Phase Details
@@ -88,9 +88,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 15-01-PLAN.md — Audio quality detection module (TDD: silence + clipping detection)
+- [x] 15-01-PLAN.md — Audio quality detection module (TDD: silence + clipping detection)
 - [x] 15-02-PLAN.md — Web Worker + pipeline swap (spectralSyncWorker, audioSync rewrite, SynAudio removal)
-- [ ] 15-03-PLAN.md — UI integration (warnings display, per-pair progress, end-to-end verification)
+- [x] 15-03-PLAN.md — UI integration (warnings display, per-pair progress, end-to-end verification)
 
 ### Phase 16: Validation + Confidence Tuning
 **Goal**: The new sync engine produces correct offsets for real multi-camera recordings that previously failed, without regressing on recordings that already worked
@@ -126,5 +126,5 @@ Phases execute in numeric order: 14 → 15 → 16
 | 12. Playback Cursor Fixes | v2.2 | 1/1 | Complete | 2026-03-09 |
 | 13. UI Cleanup | v2.2 | 1/1 | Complete | 2026-03-29 |
 | 14. DSP Foundation | v2.3 | 1/1 | Complete    | 2026-03-29 |
-| 15. Worker Integration + Pipeline Swap | v2.3 | 1/3 | In Progress|  |
+| 15. Worker Integration + Pipeline Swap | v2.3 | 3/3 | Complete   | 2026-03-29 |
 | 16. Validation + Confidence Tuning | v2.3 | 0/? | Not started | - |
