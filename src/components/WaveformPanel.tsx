@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { MultiResolutionPeaks, ViewState, DownloadableResult, MutedTracks } from '../types/index.ts';
+import type { AudioWarning } from '../lib/audioQuality.ts';
 import { WaveformTrack } from './WaveformTrack.tsx';
 
 export interface WaveformPanelProps {
@@ -14,9 +15,10 @@ export interface WaveformPanelProps {
   onScrubStart?: () => void;
   onScrubEnd?: () => void;
   onScrubSeek?: (time: number) => void;
+  audioWarnings?: Map<string, AudioWarning[]>;
 }
 
-export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, onScrub, playheadTime, isPlaying, onScrubStart, onScrubEnd, onScrubSeek }: WaveformPanelProps) {
+export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, onScrub, playheadTime, isPlaying, onScrubStart, onScrubEnd, onScrubSeek, audioWarnings }: WaveformPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const [panelWidth, setPanelWidth] = useState(0);
 
@@ -318,6 +320,7 @@ export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, on
     return results.map((result, index) => {
       const peaks = peaksMap.get(result.fileId);
       if (!peaks) return null;
+      const warnings = audioWarnings?.get(result.fileId) || [];
       return {
         key: result.fileId,
         index,
@@ -328,6 +331,7 @@ export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, on
           offsetSeconds: result.offsetSeconds,
           confidence: result.confidence,
         },
+        warnings,
       };
     }).filter(Boolean) as {
       key: string;
@@ -336,8 +340,9 @@ export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, on
       isReference: boolean;
       peaks: MultiResolutionPeaks;
       syncResult: { offsetSeconds: number; confidence: number };
+      warnings: AudioWarning[];
     }[];
-  }, [results, peaksMap]);
+  }, [results, peaksMap, audioWarnings]);
 
   if (peaksMap.size === 0) return null;
 
@@ -374,6 +379,7 @@ export function WaveformPanel({ peaksMap, results, mutedTracks, onToggleMute, on
               onScrubSeek={onScrubSeek}
               onScrubStart={onScrubStart}
               onScrubEnd={onScrubEnd}
+              warnings={entry.warnings}
             />
           </div>
         ))}

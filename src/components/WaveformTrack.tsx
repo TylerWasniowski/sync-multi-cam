@@ -2,6 +2,7 @@ import { useRef, useState, useEffect, useCallback } from 'react';
 import type { MultiResolutionPeaks, ViewState } from '../types/index.ts';
 import { selectPeakLevel } from '../lib/waveformPeaks.ts';
 import { formatOffset, formatNLETimecode } from '../lib/audioSync.ts';
+import type { AudioWarning } from '../lib/audioQuality.ts';
 import { WaveformCanvas } from './WaveformCanvas.tsx';
 
 const MIN_SAMPLES_PER_PIXEL = 1;
@@ -23,6 +24,7 @@ export interface WaveformTrackProps {
   onScrubSeek?: (time: number) => void;
   onScrubStart?: () => void;
   onScrubEnd?: () => void;
+  warnings?: AudioWarning[];
 }
 
 export function WaveformTrack({
@@ -41,6 +43,7 @@ export function WaveformTrack({
   onScrubSeek,
   onScrubStart,
   onScrubEnd,
+  warnings,
 }: WaveformTrackProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -328,6 +331,15 @@ export function WaveformTrack({
                   {formatNLETimecode(syncResult.offsetSeconds)}
                 </span>
               </>
+            )}
+            {warnings && warnings.length > 0 && (
+              <div className="flex flex-col gap-0.5 mt-0.5">
+                {warnings.map((w, i) => (
+                  <span key={i} className="text-[10px] text-amber-400 leading-tight">
+                    {w.message}
+                  </span>
+                ))}
+              </div>
             )}
           </div>
         </div>
