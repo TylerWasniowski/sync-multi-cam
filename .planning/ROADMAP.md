@@ -45,7 +45,7 @@
 ### v2.2 Cursor Fixes & UI Cleanup
 
 - [x] **Phase 12: Playback Cursor Fixes** - Fix cursor state mismatch and play-from-cursor behavior (completed 2026-03-09)
-- [ ] **Phase 13: UI Cleanup** - Remove Sync Results area and add precise offset display on waveform tracks
+- [x] **Phase 13: UI Cleanup** - Remove Sync Results area and add precise offset display on waveform tracks (completed 2026-03-29)
 
 ## Phase Details
 
@@ -96,4 +96,4 @@ Phases execute in numeric order: 12 -> 13
 | 10. Visual Feedback Polish | v2.1 | 1/1 | Complete | 2026-03-07 |
 | 11. Export Bar Redesign | v2.1 | 1/1 | Complete | 2026-03-07 |
 | 12. Playback Cursor Fixes | v2.2 | 1/1 | Complete | 2026-03-09 |
-| 13. UI Cleanup | v2.2 | 0/1 | Not started | - |
+| 13. UI Cleanup | 1/1 | Complete   | 2026-03-29 | - |

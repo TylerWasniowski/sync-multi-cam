@@ -14,8 +14,8 @@ Requirements for milestone v2.2 Cursor Fixes & UI Cleanup.
 
 ### UI Cleanup
 
-- [ ] **UI-01**: Sync Results download area is removed from the UI (GH#4)
-- [ ] **UI-02**: Waveform tracks display offset with millisecond precision and NLE timecode format (e.g., `+1.234s (00:00:01:07 @ 30fps)`) (GH#4)
+- [x] **UI-01**: Sync Results download area is removed from the UI (GH#4)
+- [x] **UI-02**: Waveform tracks display offset with millisecond precision and NLE timecode format (e.g., `+1.234s (00:00:01:07 @ 30fps)`) (GH#4)
 
 ## Future Requirements
 
@@ -36,8 +36,8 @@ Requirements for milestone v2.2 Cursor Fixes & UI Cleanup.
 |-------------|-------|--------|
 | PLAY-01 | Phase 12 | Complete |
 | PLAY-02 | Phase 12 | Complete |
-| UI-01 | Phase 13 | Pending |
-| UI-02 | Phase 13 | Pending |
+| UI-01 | Phase 13 | Complete |
+| UI-02 | Phase 13 | Complete |
 
 **Coverage:**
 - v2.2 requirements: 4 total
