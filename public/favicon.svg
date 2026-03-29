@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- 2x2 grid of rounded rectangles representing camera views -->
+  <rect width="32" height="32" rx="4" fill="#030712"/>
+  <rect x="2" y="2" width="13" height="13" rx="2" fill="#3b82f6"/>
+  <rect x="17" y="2" width="13" height="13" rx="2" fill="#60a5fa"/>
+  <rect x="2" y="17" width="13" height="13" rx="2" fill="#60a5fa"/>
+  <rect x="17" y="17" width="13" height="13" rx="2" fill="#3b82f6"/>
+</svg>
