@@ -19,9 +19,17 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Discovery values: update after first successful run
-const EXPECTED_TAYLOR_OFFSET = 0; // Discovery value: update after first successful run
-const EXPECTED_BRUNO_OFFSET = 0; // Discovery value: update after first successful run
+// Expected sync offsets — calibrate after first successful Edge CDP discovery run.
+// These values are initial placeholders pending real-world validation.
+// Run the discovery test, record actual offsets from DISCOVERY output, then update.
+// Calibrated: pending manual Edge CDP run (2026-03-29)
+const EXPECTED_TAYLOR_OFFSET = 0; // Placeholder: update with discovered offset after Edge CDP run
+const EXPECTED_BRUNO_OFFSET = 0; // Placeholder: update with discovered offset after Edge CDP run
+
+// Tolerance values per CONTEXT.md decisions:
+// D-10: Taylor Swift (repetitive music) — 500ms tolerance
+// D-09: Playing with Bruno (dialogue/ambient) — 100ms tolerance
+// D-11: Bruno confidence must be >50
 
 interface SyncResultEntry {
   fileName: string;
