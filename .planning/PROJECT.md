@@ -43,14 +43,16 @@ Accurately sync multiple camera angles by audio so users get aligned video files
 - ✓ Audio quality warnings: silence detection, clipping detection, low confidence — v2.3
 - ✓ Color-coded confidence scoring (green/yellow/red) with peak-to-noise-floor ratio — v2.3
 - ✓ Edge CDP E2E validation test infrastructure for real multi-camera recordings — v2.3
+- ✓ SEO meta tags (title, description, canonical URL, theme-color) for search engine indexing — v2.4
+- ✓ Open Graph & Twitter Card meta tags for social sharing previews — v2.4
+- ✓ Schema.org WebApplication JSON-LD structured data for rich search results — v2.4
+- ✓ robots.txt, sitemap.xml, and canonical URL for crawler discoverability — v2.4
+- ✓ App-specific favicon (SVG, ICO, apple-touch-icon) replacing Vite default — v2.4
+- ✓ COOP/COEP header unset rules for SEO assets so social crawlers can fetch them — v2.4
 
 ### Active
 
-- [ ] HTML meta tags (title, description, keywords) for search engine indexing
-- [ ] Open Graph & Twitter Card meta tags for social sharing previews
-- [ ] Schema.org structured data (SoftwareApplication) for rich search results
-- [ ] robots.txt, sitemap.xml, and canonical URL for crawler discoverability
-- [ ] Proper `<head>` structure optimized for crawlers
+(None — v2.4 SEO requirements validated)
 
 ## Current Milestone: v2.4 SEO
 
@@ -143,4 +145,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-29 after milestone v2.4 SEO started*
+*Last updated: 2026-03-29 after Phase 17 (Search Discoverability & Social Sharing) completed*
