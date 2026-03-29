@@ -123,6 +123,6 @@ Phases execute in numeric order: 14 → 15 → 16
 | 11. Export Bar Redesign | v2.1 | 1/1 | Complete | 2026-03-07 |
 | 12. Playback Cursor Fixes | v2.2 | 1/1 | Complete | 2026-03-09 |
 | 13. UI Cleanup | v2.2 | 1/1 | Complete | 2026-03-29 |
-| 14. DSP Foundation | v2.3 | 1/1 | Complete   | 2026-03-29 |
+| 14. DSP Foundation | v2.3 | 1/1 | Complete    | 2026-03-29 |
 | 15. Worker Integration + Pipeline Swap | v2.3 | 0/? | Not started | - |
 | 16. Validation + Confidence Tuning | v2.3 | 0/? | Not started | - |
