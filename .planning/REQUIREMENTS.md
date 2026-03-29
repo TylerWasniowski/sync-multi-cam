@@ -1,49 +1,95 @@
-# Requirements: Sync Multi-Cam
+# Requirements: Sync Multi-Cam v2.3
 
-**Defined:** 2026-03-08
+**Defined:** 2026-03-28
 **Core Value:** Accurately sync multiple camera angles by audio so users get aligned video files without installing any software
 
-## v2.2 Requirements
+## v2.3 Requirements
 
-Requirements for milestone v2.2 Cursor Fixes & UI Cleanup.
+Requirements for robust audio sync milestone. Each maps to roadmap phases.
 
-### Playback
+### Algorithm
 
-- [x] **PLAY-01**: Cursor state matches cursor preview position 1:1 in audio tracks (GH#1)
-- [x] **PLAY-02**: Play starts from cursor position if user has seeked, or from sync start point if no cursor set (GH#2)
+- [ ] **ALG-01**: App uses GCC-PHAT (phase-normalized frequency-domain cross-correlation) instead of SynAudio Pearson correlation to compute sync offsets
+- [ ] **ALG-02**: Sync algorithm is robust to different recording devices (phone, DSLR, GoPro) producing different frequency responses of the same audio
+- [ ] **ALG-03**: Sync algorithm handles repetitive audio content (concerts, music) without silently locking onto the wrong beat
+- [ ] **ALG-04**: Sync algorithm uses Hann windowing and zero-padding for correct linear (not circular) cross-correlation
+- [ ] **ALG-05**: Sync algorithm uses parabolic peak interpolation for sub-sample offset accuracy
 
-### UI Cleanup
+### Pipeline
 
-- [x] **UI-01**: Sync Results download area is removed from the UI (GH#4)
-- [x] **UI-02**: Waveform tracks display offset with millisecond precision and NLE timecode format (e.g., `+1.234s (00:00:01:07 @ 30fps)`) (GH#4)
+- [ ] **PIPE-01**: Sync computation runs in a Web Worker using fft.js, not blocking the UI thread
+- [ ] **PIPE-02**: SyncResult interface is preserved exactly ({offsetSeconds, offsetSamples, confidence, isReference}) — zero downstream code changes
+- [ ] **PIPE-03**: SynAudio WASM dependency is removed and replaced with fft.js (pure JS, 5KB)
+- [ ] **PIPE-04**: Audio buffers are transferred to the worker via Transferable objects (zero-copy for comparison buffers, copy for reference buffer)
+
+### Confidence
+
+- [ ] **CONF-01**: Confidence score is based on peak-to-noise-floor ratio, not raw correlation magnitude — distinguishes "clear unique match" from "multiple ambiguous peaks"
+- [ ] **CONF-02**: Low confidence results produce a visible warning in the UI indicating sync may be inaccurate
+- [ ] **CONF-03**: Silence or near-silent audio is detected and surfaced as a warning to the user
+- [ ] **CONF-04**: Clipping distortion is detected and surfaced as a warning to the user
+
+### Progress
+
+- [ ] **PROG-01**: Sync progress reports which camera pair is being processed (e.g., "Aligning camera 3 of 8")
+
+### Validation
+
+- [ ] **VAL-01**: Taylor Swift concert test videos sync correctly (previously failing case)
+- [ ] **VAL-02**: Playing with Bruno test videos continue to sync correctly (regression check)
 
 ## Future Requirements
 
-### Export
+Deferred to v2.4+. Tracked but not in current roadmap.
 
-- **EXP-01**: Per-cell aspect ratios in export instead of using first video's AR for all cells
+### Scale Optimization
+
+- **SCALE-01**: Coarse-to-fine two-stage search for faster processing of 30+ cameras
+- **SCALE-02**: Landmark fingerprint pre-filter for O(N) vs O(N²) pairwise correlation
+- **SCALE-03**: Multi-pair MST graph-based offset resolution for redundant pairwise consistency
+
+### Polish
+
+- **POL-01**: Confidence breakdown in UI tooltip showing why confidence is high/low
+- **POL-02**: Adaptive frequency band selection auto-tuning per audio scenario
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Frame-accurate sub-ms offsets | NLEs work in frame units; millisecond precision already exceeds single-frame granularity |
-| Replacing individual synced file downloads | Export composite covers the main use case; individual trimmed files stay via existing ZIP flow if re-added later |
+| Audio drift compensation | Extremely complex, only matters for 30+ min recordings, explicitly excluded in PROJECT.md |
+| ML-based sync (neural embeddings) | Model weights (10-100MB), slow WASM inference, classical DSP is sufficient |
+| Chromagram/MFCC correlation | Designed for content matching, not sample-accurate time alignment |
+| WebGPU-accelerated FFT | Not available in Firefox, FFT sizes too small to benefit from GPU dispatch |
+| User-configurable algorithm parameters | Sync should "just work" — no FFT size sliders |
+| Full Shazam-style fingerprint database | We match N clips in-memory, not searching millions of songs |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PLAY-01 | Phase 12 | Complete |
-| PLAY-02 | Phase 12 | Complete |
-| UI-01 | Phase 13 | Complete |
-| UI-02 | Phase 13 | Complete |
+| ALG-01 | — | Pending |
+| ALG-02 | — | Pending |
+| ALG-03 | — | Pending |
+| ALG-04 | — | Pending |
+| ALG-05 | — | Pending |
+| PIPE-01 | — | Pending |
+| PIPE-02 | — | Pending |
+| PIPE-03 | — | Pending |
+| PIPE-04 | — | Pending |
+| CONF-01 | — | Pending |
+| CONF-02 | — | Pending |
+| CONF-03 | — | Pending |
+| CONF-04 | — | Pending |
+| PROG-01 | — | Pending |
+| VAL-01 | — | Pending |
+| VAL-02 | — | Pending |
 
 **Coverage:**
-- v2.2 requirements: 4 total
-- Mapped to phases: 4
-- Unmapped: 0
+- v2.3 requirements: 16 total
+- Mapped to phases: 0
+- Unmapped: 16 ⚠️
 
 ---
-*Requirements defined: 2026-03-08*
-*Last updated: 2026-03-08 after roadmap creation*
+*Requirements defined: 2026-03-28*
+*Last updated: 2026-03-28 after initial definition*
