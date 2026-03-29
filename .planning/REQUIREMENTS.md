@@ -17,21 +17,21 @@ Requirements for robust audio sync milestone. Each maps to roadmap phases.
 
 ### Pipeline
 
-- [ ] **PIPE-01**: Sync computation runs in a Web Worker using fft.js, not blocking the UI thread
-- [ ] **PIPE-02**: SyncResult interface is preserved exactly ({offsetSeconds, offsetSamples, confidence, isReference}) — zero downstream code changes
-- [ ] **PIPE-03**: SynAudio WASM dependency is removed and replaced with fft.js (pure JS, 5KB)
-- [ ] **PIPE-04**: Audio buffers are transferred to the worker via Transferable objects (zero-copy for comparison buffers, copy for reference buffer)
+- [x] **PIPE-01**: Sync computation runs in a Web Worker using fft.js, not blocking the UI thread
+- [x] **PIPE-02**: SyncResult interface is preserved exactly ({offsetSeconds, offsetSamples, confidence, isReference}) — zero downstream code changes
+- [x] **PIPE-03**: SynAudio WASM dependency is removed and replaced with fft.js (pure JS, 5KB)
+- [x] **PIPE-04**: Audio buffers are transferred to the worker via Transferable objects (zero-copy for comparison buffers, copy for reference buffer)
 
 ### Confidence
 
 - [x] **CONF-01**: Confidence score is based on peak-to-noise-floor ratio, not raw correlation magnitude — distinguishes "clear unique match" from "multiple ambiguous peaks"
 - [ ] **CONF-02**: Low confidence results produce a visible warning in the UI indicating sync may be inaccurate
-- [x] **CONF-03**: Silence or near-silent audio is detected and surfaced as a warning to the user
-- [x] **CONF-04**: Clipping distortion is detected and surfaced as a warning to the user
+- [ ] **CONF-03**: Silence or near-silent audio is detected and surfaced as a warning to the user
+- [ ] **CONF-04**: Clipping distortion is detected and surfaced as a warning to the user
 
 ### Progress
 
-- [ ] **PROG-01**: Sync progress reports which camera pair is being processed (e.g., "Aligning camera 3 of 8")
+- [x] **PROG-01**: Sync progress reports which camera pair is being processed (e.g., "Aligning camera 3 of 8")
 
 ### Validation
 
@@ -74,14 +74,14 @@ Deferred to v2.4+. Tracked but not in current roadmap.
 | ALG-04 | Phase 14 | Complete |
 | ALG-05 | Phase 14 | Complete |
 | CONF-01 | Phase 14 | Complete |
-| PIPE-01 | Phase 15 | Pending |
-| PIPE-02 | Phase 15 | Pending |
-| PIPE-03 | Phase 15 | Pending |
-| PIPE-04 | Phase 15 | Pending |
+| PIPE-01 | Phase 15 | Complete |
+| PIPE-02 | Phase 15 | Complete |
+| PIPE-03 | Phase 15 | Complete |
+| PIPE-04 | Phase 15 | Complete |
 | CONF-02 | Phase 15 | Pending |
-| CONF-03 | Phase 15 | Complete |
-| CONF-04 | Phase 15 | Complete |
-| PROG-01 | Phase 15 | Pending |
+| CONF-03 | Phase 15 | Pending |
+| CONF-04 | Phase 15 | Pending |
+| PROG-01 | Phase 15 | Complete |
 | VAL-01 | Phase 16 | Pending |
 | VAL-02 | Phase 16 | Pending |
 

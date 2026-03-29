@@ -1,22 +1,75 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { AudioData } from '../../types/index.ts';
+import type { SyncWorkerCommand, SyncWorkerMessage } from '../audioSync.ts';
 
-// Shared mock state
-const mockSyncWorker = vi.fn();
-const constructorCalls: unknown[][] = [];
+// ---------------------------------------------------------------------------
+// Mock Worker
+// ---------------------------------------------------------------------------
 
-// Mock synaudio before importing the module under test
-vi.mock('synaudio', () => {
-  class MockSynAudio {
-    constructor(...args: unknown[]) {
-      constructorCalls.push(args);
-    }
-    syncWorker = mockSyncWorker;
+// Configurable mock return values
+let mockOffsetSamples = 8000;
+let mockConfidence = 75;
+let mockShouldError = false;
+let mockErrorMessage = 'mock error';
+
+// Track worker interactions
+let workerInstances: MockWorker[] = [];
+let postMessageCalls: { data: SyncWorkerCommand; transfer: Transferable[] }[] = [];
+
+class MockWorker {
+  private listeners = new Map<string, Function[]>();
+  terminated = false;
+
+  constructor(public url: URL | string, public options?: WorkerOptions) {
+    workerInstances.push(this);
   }
-  return {
-    default: MockSynAudio,
-  };
-});
+
+  addEventListener(type: string, fn: Function) {
+    if (!this.listeners.has(type)) this.listeners.set(type, []);
+    this.listeners.get(type)!.push(fn);
+  }
+
+  removeEventListener(type: string, fn: Function) {
+    const fns = this.listeners.get(type);
+    if (fns) this.listeners.set(type, fns.filter(f => f !== fn));
+  }
+
+  postMessage(data: SyncWorkerCommand, transfer?: Transferable[]) {
+    postMessageCalls.push({ data, transfer: transfer || [] });
+
+    // Simulate async worker response
+    queueMicrotask(() => {
+      if (mockShouldError) {
+        this.dispatchMessage({ type: 'error', message: mockErrorMessage });
+        return;
+      }
+
+      if (data.type === 'init') {
+        this.dispatchMessage({ type: 'ready' });
+      } else if (data.type === 'compare') {
+        this.dispatchMessage({
+          type: 'result',
+          offsetSamples: mockOffsetSamples,
+          confidence: mockConfidence,
+        });
+      }
+    });
+  }
+
+  private dispatchMessage(data: SyncWorkerMessage) {
+    const event = { data } as MessageEvent;
+    for (const fn of this.listeners.get('message') || []) {
+      fn(event);
+    }
+  }
+
+  terminate() {
+    this.terminated = true;
+  }
+}
+
+// Stub Worker globally before any imports
+vi.stubGlobal('Worker', MockWorker);
 
 function makeTrack(fileId: string, fileName: string, samples: number): {
   fileId: string;
@@ -36,12 +89,17 @@ function makeTrack(fileId: string, fileName: string, samples: number): {
 
 describe('syncAudioTracks', () => {
   beforeEach(() => {
-    vi.resetAllMocks();
-    constructorCalls.length = 0;
-    mockSyncWorker.mockResolvedValue({
-      sampleOffset: 8000,
-      correlation: 0.85,
-    });
+    vi.resetModules();
+    workerInstances = [];
+    postMessageCalls = [];
+    mockOffsetSamples = 8000;
+    mockConfidence = 75;
+    mockShouldError = false;
+    mockErrorMessage = 'mock error';
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('selects the longest track (by samplesDecoded) as reference', async () => {
@@ -75,13 +133,11 @@ describe('syncAudioTracks', () => {
     expect(ref!.isReference).toBe(true);
   });
 
-  it('comparison track gets sampleOffset/SYNC_SAMPLE_RATE as offsetSeconds', async () => {
+  it('comparison track offsetSeconds = offsetSamples / SYNC_SAMPLE_RATE', async () => {
     const { syncAudioTracks } = await import('../audioSync.ts');
 
-    mockSyncWorker.mockResolvedValue({
-      sampleOffset: 8000,
-      correlation: 0.85,
-    });
+    mockOffsetSamples = 8000;
+    mockConfidence = 75;
 
     const tracks = [
       makeTrack('ref', 'ref.mp4', 48000),
@@ -96,13 +152,11 @@ describe('syncAudioTracks', () => {
     expect(comp!.offsetSamples).toBe(8000);
   });
 
-  it('comparison track confidence = Math.round(Math.abs(correlation) * 100)', async () => {
+  it('comparison track confidence comes directly from worker result', async () => {
     const { syncAudioTracks } = await import('../audioSync.ts');
 
-    mockSyncWorker.mockResolvedValue({
-      sampleOffset: 0,
-      correlation: 0.756,
-    });
+    mockOffsetSamples = 0;
+    mockConfidence = 42;
 
     const tracks = [
       makeTrack('ref', 'ref.mp4', 48000),
@@ -111,30 +165,11 @@ describe('syncAudioTracks', () => {
 
     const results = await syncAudioTracks(tracks);
     const comp = results.find((r) => !r.isReference);
-    // Math.round(Math.abs(0.756) * 100) = Math.round(75.6) = 76
-    expect(comp!.confidence).toBe(76);
+    // Confidence is 0-100 directly from gccPhat, not Math.round(abs(corr) * 100)
+    expect(comp!.confidence).toBe(42);
   });
 
-  it('handles negative correlation (inverted signal)', async () => {
-    const { syncAudioTracks } = await import('../audioSync.ts');
-
-    mockSyncWorker.mockResolvedValue({
-      sampleOffset: 1600,
-      correlation: -0.92,
-    });
-
-    const tracks = [
-      makeTrack('ref', 'ref.mp4', 48000),
-      makeTrack('comp', 'comp.mp4', 16000),
-    ];
-
-    const results = await syncAudioTracks(tracks);
-    const comp = results.find((r) => !r.isReference);
-    // Math.round(Math.abs(-0.92) * 100) = 92
-    expect(comp!.confidence).toBe(92);
-  });
-
-  it('calls onProgress callback with percentage (0-100)', async () => {
+  it('calls onProgress with {current, total} per pair', async () => {
     const { syncAudioTracks } = await import('../audioSync.ts');
 
     const onProgress = vi.fn();
@@ -146,10 +181,10 @@ describe('syncAudioTracks', () => {
 
     await syncAudioTracks(tracks, onProgress);
 
-    // 2 comparison tracks: progress at 50% and 100%
+    // 2 comparison tracks: progress at {1,2} and {2,2}
     expect(onProgress).toHaveBeenCalledTimes(2);
-    expect(onProgress).toHaveBeenCalledWith(50);
-    expect(onProgress).toHaveBeenCalledWith(100);
+    expect(onProgress).toHaveBeenCalledWith({ current: 1, total: 2 });
+    expect(onProgress).toHaveBeenCalledWith({ current: 2, total: 2 });
   });
 
   it('throws if fewer than 2 tracks', async () => {
@@ -160,22 +195,91 @@ describe('syncAudioTracks', () => {
     ).rejects.toThrow('At least 2 audio tracks required for sync');
   });
 
-  it('initializes SynAudio with correlationSampleSize and initialGranularity', async () => {
+  it('creates Worker with module type', async () => {
+    const { syncAudioTracks } = await import('../audioSync.ts');
+
     const tracks = [
       makeTrack('ref', 'ref.mp4', 48000),
       makeTrack('comp', 'comp.mp4', 16000),
     ];
 
-    const { syncAudioTracks } = await import('../audioSync.ts');
     await syncAudioTracks(tracks);
 
-    expect(constructorCalls.length).toBeGreaterThan(0);
-    expect(constructorCalls[0][0]).toEqual(
-      expect.objectContaining({
-        correlationSampleSize: 11025,
-        initialGranularity: 16,
-      })
+    expect(workerInstances.length).toBe(1);
+    expect(workerInstances[0].options).toEqual({ type: 'module' });
+  });
+
+  it('sends init with copied reference buffer before compare', async () => {
+    const { syncAudioTracks } = await import('../audioSync.ts');
+
+    const tracks = [
+      makeTrack('ref', 'ref.mp4', 48000),
+      makeTrack('comp', 'comp.mp4', 16000),
+    ];
+
+    await syncAudioTracks(tracks);
+
+    // First message should be 'init', then 'compare'
+    expect(postMessageCalls.length).toBe(2);
+    expect(postMessageCalls[0].data.type).toBe('init');
+    expect(postMessageCalls[1].data.type).toBe('compare');
+
+    // Init should include a Float32Array reference buffer
+    const initCmd = postMessageCalls[0].data;
+    if (initCmd.type === 'init') {
+      expect(initCmd.referenceBuffer).toBeInstanceOf(Float32Array);
+      expect(initCmd.sampleRate).toBe(16000);
+    }
+  });
+
+  it('transfers comparison buffer via Transferable', async () => {
+    const { syncAudioTracks } = await import('../audioSync.ts');
+
+    const tracks = [
+      makeTrack('ref', 'ref.mp4', 48000),
+      makeTrack('comp', 'comp.mp4', 16000),
+    ];
+
+    await syncAudioTracks(tracks);
+
+    // Init: reference buffer transferred (after copy)
+    expect(postMessageCalls[0].transfer.length).toBe(1);
+
+    // Compare: comparison buffer transferred (zero-copy)
+    expect(postMessageCalls[1].transfer.length).toBe(1);
+  });
+
+  it('worker is terminated after all comparisons complete', async () => {
+    const { syncAudioTracks } = await import('../audioSync.ts');
+
+    const tracks = [
+      makeTrack('ref', 'ref.mp4', 48000),
+      makeTrack('comp', 'comp.mp4', 16000),
+    ];
+
+    await syncAudioTracks(tracks);
+
+    expect(workerInstances.length).toBe(1);
+    expect(workerInstances[0].terminated).toBe(true);
+  });
+
+  it('handles worker error message', async () => {
+    const { syncAudioTracks } = await import('../audioSync.ts');
+
+    mockShouldError = true;
+    mockErrorMessage = 'GCC-PHAT computation failed';
+
+    const tracks = [
+      makeTrack('ref', 'ref.mp4', 48000),
+      makeTrack('comp', 'comp.mp4', 16000),
+    ];
+
+    await expect(syncAudioTracks(tracks)).rejects.toThrow(
+      'GCC-PHAT computation failed'
     );
+
+    // Worker should still be terminated (via finally block)
+    expect(workerInstances[0].terminated).toBe(true);
   });
 });
 

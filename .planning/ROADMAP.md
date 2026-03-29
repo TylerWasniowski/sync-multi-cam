@@ -88,8 +88,8 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [x] 15-01-PLAN.md — Audio quality detection module (TDD: silence + clipping detection)
-- [ ] 15-02-PLAN.md — Web Worker + pipeline swap (spectralSyncWorker, audioSync rewrite, SynAudio removal)
+- [ ] 15-01-PLAN.md — Audio quality detection module (TDD: silence + clipping detection)
+- [x] 15-02-PLAN.md — Web Worker + pipeline swap (spectralSyncWorker, audioSync rewrite, SynAudio removal)
 - [ ] 15-03-PLAN.md — UI integration (warnings display, per-pair progress, end-to-end verification)
 
 ### Phase 16: Validation + Confidence Tuning

@@ -11,5 +11,4 @@ export const MIN_FILES = 2;
 export const MAX_FILES = 30;
 
 export const SYNC_SAMPLE_RATE = 16000;
-export const CORRELATION_SAMPLE_SIZE = 11025;
-export const INITIAL_GRANULARITY = 16;
+export const MAX_SYNC_OFFSET_SECONDS = 300; // 5 minutes — maximum plausible offset between cameras
