@@ -37,23 +37,14 @@ Accurately sync multiple camera angles by audio so users get aligned video files
 - ✓ Play starts from cursor position or sync start point (not beginning) — v2.2
 - ✓ Sync Results download area removed; trimming/ZIP pipeline removed — v2.2
 - ✓ Waveform tracks display offset with ms precision and NLE timecode format — v2.2
+- ✓ GCC-PHAT spectral cross-correlation replaces SynAudio Pearson correlation for robust sync — v2.3
+- ✓ Sync runs in Web Worker with zero-copy buffer transfers, SynAudio WASM dependency removed — v2.3
+- ✓ Per-pair progress reporting ("Aligning camera N of M") during sync — v2.3
+- ✓ Audio quality warnings: silence detection, clipping detection, low confidence — v2.3
+- ✓ Color-coded confidence scoring (green/yellow/red) with peak-to-noise-floor ratio — v2.3
+- ✓ Edge CDP E2E validation test infrastructure for real multi-camera recordings — v2.3
 
 ### Active
-
-- ✓ GCC-PHAT algorithm engine computes time-delay offsets and confidence scores, proven by 17 unit tests against synthetic signals — v2.3 Phase 14
-- ✓ GCC-PHAT runs in Web Worker, SynAudio removed, per-pair progress reporting, audio quality warnings (silence/clipping/low confidence) — v2.3 Phase 15
-- ✓ Edge CDP sync validation infrastructure for real multi-camera recordings (Taylor Swift concert + Playing with Bruno) — v2.3 Phase 16 (offset calibration pending manual E2E run)
-
-## Current Milestone: v2.3 Robust Audio Sync
-
-**Goal:** Replace raw waveform Pearson correlation with a spectral/frequency-domain sync algorithm that works reliably across diverse audio scenarios — concerts, dialogue, ambient, different devices and positions.
-
-**Target features:**
-- Spectral cross-correlation sync engine replacing SynAudio waveform correlation
-- Robust to device differences (mic frequency response, clipping, reverb, distance)
-- Robust to repetitive content (music, rhythmic audio)
-- Meaningful confidence scoring that reflects actual sync reliability
-- Same pipeline interface: video files in → time offsets + confidence out
 
 ### Out of Scope
 
@@ -68,8 +59,8 @@ Accurately sync multiple camera angles by audio so users get aligned video files
 
 ## Context
 
-- **Shipped v2.2** with 5,791 LOC TypeScript across 13 phases (4 v1.0 + 5 v2.0 + 2 v2.1 + 2 v2.2) over 27 days
-- **Tech stack:** Vite + React 19 + Tailwind CSS v4 + FFmpeg WASM + SynAudio WASM SIMD + mp4box.js + Mediabunny (WebCodecs) + Web Audio API
+- **Shipped v2.3** with 7,086 LOC TypeScript across 16 phases (4 v1.0 + 5 v2.0 + 2 v2.1 + 2 v2.2 + 3 v2.3) over 29 days
+- **Tech stack:** Vite + React 19 + Tailwind CSS v4 + FFmpeg WASM + fft.js + mp4box.js + Mediabunny (WebCodecs) + Web Audio API
 - **Deployed at:** https://sync-multi-cam.pages.dev
 - Target users: people doing multi-camera shoots (events, podcasts, interviews) who need a quick way to align angles, preview sync, and export a composite
 - **Known limitation:** Mixed aspect ratio videos use first video's AR for all export cells (future work)
@@ -88,8 +79,12 @@ Accurately sync multiple camera angles by audio so users get aligned video files
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
 | FFmpeg WASM for video processing | Battle-tested, handles extraction and trimming, works in-browser | ✓ Good — reliable for extraction and stream-copy |
-| SynAudio WASM SIMD for correlation | Fast cross-correlation with Web Worker support | ✓ Good — syncWorker mode avoids threading bugs |
-| Audio cross-correlation for sync | Standard, reliable approach for finding temporal alignment | ✓ Good — accurate results with confidence scoring |
+| SynAudio WASM SIMD for correlation | Fast cross-correlation with Web Worker support | ⚠️ Replaced in v2.3 — Pearson on raw waveforms fails for different mics and repetitive content |
+| Audio cross-correlation for sync | Standard, reliable approach for finding temporal alignment | ✓ Good — upgraded to GCC-PHAT spectral method in v2.3 |
+| GCC-PHAT replacing SynAudio | Phase-normalized frequency-domain correlation robust to mic differences and reverb | ✓ Good — correct offsets for concert + dialogue content |
+| fft.js (5KB pure JS) over WASM FFT | Simpler than KissFFT WASM, adequate performance for ~3 FFTs per sync pair | ✓ Good — net reduction in bundle size, no WASM complexity |
+| Peak-to-noise-floor confidence | Scale-invariant confidence scoring that works regardless of FFT size | ✓ Good — replaced broken absolute threshold that always produced 0% on real audio |
+| Pre-sync audio quality detection | Detect silence/clipping before sync starts, warn but don't block | ✓ Good — non-intrusive, catches unusable tracks early |
 | Trim-to-earliest strategy | Align start points, keep all footage — no forced end trim | ✓ Good |
 | Stream-copy via mp4box.js keyframes | No re-encoding preserves HEVC/HDR; mp4box.js reads container index without decoding | ✓ Good — replaced broken smart rendering approach |
 | Dark/modern UI theme | Professional video tool aesthetic | ✓ Good |
@@ -113,4 +108,4 @@ Accurately sync multiple camera angles by audio so users get aligned video files
 | Widen label column w-32 → w-36 | Fit 3-line offset display (filename, ms offset, NLE timecode) | ✓ Good |
 
 ---
-*Last updated: 2026-03-29 after Phase 16 (Validation + Confidence Tuning) complete — v2.3 milestone infrastructure done*
+*Last updated: 2026-03-29 after v2.3 Robust Audio Sync milestone shipped*
