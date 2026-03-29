@@ -100,10 +100,11 @@ Plans:
   1. Taylor Swift concert test videos (previously failing case with repetitive music) sync to the correct offset as verified by visual/audible alignment in the grid player
   2. Playing with Bruno test videos (dialogue/ambient content that already worked) continue to sync correctly — no regression from the algorithm change
   3. Confidence scores for both test cases are meaningful: high confidence for clear matches, lower confidence with warnings for ambiguous matches
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 16-01: TBD
+- [ ] 16-01-PLAN.md — Edge CDP sync test infrastructure (harness page, browser-side logic, Playwright spec)
+- [ ] 16-02-PLAN.md — Discovery run, offset calibration, confidence tuning, final validation
 
 ## Progress
 
@@ -127,4 +128,4 @@ Phases execute in numeric order: 14 → 15 → 16
 | 13. UI Cleanup | v2.2 | 1/1 | Complete | 2026-03-29 |
 | 14. DSP Foundation | v2.3 | 1/1 | Complete    | 2026-03-29 |
 | 15. Worker Integration + Pipeline Swap | v2.3 | 3/3 | Complete    | 2026-03-29 |
-| 16. Validation + Confidence Tuning | v2.3 | 0/? | Not started | - |
+| 16. Validation + Confidence Tuning | v2.3 | 0/2 | Not started | - |
