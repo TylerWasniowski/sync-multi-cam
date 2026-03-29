@@ -128,4 +128,4 @@ Phases execute in numeric order: 14 → 15 → 16
 | 13. UI Cleanup | v2.2 | 1/1 | Complete | 2026-03-29 |
 | 14. DSP Foundation | v2.3 | 1/1 | Complete    | 2026-03-29 |
 | 15. Worker Integration + Pipeline Swap | v2.3 | 3/3 | Complete    | 2026-03-29 |
-| 16. Validation + Confidence Tuning | v2.3 | 2/2 | Complete   | 2026-03-29 |
+| 16. Validation + Confidence Tuning | v2.3 | 2/2 | Complete    | 2026-03-29 |
