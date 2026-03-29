@@ -89,7 +89,7 @@ Plans:
 
 Plans:
 - [ ] 15-01-PLAN.md — Audio quality detection module (TDD: silence + clipping detection)
-- [ ] 15-02-PLAN.md — Web Worker + pipeline swap (spectralSyncWorker, audioSync rewrite, SynAudio removal)
+- [x] 15-02-PLAN.md — Web Worker + pipeline swap (spectralSyncWorker, audioSync rewrite, SynAudio removal)
 - [ ] 15-03-PLAN.md — UI integration (warnings display, per-pair progress, end-to-end verification)
 
 ### Phase 16: Validation + Confidence Tuning
@@ -126,5 +126,5 @@ Phases execute in numeric order: 14 → 15 → 16
 | 12. Playback Cursor Fixes | v2.2 | 1/1 | Complete | 2026-03-09 |
 | 13. UI Cleanup | v2.2 | 1/1 | Complete | 2026-03-29 |
 | 14. DSP Foundation | v2.3 | 1/1 | Complete    | 2026-03-29 |
-| 15. Worker Integration + Pipeline Swap | v2.3 | 0/3 | Not started | - |
+| 15. Worker Integration + Pipeline Swap | v2.3 | 1/3 | In Progress|  |
 | 16. Validation + Confidence Tuning | v2.3 | 0/? | Not started | - |
