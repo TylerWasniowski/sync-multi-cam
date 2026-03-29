@@ -4,7 +4,8 @@ import { MAX_FILES } from '../lib/constants.ts';
 import { validateFiles } from '../lib/fileValidation.ts';
 import { getFFmpeg } from '../lib/ffmpeg.ts';
 import { extractAudio } from '../lib/audioExtractor.ts';
-import { syncAudioTracks } from '../lib/audioSync.ts';
+import { syncAudioTracks, getConfidenceLevel } from '../lib/audioSync.ts';
+import { detectAudioWarnings, type AudioWarning } from '../lib/audioQuality.ts';
 import { computeMultiResolutionPeaks } from '../lib/waveformPeaks.ts';
 import { PrivacyBanner } from './PrivacyBanner.tsx';
 import { FileDropZone } from './FileDropZone.tsx';
@@ -65,6 +66,7 @@ export default function App() {
   const [syncResults, setSyncResults] = useState<DownloadableResult[]>([]);
   const [syncError, setSyncError] = useState<string | undefined>(undefined);
   const [waveformPeaks, setWaveformPeaks] = useState<Map<string, MultiResolutionPeaks>>(new Map());
+  const [audioWarnings, setAudioWarnings] = useState<Map<string, AudioWarning[]>>(new Map());
 
   const handleSync = useCallback(async () => {
     if (files.length < 2) return;
@@ -73,6 +75,7 @@ export default function App() {
     setSyncResults([]);
     setSyncError(undefined);
     setWaveformPeaks(new Map());
+    setAudioWarnings(new Map());
     setSyncProgress({ stage: 'extracting', current: 0, total: files.length, message: 'Starting audio extraction...' });
 
     try {
@@ -97,6 +100,16 @@ export default function App() {
         });
       }
 
+      // Phase 1.5: Detect audio quality issues (runs on main thread per D-06)
+      const warningsMap = new Map<string, AudioWarning[]>();
+      for (const track of audioTracks) {
+        const warnings = detectAudioWarnings(track.audio.channelData[0]);
+        if (warnings.length > 0) {
+          warningsMap.set(track.fileId, warnings);
+        }
+      }
+      setAudioWarnings(warningsMap);
+
       // Phase 2: Correlate all tracks
       setSyncProgress({
         stage: 'correlating',
@@ -113,6 +126,20 @@ export default function App() {
           message: `Aligning camera ${current} of ${total}...`,
         });
       });
+
+      // Add low-confidence warnings after sync completes (CONF-02)
+      const updatedWarnings = new Map(warningsMap);
+      for (const result of results) {
+        if (!result.isReference && getConfidenceLevel(result.confidence) === 'low') {
+          const existing = updatedWarnings.get(result.fileId) || [];
+          existing.push({
+            type: 'low-confidence' as const,
+            message: 'Low sync confidence — alignment may be inaccurate',
+          });
+          updatedWarnings.set(result.fileId, existing);
+        }
+      }
+      setAudioWarnings(updatedWarnings);
 
       // Build simplified downloadable results (no trimming/ZIP needed)
       const downloadableResults: DownloadableResult[] = results.map(syncResult => {
@@ -233,7 +260,7 @@ export default function App() {
         {/* Playback section: video grid + waveforms */}
         {syncResults.length > 0 && waveformPeaks.size > 0 && (
           <div className="mt-6">
-            <PlaybackSection peaksMap={waveformPeaks} results={syncResults} />
+            <PlaybackSection peaksMap={waveformPeaks} results={syncResults} audioWarnings={audioWarnings} />
           </div>
         )}
       </main>

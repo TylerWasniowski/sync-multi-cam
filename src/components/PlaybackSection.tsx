@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import type { DownloadableResult, MultiResolutionPeaks, DisplayMode, MutedTracks } from '../types/index.ts';
+import type { AudioWarning } from '../lib/audioQuality.ts';
 import { createPosterExtractor } from '../lib/posterFrame.ts';
 import { createTimelineClock } from '../lib/videoSync.ts';
 import type { SyncEngine } from '../lib/videoSync.ts';
@@ -13,9 +14,10 @@ import { ExportPanel } from './ExportPanel.tsx';
 export interface PlaybackSectionProps {
   results: DownloadableResult[];
   peaksMap: Map<string, MultiResolutionPeaks>;
+  audioWarnings?: Map<string, AudioWarning[]>;
 }
 
-export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
+export function PlaybackSection({ results, peaksMap, audioWarnings }: PlaybackSectionProps) {
   const [displayMode, setDisplayMode] = useState<DisplayMode>('fill');
   const [allVideosReady, setAllVideosReady] = useState(false);
 
@@ -496,6 +498,7 @@ export function PlaybackSection({ results, peaksMap }: PlaybackSectionProps) {
         onScrubStart={handleScrubStart}
         onScrubEnd={handleScrubEnd}
         onScrubSeek={handleScrubSeek}
+        audioWarnings={audioWarnings}
       />
 
       {/* Export panel -- resolution picker, export button, progress bar */}
