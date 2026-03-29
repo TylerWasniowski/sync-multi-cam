@@ -309,8 +309,8 @@ export function WaveformTrack({
               <>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="text-[10px] font-mono text-blue-400">REF</span>
-                  <span className="text-[10px] text-gray-600">
-                    {syncResult.confidence}%
+                  <span className={`text-[10px] ${syncResult.confidence < 25 ? 'text-red-400' : syncResult.confidence < 40 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                    {syncResult.confidence}% confidence
                   </span>
                 </div>
                 <span className="text-[10px] font-mono text-gray-600 mt-px">
@@ -323,8 +323,8 @@ export function WaveformTrack({
                   <span className="text-[10px] font-mono text-gray-400">
                     {formatOffset(syncResult.offsetSeconds)}
                   </span>
-                  <span className="text-[10px] text-gray-600">
-                    {syncResult.confidence}%
+                  <span className={`text-[10px] ${syncResult.confidence < 25 ? 'text-red-400' : syncResult.confidence < 40 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                    {syncResult.confidence}% confidence
                   </span>
                 </div>
                 <span className="text-[10px] font-mono text-gray-600 mt-px">

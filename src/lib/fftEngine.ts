@@ -218,17 +218,15 @@ function findPeakParabolic(
 }
 
 /**
- * Compute confidence score using two factors:
+ * Compute confidence score using peak-to-noise-floor ratio.
  *
- * 1. Peak strength: How close the absolute peak value is to the theoretical
- *    maximum (1.0 for perfectly correlated signals after PHAT normalization).
- *    Uncorrelated noise peaks at ~0.3-0.6 depending on signal length.
+ * Measures how sharply the main peak stands out from the average correlation
+ * level (noise floor). This is scale-invariant — works regardless of absolute
+ * peak magnitude, which varies with FFT size and signal length.
  *
- * 2. Peak uniqueness: How much the main peak stands out from the second-highest
- *    peak outside its neighborhood. Repetitive signals have multiple peaks of
- *    similar height, reducing uniqueness.
- *
- * Combined: confidence = peakStrength * peakUniqueness * 100
+ * Maps ratio from [2, 15] to [0, 100]:
+ * - ratio <= 2: noise-level peak, confidence 0
+ * - ratio >= 15: extremely sharp peak, confidence 100
  *
  * Result interpretation:
  * - High (>70): Clear, unique correlation peak (reliable sync)
@@ -250,22 +248,18 @@ function computeConfidence(
     return 0;
   }
 
-  // Factor 1: Peak strength
-  // Map peak value from [0.6, 1.0] to [0, 1]. Values below 0.6 are noise-level
-  // for typical GCC-PHAT output (uncorrelated signals peak at ~0.3-0.55 depending
-  // on signal length and FFT size).
-  const peakStrength = Math.min(1, Math.max(0, (peakValue - 0.6) / 0.4));
-
-  // Factor 2: Peak uniqueness — find second-highest peak outside neighborhood
+  // Compute noise floor and find second-highest peak outside neighborhood
+  let noiseSum = 0;
+  let noiseCount = 0;
   let secondPeak = 0;
 
   // Scan positive offsets [0, maxOffsetSamples]
   for (let i = 0; i <= maxOffsetSamples; i++) {
     if (distanceCircular(i, peakIndex, fftSize) > NEIGHBORHOOD_RADIUS) {
       const v = Math.abs(correlation[i]);
-      if (v > secondPeak) {
-        secondPeak = v;
-      }
+      noiseSum += v;
+      noiseCount++;
+      if (v > secondPeak) secondPeak = v;
     }
   }
 
@@ -274,17 +268,32 @@ function computeConfidence(
   for (let i = negStart; i < fftSize; i++) {
     if (distanceCircular(i, peakIndex, fftSize) > NEIGHBORHOOD_RADIUS) {
       const v = Math.abs(correlation[i]);
-      if (v > secondPeak) {
-        secondPeak = v;
-      }
+      noiseSum += v;
+      noiseCount++;
+      if (v > secondPeak) secondPeak = v;
     }
   }
 
-  // peakUniqueness: 1.0 if second peak is negligible, 0.0 if equal to main peak
-  const peakUniqueness =
-    secondPeak < EPSILON ? 1.0 : 1.0 - secondPeak / peakValue;
+  // If no noise samples, can't compute ratio — ambiguous
+  if (noiseCount === 0 || noiseSum < EPSILON) {
+    return 50;
+  }
 
-  const raw = peakStrength * peakUniqueness * 100;
+  const noiseFloor = noiseSum / noiseCount;
+
+  // Peak-to-noise-floor ratio: how many times the peak exceeds average noise
+  const ratio = peakValue / noiseFloor;
+
+  // Map ratio [2, 15] to [0, 1]
+  const ratioScore = Math.min(1, Math.max(0, (ratio - 2) / 13));
+
+  // Peak uniqueness: how much the main peak dominates the second-highest peak
+  // 1.0 = no competing peak, 0.0 = second peak equals main peak
+  const uniqueness = secondPeak < EPSILON ? 1.0 : Math.max(0, 1.0 - secondPeak / peakValue);
+
+  // Geometric mean of ratio and uniqueness — both must be good for high confidence
+  // This ensures repetitive signals (low uniqueness) AND noise (low ratio) both score low
+  const raw = Math.sqrt(ratioScore * uniqueness) * 100;
   return Math.round(Math.min(100, Math.max(0, raw)));
 }
 

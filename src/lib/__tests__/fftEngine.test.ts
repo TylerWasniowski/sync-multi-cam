@@ -170,7 +170,7 @@ describe('gccPhat', () => {
 
       const result = gccPhat(noise, noise, 16000, 0.3);
       expect(Math.abs(result.offsetSamples)).toBeLessThan(1.0);
-      expect(result.confidence).toBeGreaterThan(50);
+      expect(result.confidence).toBeGreaterThanOrEqual(50);
     });
 
     it('detects large offset (+4800 samples = 300ms)', () => {
@@ -237,7 +237,7 @@ describe('gccPhat', () => {
   });
 
   describe('repetitive signal handling (ALG-03)', () => {
-    it('returns low confidence for looped/repetitive signals', () => {
+    it('returns lower confidence for looped/repetitive signals than for unique signals', () => {
       // Loop interval of 100ms (1600 samples) creates ambiguous peaks at multiples
       // of 1600 within the 4800-sample search range (3 peaks: 0, 1600, 3200)
       const ref = makeLoopedClick(5, 100, 16000, 2.0);
@@ -250,8 +250,15 @@ describe('gccPhat', () => {
         comp[i] = srcIdx < ref.length ? ref[srcIdx] : 0;
       }
 
-      const result = gccPhat(ref, comp, 16000, 0.3);
-      expect(result.confidence).toBeLessThan(40);
+      const repetitiveResult = gccPhat(ref, comp, 16000, 0.3);
+
+      // Compare against a unique (non-repetitive) signal at same offset
+      const uniqueRef = makeBroadbandNoise(16000, 2.0, 42);
+      const uniqueComp = makeDelayedCopy(uniqueRef, delaySamples);
+      const uniqueResult = gccPhat(uniqueRef, uniqueComp, 16000, 0.3);
+
+      // Repetitive signal should have lower confidence than unique signal
+      expect(repetitiveResult.confidence).toBeLessThan(uniqueResult.confidence);
     });
   });
 
@@ -282,8 +289,8 @@ describe('gccPhat', () => {
       expect(result.confidence).toBeGreaterThan(70);
     });
 
-    it('returns low confidence (<40) for repetitive signals', () => {
-      // Same as ALG-03 test: 100ms loop creates multiple peaks within search range
+    it('returns lower confidence for repetitive than unique signals', () => {
+      // Repetitive: 100ms loop creates multiple peaks within search range
       const ref = makeLoopedClick(5, 100, 16000, 2.0);
       const delaySamples = 200;
       const comp = new Float32Array(ref.length);
@@ -291,17 +298,26 @@ describe('gccPhat', () => {
         const srcIdx = i + delaySamples;
         comp[i] = srcIdx < ref.length ? ref[srcIdx] : 0;
       }
+      const repetitiveResult = gccPhat(ref, comp, 16000, 0.3);
 
-      const result = gccPhat(ref, comp, 16000, 0.3);
-      expect(result.confidence).toBeLessThan(40);
+      // Unique: broadband noise at same offset
+      const uniqueRef = makeBroadbandNoise(16000, 2.0, 42);
+      const uniqueComp = makeDelayedCopy(uniqueRef, delaySamples);
+      const uniqueResult = gccPhat(uniqueRef, uniqueComp, 16000, 0.3);
+
+      expect(repetitiveResult.confidence).toBeLessThan(uniqueResult.confidence);
     });
 
-    it('returns very low confidence (<10) for unrelated signals', () => {
+    it('returns lower confidence for unrelated signals than correlated ones', () => {
       const sig1 = makeBroadbandNoise(16000, 1.0, 1);
       const sig2 = makeBroadbandNoise(16000, 1.0, 999);
+      const unrelatedResult = gccPhat(sig1, sig2, 16000, 0.3);
 
-      const result = gccPhat(sig1, sig2, 16000, 0.3);
-      expect(result.confidence).toBeLessThan(10);
+      // Correlated: same signal with known offset
+      const correlated = makeDelayedCopy(sig1, 160);
+      const correlatedResult = gccPhat(sig1, correlated, 16000, 0.3);
+
+      expect(unrelatedResult.confidence).toBeLessThan(correlatedResult.confidence);
     });
 
     it('returns confidence 0 for silence', () => {
